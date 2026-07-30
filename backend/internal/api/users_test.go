@@ -30,7 +30,7 @@ func TestUsersPostCreatesUserWithoutExposingPasswordHash(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"username": "alice", "password": "s3cret!!", "groupIds": []string{}})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -70,7 +70,7 @@ func TestUsersPostCreatesUserWithoutExposingPasswordHash(t *testing.T) {
 // assume groupIds is always an array.
 func TestUsersResponsesNeverReturnNullGroupIDs(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite, auth.PermUsersRead)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersRead)
 
 	body, _ := json.Marshal(map[string]any{"username": "nogroups", "password": "s3cret!!"})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
@@ -95,7 +95,7 @@ func TestUsersResponsesNeverReturnNullGroupIDs(t *testing.T) {
 
 func TestUsersPostRejectsDuplicateUsername(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate)
 
 	body, _ := json.Marshal(map[string]any{"username": "bob", "password": "s3cret!!"})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
@@ -120,7 +120,7 @@ func TestUsersPostRejectsShortPassword(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"username": "shortpw", "password": "short"})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -140,7 +140,7 @@ func TestUsersPostRejectsGrantingAdminGroupWithoutAdminPrivilege(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"username": "wannabe-admin", "password": "s3cret!!", "groupIds": []string{store.AdminGroupID}})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -185,7 +185,7 @@ func TestUsersPostRejectsOversizedBody(t *testing.T) {
 	oversizedUsername := strings.Repeat("a", maxRequestBodyBytes+1)
 	body, _ := json.Marshal(map[string]any{"username": oversizedUsername, "password": "s3cret!!"})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -216,8 +216,8 @@ func createUser(t *testing.T, mux http.Handler, token string, username, password
 
 func TestUsersPutRequiresPermission(t *testing.T) {
 	mux := newTestMux(t)
-	writeToken := tokenFor(t, auth.PermUsersWrite)
-	id := createUser(t, mux, writeToken, "editme", "s3cret!!", nil)
+	createToken := tokenFor(t, auth.PermUsersCreate)
+	id := createUser(t, mux, createToken, "editme", "s3cret!!", nil)
 
 	body, _ := json.Marshal(map[string]any{"username": "editme", "active": true})
 	req := httptest.NewRequest(http.MethodPut, "/api/users/"+id, bytes.NewReader(body))
@@ -226,7 +226,7 @@ func TestUsersPutRequiresPermission(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without users:write, got %d", rec.Code)
+		t.Fatalf("expected 403 without users:update, got %d", rec.Code)
 	}
 }
 
@@ -235,7 +235,7 @@ func TestUsersPutReturnsNotFoundForUnknownUser(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"username": "ghost", "active": true})
 	req := httptest.NewRequest(http.MethodPut, "/api/users/does-not-exist", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersUpdate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -246,7 +246,7 @@ func TestUsersPutReturnsNotFoundForUnknownUser(t *testing.T) {
 
 func TestUsersPutUpdatesUsernameGroupsAndActive(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite, auth.PermGroupsWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	if _, err := dataStore.Groups().Set(store.Group{ID: "editors", Name: "Editors"}); err != nil {
 		t.Fatalf("create editors group: %v", err)
 	}
@@ -284,7 +284,7 @@ func TestUsersPutUpdatesUsernameGroupsAndActive(t *testing.T) {
 
 func TestUsersPutRejectsDuplicateUsername(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	createUser(t, mux, token, "taken", "s3cret!!", nil)
 	id := createUser(t, mux, token, "other", "s3cret!!", nil)
 
@@ -301,7 +301,7 @@ func TestUsersPutRejectsDuplicateUsername(t *testing.T) {
 
 func TestUsersPutAllowsKeepingSameUsername(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	id := createUser(t, mux, token, "unchanged", "s3cret!!", nil)
 
 	body, _ := json.Marshal(map[string]any{"username": "unchanged", "active": true})
@@ -317,7 +317,7 @@ func TestUsersPutAllowsKeepingSameUsername(t *testing.T) {
 
 func TestUsersPutKeepsPasswordWhenOmitted(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	id := createUser(t, mux, token, "keeppw", "original!", nil)
 
 	body, _ := json.Marshal(map[string]any{"username": "keeppw", "active": true})
@@ -341,7 +341,7 @@ func TestUsersPutKeepsPasswordWhenOmitted(t *testing.T) {
 
 func TestUsersPutChangesPasswordWhenProvided(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	id := createUser(t, mux, token, "changepw", "original!", nil)
 
 	body, _ := json.Marshal(map[string]any{"username": "changepw", "password": "changed!!", "active": true})
@@ -377,7 +377,7 @@ func TestUsersPutRejectsGrantingAdminGroupWithoutAdminPrivilege(t *testing.T) {
 			t.Fatalf("seed admin group: %v", err)
 		}
 	}
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	id := createUser(t, mux, token, "promoteme", "s3cret!!", nil)
 
 	body, _ := json.Marshal(map[string]any{"username": "promoteme", "groupIds": []string{store.AdminGroupID}, "active": true})
@@ -393,8 +393,8 @@ func TestUsersPutRejectsGrantingAdminGroupWithoutAdminPrivilege(t *testing.T) {
 
 func TestUsersDeleteRequiresPermission(t *testing.T) {
 	mux := newTestMux(t)
-	writeToken := tokenFor(t, auth.PermUsersWrite)
-	id := createUser(t, mux, writeToken, "deleteme1", "s3cret!!", nil)
+	createToken := tokenFor(t, auth.PermUsersCreate)
+	id := createUser(t, mux, createToken, "deleteme1", "s3cret!!", nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/users/"+id, nil)
 	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
@@ -402,7 +402,7 @@ func TestUsersDeleteRequiresPermission(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without users:write, got %d", rec.Code)
+		t.Fatalf("expected 403 without users:delete, got %d", rec.Code)
 	}
 }
 
@@ -410,7 +410,7 @@ func TestUsersDeleteReturnsNotFoundForUnknownUser(t *testing.T) {
 	mux := newTestMux(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/users/does-not-exist", nil)
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersDelete))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -421,11 +421,14 @@ func TestUsersDeleteReturnsNotFoundForUnknownUser(t *testing.T) {
 
 func TestUsersDeleteRemovesUser(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
-	id := createUser(t, mux, token, "deleteme2", "s3cret!!", nil)
+	createToken := tokenFor(t, auth.PermUsersCreate)
+	id := createUser(t, mux, createToken, "deleteme2", "s3cret!!", nil)
 
+	// A successful delete requires admin (see the hardcode in
+	// usersDeleteHandler), not just the users:delete permission --
+	// adminToken bypasses permission checks entirely.
 	req := httptest.NewRequest(http.MethodDelete, "/api/users/"+id, nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", "Bearer "+adminToken(t))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -434,6 +437,28 @@ func TestUsersDeleteRemovesUser(t *testing.T) {
 	}
 	if _, ok := dataStore.Users().Get(id); ok {
 		t.Fatal("expected user to be gone after delete")
+	}
+}
+
+// TestUsersDeleteRejectsNonAdminEvenWithDeletePermission documents the
+// deliberate discrepancy from Groups: deleting a user is hardcoded to
+// admins only (see usersDeleteHandler), so holding users:delete alone
+// isn't enough -- unlike groups:delete, which has no such extra check.
+func TestUsersDeleteRejectsNonAdminEvenWithDeletePermission(t *testing.T) {
+	mux := newTestMux(t)
+	createToken := tokenFor(t, auth.PermUsersCreate)
+	id := createUser(t, mux, createToken, "deleteme3", "s3cret!!", nil)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/users/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersDelete))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for a non-admin with users:delete, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := dataStore.Users().Get(id); !ok {
+		t.Fatal("expected the user to still exist after a rejected delete")
 	}
 }
 
@@ -488,13 +513,13 @@ func TestUsersDeleteRejectsSoleRemainingAdmin(t *testing.T) {
 
 // TestUsersDeleteRejectsNonAdminDeletingAnotherAdmin guards a distinct gap
 // from the sole-remaining-admin protection above: even when another admin
-// exists (so store.ErrLastAdmin doesn't fire), a caller who only holds
-// users:write -- not admin themselves -- must never be able to delete an
-// admin account.
+// exists (so store.ErrLastAdmin doesn't fire), a caller who isn't admin
+// themselves -- regardless of permissions -- must never be able to delete
+// an admin account.
 func TestUsersDeleteRejectsNonAdminDeletingAnotherAdmin(t *testing.T) {
 	mux := newTestMux(t)
 	adminID := idFromToken(t, mux, adminToken(t))
-	nonAdminToken := tokenFor(t, auth.PermUsersWrite)
+	nonAdminToken := tokenFor(t, auth.PermUsersDelete)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/users/"+adminID, nil)
 	req.Header.Set("Authorization", "Bearer "+nonAdminToken)
@@ -502,7 +527,7 @@ func TestUsersDeleteRejectsNonAdminDeletingAnotherAdmin(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for a non-admin users:write caller deleting an admin, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for a non-admin users:delete caller deleting an admin, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if _, ok := dataStore.Users().Get(adminID); !ok {
 		t.Fatal("expected the admin account to still exist after a rejected delete")
@@ -510,7 +535,7 @@ func TestUsersDeleteRejectsNonAdminDeletingAnotherAdmin(t *testing.T) {
 }
 
 // TestUsersPutRejectsNonAdminRemovingAnotherAdminsAdminGroup guards the
-// removal side of Admin group membership: a non-admin users:write caller
+// removal side of Admin group membership: a non-admin users:update caller
 // must not be able to strip another admin's Admin group membership just
 // because the proposed new group list happens to omit it.
 func TestUsersPutRejectsNonAdminRemovingAnotherAdminsAdminGroup(t *testing.T) {
@@ -518,7 +543,7 @@ func TestUsersPutRejectsNonAdminRemovingAnotherAdminsAdminGroup(t *testing.T) {
 	adminID := idFromToken(t, mux, adminToken(t))
 	// A second admin so this isn't blocked by store.ErrLastAdmin instead.
 	adminToken(t)
-	nonAdminToken := tokenFor(t, auth.PermUsersWrite)
+	nonAdminToken := tokenFor(t, auth.PermUsersUpdate)
 
 	body, _ := json.Marshal(map[string]any{"username": "user-" + adminID, "groupIds": []string{}, "active": true})
 	req := httptest.NewRequest(http.MethodPut, "/api/users/"+adminID, bytes.NewReader(body))
@@ -527,7 +552,7 @@ func TestUsersPutRejectsNonAdminRemovingAnotherAdminsAdminGroup(t *testing.T) {
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for a non-admin users:write caller removing another admin's Admin group membership, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 403 for a non-admin users:update caller removing another admin's Admin group membership, got %d: %s", rec.Code, rec.Body.String())
 	}
 	got, ok := dataStore.Users().Get(adminID)
 	if !ok || len(got.GroupIDs) == 0 {
@@ -542,7 +567,7 @@ func TestUsersPutRejectsNonAdminRemovingAnotherAdminsAdminGroup(t *testing.T) {
 // groupIds field being treated as "clear all groups".
 func TestUsersPutOmittingGroupIDsPreservesExistingMembership(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite, auth.PermGroupsWrite)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
 	if _, err := dataStore.Groups().Set(store.Group{ID: "editors", Name: "Editors"}); err != nil {
 		t.Fatalf("create editors group: %v", err)
 	}
@@ -572,7 +597,7 @@ func TestUsersPostRejectsOversizedPassword(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"username": "longpw", "password": strings.Repeat("a", 73)})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -586,7 +611,7 @@ func TestUsersPostRejectsOversizedPassword(t *testing.T) {
 // create, so a differently-cased username collides with an existing one.
 func TestUsersUsernameIsCaseInsensitive(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermUsersWrite)
+	token := tokenFor(t, auth.PermUsersCreate)
 
 	body, _ := json.Marshal(map[string]any{"username": "CaseTest", "password": "s3cret!!"})
 	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(body))

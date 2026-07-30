@@ -123,13 +123,13 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) {
 
 // requireAdminForAdminGroupChange returns false (having already written a
 // 403 response) if any of groupSets includes the Admin group and the acting
-// principal isn't already an admin themselves -- otherwise a
-// users:write-only caller could create/edit/delete their way into granting,
-// retaining, or revoking Admin group membership (including another admin's)
-// without ever holding groups:write or admin rights. Callers pass whichever
-// of a user's current and/or proposed group lists are relevant: touching
-// the Admin group from either side requires the caller to already be an
-// admin.
+// principal isn't already an admin themselves -- otherwise a caller holding
+// only users:create/users:update could create/edit their way into granting
+// or retaining Admin group membership (including another admin's) without
+// ever holding groups:create/groups:update or admin rights. Callers pass
+// whichever of a user's current and/or proposed group lists are relevant:
+// touching the Admin group from either side requires the caller to already
+// be an admin.
 func requireAdminForAdminGroupChange(w http.ResponseWriter, r *http.Request, groupSets ...[]string) bool {
 	touchesAdmin := false
 	for _, groupIDs := range groupSets {
@@ -241,17 +241,19 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) {
 
 func usersDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	existing, ok := dataStore.Users().Get(id)
-	if !ok {
+	if _, ok := dataStore.Users().Get(id); !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
 		return
 	}
 
-	// A users:write-only caller must never be able to remove an admin
-	// account -- store.ErrLastAdmin only protects the *sole* remaining
-	// admin, so without this check a non-admin could still delete any
-	// other admin as long as at least one more remained.
-	if !requireAdminForAdminGroupChange(w, r, existing.GroupIDs) {
+	// Deleting a user is hardcoded to admins only for now, on top of the
+	// users:delete permission check requirePermission already applied above.
+	// Once that policy is ready to relax, removing this block is the only
+	// change needed to let a non-admin group holding users:delete actually
+	// delete users.
+	principal, _ := principalFromContext(r)
+	if !principal.IsAdmin {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only an Admin can delete users"})
 		return
 	}
 

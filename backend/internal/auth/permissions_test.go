@@ -34,7 +34,7 @@ func TestResolveUnionsPermissionsAcrossGroups(t *testing.T) {
 	if _, err := s.Groups().Set(store.Group{ID: "editors", Name: "Editors", Permissions: []string{PermFlagsRead, PermFlagsWrite}}); err != nil {
 		t.Fatalf("create editors group: %v", err)
 	}
-	if _, err := s.Groups().Set(store.Group{ID: "user-admins", Name: "User Admins", Permissions: []string{PermUsersRead, PermUsersWrite}}); err != nil {
+	if _, err := s.Groups().Set(store.Group{ID: "user-admins", Name: "User Admins", Permissions: []string{PermUsersRead, PermUsersUpdate}}); err != nil {
 		t.Fatalf("create user-admins group: %v", err)
 	}
 	user, err := s.Users().Set(store.User{ID: store.NewID(), Username: "alice", Active: true, GroupIDs: []string{"editors", "user-admins"}})
@@ -50,7 +50,7 @@ func TestResolveUnionsPermissionsAcrossGroups(t *testing.T) {
 	if isAdmin {
 		t.Fatal("expected non-admin user to not resolve as admin")
 	}
-	for _, want := range []string{PermFlagsRead, PermFlagsWrite, PermUsersRead, PermUsersWrite} {
+	for _, want := range []string{PermFlagsRead, PermFlagsWrite, PermUsersRead, PermUsersUpdate} {
 		if !perms.Has(want) {
 			t.Fatalf("expected resolved permission set to include %q, got %v", want, perms.Keys())
 		}

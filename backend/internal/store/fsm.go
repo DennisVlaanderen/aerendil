@@ -12,6 +12,7 @@ import (
 const (
 	opSet    = "set"
 	opDelete = "delete"
+	opAppend = "append"
 )
 
 // entity discriminates which map a command applies to.
@@ -21,6 +22,7 @@ const (
 	entityFlag  entity = "flag"
 	entityUser  entity = "user"
 	entityGroup entity = "group"
+	entityAudit entity = "audit"
 )
 
 // command is the single Raft log entry shape for every entity kind this
@@ -30,29 +32,31 @@ const (
 // does mean an existing on-disk data dir must be wiped before running a
 // build that includes this change.
 type command struct {
-	Op     string `json:"op"`
-	Entity entity `json:"entity"`
-	Key    string `json:"key,omitempty"`
-	Flag   *Flag  `json:"flag,omitempty"`
-	User   *User  `json:"user,omitempty"`
-	Group  *Group `json:"group,omitempty"`
+	Op     		string 		`json:"op"`
+	Entity 		entity 		`json:"entity"`
+	Key    		string 		`json:"key,omitempty"`
+	Flag   		*Flag  		`json:"flag,omitempty"`
+	User   		*User  		`json:"user,omitempty"`
+	Group  		*Group 		`json:"group,omitempty"`
+	AuditEntry  *AuditEntry `json:"audit,omitempty"`
 }
 
-// fsm is the Raft finite state machine: in-memory maps of flags, users, and
-// groups, made durable by Raft's own replicated log plus periodic
-// snapshots. There's no need for a separate embedded database -- Raft
-// already gives us a durable, replicated log to reconstruct all three from.
+// fsm is the Raft finite state machine: in-memory maps of stored entitires, 
+// made durable by Raft's own replicated log plus periodic snapshots.
+// There's no need for a separate embedded database -- Raft already gives us a durable,
+// replicated log to reconstruct all three from.
 //
 // Each entity's apply logic and read accessors live alongside that
 // entity's struct definition (flag.go/user.go/group.go), not here -- this
 // file only holds the machinery every entity shares: the command envelope,
 // the Apply dispatch switch, and snapshot/restore. Adding a new entity
-// means adding a file, not growing this one.
+// means adding a file and minimal struct definition, not growing this one.
 type fsm struct {
-	mu     sync.RWMutex
-	flags  map[string]Flag
-	users  map[string]User
-	groups map[string]Group
+	mu     			sync.RWMutex
+	flags  			map[string]Flag
+	users  			map[string]User
+	groups 			map[string]Group
+	auditEntries 	map[uint64]AuditEntry
 }
 
 func newFSM() *fsm {
@@ -60,6 +64,7 @@ func newFSM() *fsm {
 		flags:  make(map[string]Flag),
 		users:  make(map[string]User),
 		groups: make(map[string]Group),
+		auditEntries: make(map[uint64]AuditEntry),
 	}
 }
 
@@ -83,6 +88,8 @@ func (f *fsm) Apply(log *raft.Log) interface{} {
 		return f.applyUser(log.Index, cmd)
 	case entityGroup:
 		return f.applyGroup(log.Index, cmd)
+	case entityAudit:
+		return f.applyAuditEntry(log.Index, cmd)
 	default:
 		return fmt.Errorf("unknown command entity %q", cmd.Entity)
 	}
@@ -96,6 +103,7 @@ type snapshotDoc struct {
 	Flags  map[string]Flag  `json:"flags"`
 	Users  map[string]User  `json:"users"`
 	Groups map[string]Group `json:"groups"`
+	AuditEntries map[uint64]AuditEntry `json:"auditEntries"`
 }
 
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
@@ -106,6 +114,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		Flags:  make(map[string]Flag, len(f.flags)),
 		Users:  make(map[string]User, len(f.users)),
 		Groups: make(map[string]Group, len(f.groups)),
+		AuditEntries: make(map[uint64]AuditEntry, len(f.auditEntries)),
 	}
 	for k, v := range f.flags {
 		doc.Flags[k] = v
@@ -115,6 +124,9 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	}
 	for k, v := range f.groups {
 		doc.Groups[k] = v
+	}
+	for k, v := range f.auditEntries {
+		doc.AuditEntries[k] = v
 	}
 	return &fsmSnapshot{doc: doc}, nil
 }
@@ -160,12 +172,16 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	if doc.Groups == nil {
 		doc.Groups = make(map[string]Group)
 	}
+	if doc.AuditEntries == nil {
+		doc.AuditEntries = make(map[uint64]AuditEntry)
+	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.flags = doc.Flags
 	f.users = doc.Users
 	f.groups = doc.Groups
+	f.auditEntries = doc.AuditEntries
 	return nil
 }
 

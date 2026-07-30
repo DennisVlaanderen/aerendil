@@ -15,9 +15,14 @@ export const ALL_PERMISSIONS = [
 	'flags:read',
 	'flags:write',
 	'users:read',
-	'users:write',
+	'users:create',
+	'users:update',
+	'users:delete',
 	'groups:read',
-	'groups:write'
+	'groups:create',
+	'groups:update',
+	'groups:delete',
+	'audits:read'
 ] as const;
 
 // `status` mirrors the backend's own HTTP status verbatim -- see the

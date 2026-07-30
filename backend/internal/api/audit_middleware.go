@@ -1,0 +1,158 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+
+	"aerendil/backend/internal/store"
+)
+
+// auditConfig describes one mutating route's audit metadata. Before is nil
+// for pure-create routes (users/groups POST -- the ID is fresh every time,
+// generated server-side inside the handler, so there is never a prior
+// state); it is set for every route that can genuinely overwrite an
+// existing record: users/groups PUT/DELETE (identified by path {id}) and
+// flags POST, which is an upsert-by-key (identified by the request body's
+// "key" field, not a path param).
+type auditConfig struct {
+	Action     string
+	TargetType string
+	Before     func(r *http.Request, body []byte) (any, bool)
+}
+
+// withAudit wraps next so every invocation -- success or rejection -- is
+// durably recorded via dataStore.Audits().Append before the real response
+// reaches the client. It must be nested INSIDE requirePermission in route
+// registration (requirePermission(perm, withAudit(cfg, handler))) so
+// principalFromContext is already populated when this runs.
+//
+// If Append itself fails, that is surfaced to the client as an error even
+// if the underlying mutation already committed -- a deliberate tradeoff: an
+// audit trail that can silently go missing is worse than an occasional
+// false-negative response to an already-applied change.
+func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
+		r.Body = io.NopCloser(bytes.NewReader(body))
+
+		var beforeJSON string
+		if cfg.Before != nil {
+			if v, ok := cfg.Before(r, body); ok {
+				if b, err := json.Marshal(v); err == nil {
+					beforeJSON = string(b)
+				}
+			}
+		}
+
+		rec := newAuditRecorder()
+		next(rec, r)
+
+		status := rec.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		success := status >= 200 && status < 300
+
+		principal, _ := principalFromContext(r)
+		actorID := ""
+		if principal.User != nil {
+			actorID = principal.User.ID
+		}
+
+		entry := store.AuditEntry{
+			ActorID:    actorID,
+			Action:     cfg.Action,
+			TargetType: cfg.TargetType,
+			TargetID:   targetIDFrom(r, rec.body.Bytes()),
+			Before:     beforeJSON,
+			Success:    success,
+			StatusCode: status,
+		}
+		if success {
+			entry.After = rec.body.String()
+		} else {
+			entry.Error = extractErrorMessage(rec.body.Bytes())
+		}
+
+		if _, err := dataStore.Audits().Append(entry); err != nil {
+			log.Printf("api: failed to record audit entry for %s %s (mutation status %d): %v", r.Method, r.URL.Path, status, err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "the request may have been applied, but recording its audit trail failed; verify before retrying",
+			})
+			return
+		}
+
+		for k, vv := range rec.header {
+			w.Header()[k] = vv
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write(rec.body.Bytes())
+	}
+}
+
+// auditRecorder buffers a handler's response instead of writing it straight
+// through, so withAudit can record the audit entry (and decide whether the
+// mutation counts as a success) before anything reaches the real client.
+type auditRecorder struct {
+	header      http.Header
+	body        bytes.Buffer
+	status      int
+	wroteHeader bool
+}
+
+func newAuditRecorder() *auditRecorder {
+	return &auditRecorder{header: make(http.Header)}
+}
+
+func (a *auditRecorder) Header() http.Header { return a.header }
+
+func (a *auditRecorder) WriteHeader(status int) {
+	if a.wroteHeader {
+		return
+	}
+	a.status = status
+	a.wroteHeader = true
+}
+
+func (a *auditRecorder) Write(p []byte) (int, error) {
+	if !a.wroteHeader {
+		a.WriteHeader(http.StatusOK)
+	}
+	return a.body.Write(p)
+}
+
+// targetIDFrom resolves the audited entity's identity: the path {id} param
+// for PUT/DELETE routes, else a best-effort "id" (users/groups POST) or
+// "key" (flags POST) field sniffed from the buffered response body. Empty
+// for a rejected create, which never allocated an identity in the first
+// place.
+func targetIDFrom(r *http.Request, respBody []byte) string {
+	if id := r.PathValue("id"); id != "" {
+		return id
+	}
+	var probe struct {
+		ID  string `json:"id"`
+		Key string `json:"key"`
+	}
+	_ = json.Unmarshal(respBody, &probe)
+	if probe.ID != "" {
+		return probe.ID
+	}
+	return probe.Key
+}
+
+// extractErrorMessage pulls the "error" field every handler's error
+// response already uses (see writeJSON/writeStoreError call sites), falling
+// back to the raw body if it isn't in that shape.
+func extractErrorMessage(body []byte) string {
+	var probe struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(body, &probe); err == nil && probe.Error != "" {
+		return probe.Error
+	}
+	return string(body)
+}

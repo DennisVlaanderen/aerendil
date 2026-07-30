@@ -12,17 +12,20 @@
 			const flag = data.flag as { key: string } | undefined;
 			return flag?.key ?? m.nav_flags();
 		}
+		if (pathname.startsWith('/dashboard/users/')) {
+			const user = data.user as { username: string } | undefined;
+			return user?.username ?? m.nav_users();
+		}
 		if (pathname.startsWith('/dashboard/users')) return m.nav_users();
 		if (pathname.startsWith('/dashboard/groups')) return m.nav_groups();
+		if (pathname.startsWith('/dashboard/audit-log')) return m.nav_audit_log();
 		return m.nav_dashboard();
 	}
 
 	let title = $derived(resolveTitle(page.url.pathname, page.data));
 </script>
 
-<header
-	class="flex h-16 shrink-0 items-center justify-between border-b border-line-2 bg-page px-7"
->
+<header class="flex h-16 shrink-0 items-center justify-between border-b border-line-2 bg-page px-7">
 	<div class="truncate text-base font-semibold text-ink">{title}</div>
 
 	<div class="flex items-center gap-4">

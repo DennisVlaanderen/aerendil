@@ -13,6 +13,7 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 	f.users["u1"] = User{ID: "u1", Username: "alice", GroupIDs: []string{"editors"}, Active: true, Version: 2}
 	f.groups["editors"] = Group{ID: "editors", Name: "Editors", Permissions: []string{"flags:read"}, Version: 3}
 	f.groups[AdminGroupID] = Group{ID: AdminGroupID, Name: "Admin", System: true, Version: 4}
+	f.auditEntries[5] = AuditEntry{ID: 5, Timestamp: 1234, ActorID: "u1", Action: "flag.set", TargetType: "flag", TargetID: "a", Success: true, StatusCode: 200}
 
 	snap, err := f.Snapshot()
 	if err != nil {
@@ -45,6 +46,11 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 	if !ok || !restoredAdmin.System {
 		t.Fatalf("expected Admin group to round-trip with System=true, got %+v (ok=%v)", restoredAdmin, ok)
 	}
+
+	restoredEntry, ok := restored.auditEntries[5]
+	if !ok || restoredEntry.Action != "flag.set" || restoredEntry.TargetID != "a" {
+		t.Fatalf("unexpected restored audit entries: %+v (ok=%v)", restoredEntry, ok)
+	}
 }
 
 // TestFSMRestoreRejectsPreUserGroupSnapshotFormat guards against silently
@@ -68,8 +74,43 @@ func TestFSMRestoreToleratesEmptySnapshot(t *testing.T) {
 	if err := f.Restore(io.NopCloser(strings.NewReader(""))); err != nil {
 		t.Fatalf("expected Restore to tolerate an empty snapshot, got %v", err)
 	}
-	if f.flags == nil || f.users == nil || f.groups == nil {
-		t.Fatalf("expected all three maps to default to empty, got flags=%v users=%v groups=%v", f.flags, f.users, f.groups)
+	if f.flags == nil || f.users == nil || f.groups == nil || f.auditEntries == nil {
+		t.Fatalf("expected all maps to default to empty, got flags=%v users=%v groups=%v auditEntries=%v", f.flags, f.users, f.groups, f.auditEntries)
+	}
+}
+
+// TestApplyAuditEntrySetsIDFromLogIndex guards the Raft-determinism
+// requirement that ID (like Flag.Version) comes from the log index every
+// node applies identically, while Timestamp is passed through unchanged --
+// it must be assigned once by the leader-side AuditRepository.Append, never
+// inside applyAuditEntry (which every replica re-executes independently).
+func TestApplyAuditEntrySetsIDFromLogIndex(t *testing.T) {
+	f := newFSM()
+
+	resp := f.applyAuditEntry(7, command{Op: opAppend, Entity: entityAudit, AuditEntry: &AuditEntry{
+		Timestamp:  1700000000,
+		ActorID:    "u1",
+		Action:     "user.create",
+		TargetType: "user",
+		TargetID:   "u2",
+		Success:    true,
+		StatusCode: 201,
+	}})
+
+	applied, ok := resp.(AuditEntry)
+	if !ok {
+		t.Fatalf("expected applyAuditEntry to return an AuditEntry, got %+v", resp)
+	}
+	if applied.ID != 7 {
+		t.Fatalf("expected ID to be set from the log index (7), got %d", applied.ID)
+	}
+	if applied.Timestamp != 1700000000 {
+		t.Fatalf("expected Timestamp to pass through unchanged, got %d", applied.Timestamp)
+	}
+
+	stored, ok := f.auditEntries[7]
+	if !ok || stored.ActorID != "u1" || stored.TargetID != "u2" {
+		t.Fatalf("unexpected stored audit entry: %+v (ok=%v)", stored, ok)
 	}
 }
 

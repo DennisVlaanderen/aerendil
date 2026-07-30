@@ -6,7 +6,7 @@ import type { RequestHandler } from './$types';
 
 export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 	const session = await getSession(cookies);
-	if (!session || !hasPermission(session, 'groups:write')) {
+	if (!session || !hasPermission(session, 'groups:update')) {
 		return json({ error: 'You do not have permission to manage groups.' }, { status: 403 });
 	}
 
@@ -35,7 +35,7 @@ export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 
 export const DELETE: RequestHandler = async ({ cookies, params }) => {
 	const session = await getSession(cookies);
-	if (!session || !hasPermission(session, 'groups:write')) {
+	if (!session || !hasPermission(session, 'groups:delete')) {
 		return json({ error: 'You do not have permission to manage groups.' }, { status: 403 });
 	}
 

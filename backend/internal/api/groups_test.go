@@ -17,7 +17,7 @@ func TestGroupsPostRejectsUnknownPermission(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"name": "Editors", "permissions": []string{"not-a-real-permission"}})
 	req := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -31,7 +31,7 @@ func TestGroupsPostForcesNonSystem(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{"name": "Editors", "permissions": []string{auth.PermFlagsRead}, "system": true})
 	req := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsCreate))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -50,7 +50,7 @@ func TestGroupsPostForcesNonSystem(t *testing.T) {
 
 func TestGroupsFullCRUDForNonSystemGroup(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermGroupsWrite)
+	token := tokenFor(t, auth.PermGroupsCreate, auth.PermGroupsUpdate, auth.PermGroupsDelete)
 
 	createBody, _ := json.Marshal(map[string]any{"name": "Editors", "permissions": []string{auth.PermFlagsRead}})
 	createReq := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(createBody))
@@ -99,7 +99,7 @@ func TestGroupsFullCRUDForNonSystemGroup(t *testing.T) {
 // and the dashboard/groups UI calls .includes() on it unconditionally.
 func TestGroupsResponsesNeverReturnNullPermissions(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermGroupsWrite, auth.PermGroupsRead)
+	token := tokenFor(t, auth.PermGroupsCreate, auth.PermGroupsRead)
 
 	body, _ := json.Marshal(map[string]any{"name": "NoPerms", "permissions": []string{}})
 	req := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
@@ -152,7 +152,7 @@ func TestGroupsDeleteReturnsNotFoundForUnknownGroup(t *testing.T) {
 	mux := newTestMux(t)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/groups/does-not-exist", nil)
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsDelete))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

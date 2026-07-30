@@ -23,6 +23,7 @@
 	const canSeeUsers = $derived(hasPermission({ isAdmin, permissions }, 'users:read'));
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
 	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
+	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
 
 	function isActive(pathname: string) {
 		return page.url.pathname === pathname;
@@ -53,7 +54,7 @@
 		: 'w-62.5'}"
 >
 	<div class="flex items-center gap-2.5 border-b border-line-2 px-4.5 py-5 h-16">
-		<img src="/aerendil-logo.svg" width="26" height="26" class="shrink-0" alt="Aerendil Logo"/>
+		<img src="/aerendil-logo.svg" width="26" height="26" class="shrink-0" alt="Aerendil Logo" />
 		{#if !collapsed}
 			<span class="truncate text-base font-semibold tracking-[0.3px] text-ink">Aerendil</span>
 		{/if}
@@ -76,30 +77,39 @@
 
 		{#if canSeeUserManagement}
 			<div bind:this={userManagementContainer}>
-				<button
-					type="button"
-					class="flex w-full cursor-pointer items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium hover:bg-line-3 {isActive(
-						'/dashboard/users'
-					) || isActive('/dashboard/groups')
+				<div
+					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive('/dashboard/users') ||
+					isActive('/dashboard/groups')
 						? 'bg-nav-active-bg text-nav-active'
 						: 'text-nav-inactive'}"
-					aria-haspopup="true"
-					aria-expanded={userManagementOpen}
-					onclick={() => (userManagementOpen = !userManagementOpen)}
 				>
-					<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
-						<span class="icon-[lucide--users] size-4.5"></span>
-					</span>
+					<a
+						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
+						href={resolve(localizeHref('/dashboard/users') as Pathname)}
+					>
+						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
+							<span class="icon-[lucide--users] size-4.5"></span>
+						</span>
+						{#if !collapsed}<span>{m.nav_user_management()}</span>{/if}
+					</a>
 					{#if !collapsed}
-						<span class="flex-1 text-left">{m.nav_user_management()}</span>
-						<span
-							class="icon-[lucide--chevron-down] size-3.5 text-nav-inactive transition-transform duration-150 {userManagementOpen
-								? 'rotate-180'
-								: ''}"
-							aria-hidden="true"
-						></span>
+						<button
+							type="button"
+							class="flex shrink-0 cursor-pointer items-center justify-center px-2.5 py-2.25"
+							aria-haspopup="true"
+							aria-expanded={userManagementOpen}
+							aria-label={m.nav_user_management_toggle()}
+							onclick={() => (userManagementOpen = !userManagementOpen)}
+						>
+							<span
+								class="icon-[lucide--chevron-down] size-3.5 transition-transform duration-150 {userManagementOpen
+									? 'rotate-180'
+									: ''}"
+								aria-hidden="true"
+							></span>
+						</button>
 					{/if}
-				</button>
+				</div>
 
 				{#if userManagementOpen && !collapsed}
 					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-line-3 pl-2.5">
@@ -130,6 +140,22 @@
 					</div>
 				{/if}
 			</div>
+		{/if}
+
+		{#if canSeeAuditLog}
+			<a
+				class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-line-3 {isActive(
+					'/dashboard/audit-log'
+				)
+					? 'bg-nav-active-bg text-nav-active'
+					: 'text-nav-inactive'}"
+				href={resolve(localizeHref('/dashboard/audit-log') as Pathname)}
+			>
+				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
+					<span class="icon-[lucide--history] size-4.5"></span>
+				</span>
+				{#if !collapsed}<span>{m.nav_audit_log()}</span>{/if}
+			</a>
 		{/if}
 
 		{#if !collapsed}
@@ -183,19 +209,19 @@
 
 	<div class="flex items-center gap-2.5 border-t border-line-2 px-4 py-3.5">
 		<div
-				class="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-avatar text-[11px] font-semibold text-cream"
-			>
-				{getInitials(username)}
-			</div>
-			{#if !collapsed}
+			class="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-avatar text-[11px] font-semibold text-cream"
+		>
+			{getInitials(username)}
+		</div>
+		{#if !collapsed}
 			<div class="min-w-0">
 				<div class="truncate text-[12.5px] font-medium text-ink">{username}</div>
 				<div class="truncate text-[11px] text-ink-muted">
 					{isAdmin ? m.sidebar_role_admin() : m.sidebar_role_member()}
 				</div>
 			</div>
-			{/if}
-		</div>
+		{/if}
+	</div>
 
 	<button
 		type="button"
@@ -204,7 +230,9 @@
 		aria-label={collapsed ? m.sidebar_expand() : m.sidebar_collapse()}
 	>
 		<span
-			class="{collapsed ? 'icon-[lucide--panel-left-open]' : 'icon-[lucide--panel-left-close]'} size-3.5 shrink-0"
+			class="{collapsed
+				? 'icon-[lucide--panel-left-open]'
+				: 'icon-[lucide--panel-left-close]'} size-3.5 shrink-0"
 			aria-hidden="true"
 		></span>
 		{#if !collapsed}<span class="text-xs overflow-hidden h-4">{m.sidebar_collapse()}</span>{/if}
