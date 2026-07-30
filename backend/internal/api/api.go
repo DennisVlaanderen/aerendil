@@ -43,19 +43,67 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 
 	mux.HandleFunc("/api/health", healthHandler)
 	mux.HandleFunc("GET /api/flags", requirePermission(auth.PermFlagsRead, flagsGetHandler))
-	mux.HandleFunc("POST /api/flags", requirePermission(auth.PermFlagsWrite, flagsPostHandler))
+	mux.HandleFunc("POST /api/flags", requirePermission(auth.PermFlagsWrite, withAudit(auditConfig{
+		Action:     "flag.set",
+		TargetType: "flag",
+		Before: func(r *http.Request, body []byte) (any, bool) {
+			var probe struct {
+				Key string `json:"key"`
+			}
+			if err := json.Unmarshal(body, &probe); err != nil || probe.Key == "" {
+				return nil, false
+			}
+			return dataStore.Flags().Get(probe.Key)
+		},
+	}, flagsPostHandler)))
 	mux.HandleFunc("/api/auth/login", loginHandler)
 	mux.HandleFunc("/api/auth/me", meHandler)
 
 	mux.HandleFunc("GET /api/users", requirePermission(auth.PermUsersRead, usersGetHandler))
-	mux.HandleFunc("POST /api/users", requirePermission(auth.PermUsersWrite, usersPostHandler))
-	mux.HandleFunc("PUT /api/users/{id}", requirePermission(auth.PermUsersWrite, usersPutHandler))
-	mux.HandleFunc("DELETE /api/users/{id}", requirePermission(auth.PermUsersWrite, usersDeleteHandler))
+	mux.HandleFunc("POST /api/users", requirePermission(auth.PermUsersCreate, withAudit(auditConfig{
+		Action:     "user.create",
+		TargetType: "user",
+	}, usersPostHandler)))
+	mux.HandleFunc("PUT /api/users/{id}", requirePermission(auth.PermUsersUpdate, withAudit(auditConfig{
+		Action:     "user.update",
+		TargetType: "user",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			u, ok := dataStore.Users().Get(r.PathValue("id"))
+			return toUserResponse(u), ok
+		},
+	}, usersPutHandler)))
+	mux.HandleFunc("DELETE /api/users/{id}", requirePermission(auth.PermUsersDelete, withAudit(auditConfig{
+		Action:     "user.delete",
+		TargetType: "user",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			u, ok := dataStore.Users().Get(r.PathValue("id"))
+			return toUserResponse(u), ok
+		},
+	}, usersDeleteHandler)))
 
 	mux.HandleFunc("GET /api/groups", requirePermission(auth.PermGroupsRead, groupsGetHandler))
-	mux.HandleFunc("POST /api/groups", requirePermission(auth.PermGroupsWrite, groupsPostHandler))
-	mux.HandleFunc("PUT /api/groups/{id}", requirePermission(auth.PermGroupsWrite, groupsPutHandler))
-	mux.HandleFunc("DELETE /api/groups/{id}", requirePermission(auth.PermGroupsWrite, groupsDeleteHandler))
+	mux.HandleFunc("POST /api/groups", requirePermission(auth.PermGroupsCreate, withAudit(auditConfig{
+		Action:     "group.create",
+		TargetType: "group",
+	}, groupsPostHandler)))
+	mux.HandleFunc("PUT /api/groups/{id}", requirePermission(auth.PermGroupsUpdate, withAudit(auditConfig{
+		Action:     "group.update",
+		TargetType: "group",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			g, ok := dataStore.Groups().Get(r.PathValue("id"))
+			return toGroupResponse(g), ok
+		},
+	}, groupsPutHandler)))
+	mux.HandleFunc("DELETE /api/groups/{id}", requirePermission(auth.PermGroupsDelete, withAudit(auditConfig{
+		Action:     "group.delete",
+		TargetType: "group",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			g, ok := dataStore.Groups().Get(r.PathValue("id"))
+			return toGroupResponse(g), ok
+		},
+	}, groupsDeleteHandler)))
+
+	mux.HandleFunc("GET /api/audits", requirePermission(auth.PermAuditsRead, auditsGetHandler))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

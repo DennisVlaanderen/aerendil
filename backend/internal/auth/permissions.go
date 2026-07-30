@@ -8,12 +8,17 @@ import (
 )
 
 const (
-	PermFlagsRead   = "flags:read"
-	PermFlagsWrite  = "flags:write"
-	PermUsersRead   = "users:read"
-	PermUsersWrite  = "users:write"
-	PermGroupsRead  = "groups:read"
-	PermGroupsWrite = "groups:write"
+	PermFlagsRead    = "flags:read"
+	PermFlagsWrite   = "flags:write"
+	PermUsersRead    = "users:read"
+	PermUsersCreate  = "users:create"
+	PermUsersUpdate  = "users:update"
+	PermUsersDelete  = "users:delete"
+	PermGroupsRead   = "groups:read"
+	PermGroupsCreate = "groups:create"
+	PermGroupsUpdate = "groups:update"
+	PermGroupsDelete = "groups:delete"
+	PermAuditsRead   = "audits:read"
 )
 
 // AllPermissions is the catalog of every known permission string --
@@ -22,10 +27,17 @@ const (
 // unknown or typo'd string. Gating a new endpoint elsewhere is "add one
 // const here, reference it in one route registration line" -- nothing else
 // in the permission model needs to change.
+//
+// Users and Groups are split into per-action read/create/update/delete
+// permissions rather than a single coarse "write" (unlike Flags, which has
+// no separate create/update/delete endpoints) so a group can be granted,
+// say, users:create and users:update without also being able to delete
+// users.
 var AllPermissions = []string{
 	PermFlagsRead, PermFlagsWrite,
-	PermUsersRead, PermUsersWrite,
-	PermGroupsRead, PermGroupsWrite,
+	PermUsersRead, PermUsersCreate, PermUsersUpdate, PermUsersDelete,
+	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
+	PermAuditsRead,
 }
 
 // IsKnownPermission reports whether perm is one of AllPermissions.

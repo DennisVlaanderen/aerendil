@@ -6,7 +6,7 @@ import type { RequestHandler } from './$types';
 
 export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 	const session = await getSession(cookies);
-	if (!session || !hasPermission(session, 'users:write')) {
+	if (!session || !hasPermission(session, 'users:update')) {
 		return json({ error: 'You do not have permission to manage users.' }, { status: 403 });
 	}
 
@@ -37,8 +37,11 @@ export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 
 export const DELETE: RequestHandler = async ({ cookies, params }) => {
 	const session = await getSession(cookies);
-	if (!session || !hasPermission(session, 'users:write')) {
-		return json({ error: 'You do not have permission to manage users.' }, { status: 403 });
+	// Deleting a user is hardcoded to admins only, mirroring the identical
+	// backend hardcode in usersDeleteHandler -- users:delete alone isn't
+	// enough (unlike groups:delete, which has no such extra check).
+	if (!session?.isAdmin) {
+		return json({ error: 'Only an administrator can delete users.' }, { status: 403 });
 	}
 
 	const token = getAuthToken(cookies);

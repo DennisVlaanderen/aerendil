@@ -6,7 +6,7 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const session = await getSession(cookies);
-	if (!session || !hasPermission(session, 'groups:write')) {
+	if (!session || !hasPermission(session, 'groups:create')) {
 		return json({ error: 'You do not have permission to manage groups.' }, { status: 403 });
 	}
 

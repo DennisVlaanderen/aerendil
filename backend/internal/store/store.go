@@ -50,6 +50,9 @@ func (s *Store) Users() UserRepository { return UserRepository{store: s} }
 // Groups returns a repository for group operations against the store.
 func (s *Store) Groups() GroupRepository { return GroupRepository{store: s} }
 
+// Audits returns a repository for audit-log operations against the store.
+func (s *Store) Audits() AuditRepository { return AuditRepository{store: s} }
+
 // apply centralizes the boilerplate every mutating repository method needs:
 // confirm this node is the Raft leader, marshal the command, submit it via
 // raft.Apply, and surface any submission-level error. The caller still

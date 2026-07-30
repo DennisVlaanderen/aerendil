@@ -56,3 +56,4 @@ package
 # Local raft data dir (AERENDIL_RAFT_DATA_DIR default), wherever `go run` is
 # invoked from.
 backend/**/data/
+/data/

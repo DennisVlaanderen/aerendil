@@ -58,7 +58,7 @@ describe('Sidebar user management visibility', () => {
 
 		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();
 
-		await screen.getByText('User Management').click();
+		await screen.getByRole('button', { name: 'Toggle User Management submenu' }).click();
 
 		await expect.element(screen.getByRole('link', { name: 'Users' })).toBeInTheDocument();
 		await expect.element(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('Sidebar user management visibility', () => {
 			permissions: ['groups:read']
 		});
 
-		await screen.getByText('User Management').click();
+		await screen.getByRole('button', { name: 'Toggle User Management submenu' }).click();
 
 		await expect.element(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
 		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();

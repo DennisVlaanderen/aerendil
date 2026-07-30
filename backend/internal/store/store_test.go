@@ -336,6 +336,59 @@ func TestStoreDeleteGroupAllowsNonSystemGroup(t *testing.T) {
 	}
 }
 
+func TestStoreAuditsAppendAndList(t *testing.T) {
+	s := newTestStore(t)
+
+	first, err := s.Audits().Append(AuditEntry{ActorID: "u1", Action: "flag.set", TargetType: "flag", TargetID: "checkout", Success: true, StatusCode: 200})
+	if err != nil {
+		t.Fatalf("expected Append to succeed: %v", err)
+	}
+	if first.ID == 0 {
+		t.Fatal("expected appended entry to have a non-zero ID")
+	}
+	if first.Timestamp == 0 {
+		t.Fatal("expected Append to assign a non-zero Timestamp")
+	}
+
+	second, err := s.Audits().Append(AuditEntry{ActorID: "u2", Action: "user.create", TargetType: "user", TargetID: "u3", Success: false, StatusCode: 409, Error: "username is already taken"})
+	if err != nil {
+		t.Fatalf("expected second Append to succeed: %v", err)
+	}
+
+	got, ok := s.Audits().Get(first.ID)
+	if !ok || got.Action != "flag.set" {
+		t.Fatalf("expected Get to find the first entry, got %+v (ok=%v)", got, ok)
+	}
+
+	all := s.Audits().List(AuditFilter{})
+	if len(all) != 2 {
+		t.Fatalf("expected 2 audit entries, got %d", len(all))
+	}
+	if all[0].ID != second.ID {
+		t.Fatalf("expected List to order newest first, got %+v", all)
+	}
+
+	byTargetType := s.Audits().List(AuditFilter{TargetType: "user"})
+	if len(byTargetType) != 1 || byTargetType[0].TargetID != "u3" {
+		t.Fatalf("expected 1 entry filtered by TargetType=user, got %+v", byTargetType)
+	}
+
+	byTargetID := s.Audits().List(AuditFilter{TargetID: "checkout"})
+	if len(byTargetID) != 1 || byTargetID[0].ActorID != "u1" {
+		t.Fatalf("expected 1 entry filtered by TargetID=checkout, got %+v", byTargetID)
+	}
+
+	byActor := s.Audits().List(AuditFilter{ActorID: "u2"})
+	if len(byActor) != 1 || byActor[0].TargetID != "u3" {
+		t.Fatalf("expected 1 entry filtered by ActorID=u2, got %+v", byActor)
+	}
+
+	combined := s.Audits().List(AuditFilter{TargetType: "flag", ActorID: "u2"})
+	if len(combined) != 0 {
+		t.Fatalf("expected AND-combined filter to match nothing, got %+v", combined)
+	}
+}
+
 type memSnapshotSink struct {
 	buf bytes.Buffer
 }
