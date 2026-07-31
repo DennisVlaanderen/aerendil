@@ -13,6 +13,15 @@ import (
 // protected (contrast with ErrProtectedSystemGroup).
 var ErrLastEnvironment = errors.New("cannot delete the last remaining environment")
 
+// ErrEnvironmentHasFlags is returned by EnvironmentRepository.Delete (and,
+// ultimately, fsm.applyEnvironment) when the target environment still has
+// at least one flag scoped to it. This referential integrity check is
+// FSM-enforced, the same tier as ErrLastAdmin/ErrProtectedSystemGroup/
+// ErrLastEnvironment, since a deleted environment would otherwise silently
+// orphan any flags still pointing at it -- real data loss, not a harmless
+// dangling reference.
+var ErrEnvironmentHasFlags = errors.New("cannot delete an environment that still has flags")
+
 // Environment is a named deployment target (e.g. "Production", "Staging")
 // that flags and group permissions will later be scoped to. Order is
 // stamped at creation time from the current environment count and is
@@ -34,6 +43,9 @@ func (f *fsm) applyEnvironment(index uint64, cmd command) any {
 	case opDelete:
 		if _, ok := f.environments[cmd.Key]; ok && len(f.environments) <= 1 {
 			return fmt.Errorf("%w: %q", ErrLastEnvironment, cmd.Key)
+		}
+		if f.hasFlagsInEnvironmentLocked(cmd.Key) {
+			return fmt.Errorf("%w: %q", ErrEnvironmentHasFlags, cmd.Key)
 		}
 		delete(f.environments, cmd.Key)
 		return nil
@@ -102,12 +114,16 @@ func (r EnvironmentRepository) Set(env Environment) (Environment, error) {
 }
 
 // Delete removes an environment by ID. Fails with ErrLastEnvironment if it
-// is the only one remaining -- a fast pre-check here, with
-// fsm.applyEnvironment as the ultimate source of truth for the same rule
-// (mirrors GroupRepository.Delete's pre-check + FSM-enforcement pattern).
+// is the only one remaining, or ErrEnvironmentHasFlags if any flag is still
+// scoped to it -- both are fast pre-checks here, with fsm.applyEnvironment
+// as the ultimate source of truth for the same rules (mirrors
+// GroupRepository.Delete's pre-check + FSM-enforcement pattern).
 func (r EnvironmentRepository) Delete(id string) error {
 	if _, ok := r.store.fsm.getEnvironment(id); ok && len(r.store.fsm.listEnvironments()) <= 1 {
 		return fmt.Errorf("%w: %q", ErrLastEnvironment, id)
+	}
+	if r.store.fsm.hasFlagsInEnvironment(id) {
+		return fmt.Errorf("%w: %q", ErrEnvironmentHasFlags, id)
 	}
 
 	resp, err := r.store.apply(command{Op: opDelete, Entity: entityEnvironment, Key: id})

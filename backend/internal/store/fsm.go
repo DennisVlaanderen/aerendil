@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	opSet    = "set"
-	opDelete = "delete"
-	opAppend = "append"
+	opSet      = "set"
+	opSetBatch = "setBatch"
+	opDelete   = "delete"
+	opAppend   = "append"
 )
 
 // entity discriminates which map a command applies to.
@@ -38,6 +39,7 @@ type command struct {
 	Entity 		entity 		`json:"entity"`
 	Key    		string 		`json:"key,omitempty"`
 	Flag   		*Flag  		`json:"flag,omitempty"`
+	Flags       []Flag      `json:"flags,omitempty"`
 	User   		*User  		`json:"user,omitempty"`
 	Group  		*Group 		`json:"group,omitempty"`
 	AuditEntry  *AuditEntry `json:"audit,omitempty"`
@@ -163,6 +165,17 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		}
 		if err := json.Unmarshal(raw, &doc); err != nil {
 			return fmt.Errorf("decode snapshot: %w", err)
+		}
+	}
+	for _, flag := range doc.Flags {
+		// A pre-environment-scoped snapshot decodes "successfully" here
+		// (Flag.EnvironmentID is just a new field, zero-valued to "" on
+		// decode) but every flag would then be silently orphaned under
+		// environment ID "" forever -- fail loudly instead, same "detect
+		// the old shape, don't silently drop data" convention as the
+		// pre-user/group probe above.
+		if flag.EnvironmentID == "" {
+			return fmt.Errorf("snapshot has pre-environment-scoped flags; wipe the raft data directory and restart so state rebuilds from a fresh snapshot")
 		}
 	}
 	if doc.Flags == nil {

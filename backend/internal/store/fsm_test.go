@@ -9,7 +9,7 @@ import (
 
 func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 	f := newFSM()
-	f.flags["a"] = Flag{Key: "a", Enabled: true, Version: 1}
+	f.flags[flagMapKey("prod", "a")] = Flag{EnvironmentID: "prod", Key: "a", Enabled: true, Version: 1}
 	f.users["u1"] = User{ID: "u1", Username: "alice", GroupIDs: []string{"editors"}, Active: true, Version: 2}
 	f.groups["editors"] = Group{ID: "editors", Name: "Editors", Permissions: []string{"flags:read"}, Version: 3}
 	f.groups[AdminGroupID] = Group{ID: AdminGroupID, Name: "Admin", System: true, Version: 4}
@@ -31,7 +31,8 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 		t.Fatalf("expected restore to succeed: %v", err)
 	}
 
-	if len(restored.flags) != 1 || !restored.flags["a"].Enabled {
+	restoredFlag, ok := restored.flags[flagMapKey("prod", "a")]
+	if !ok || !restoredFlag.Enabled || restoredFlag.EnvironmentID != "prod" {
 		t.Fatalf("unexpected restored flags: %+v", restored.flags)
 	}
 
@@ -68,15 +69,29 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 // ever exist).
 func TestFSMRestoreToleratesSnapshotWithoutEnvironmentsKey(t *testing.T) {
 	f := newFSM()
-	preEnvironmentSnapshot := `{"flags": {"a": {"key": "a", "enabled": true, "version": 1}}, "users": {}, "groups": {}, "auditEntries": {}}`
+	preEnvironmentSnapshot := `{"flags": {"legacy-env/a": {"environmentId": "legacy-env", "key": "a", "enabled": true, "version": 1}}, "users": {}, "groups": {}, "auditEntries": {}}`
 	if err := f.Restore(io.NopCloser(strings.NewReader(preEnvironmentSnapshot))); err != nil {
 		t.Fatalf("expected Restore to tolerate a snapshot without an environments key, got %v", err)
 	}
 	if f.environments == nil || len(f.environments) != 0 {
 		t.Fatalf("expected environments to default to an empty map, got %+v", f.environments)
 	}
-	if !f.flags["a"].Enabled {
+	if !f.flags[flagMapKey("legacy-env", "a")].Enabled {
 		t.Fatalf("expected pre-existing flags to still restore correctly, got %+v", f.flags)
+	}
+}
+
+// TestFSMRestoreRejectsPreEnvironmentScopedFlagSnapshot guards against
+// silently orphaning existing flags under environment ID "" forever: a
+// snapshot written before Flag.EnvironmentID existed decodes "successfully"
+// (the new field just zero-values to "") but must be rejected instead of
+// silently losing every flag's environment association.
+func TestFSMRestoreRejectsPreEnvironmentScopedFlagSnapshot(t *testing.T) {
+	f := newFSM()
+	preFlagScopingSnapshot := `{"flags": {"a": {"key": "a", "enabled": true, "version": 1}}, "users": {}, "groups": {}, "auditEntries": {}, "environments": {}}`
+	err := f.Restore(io.NopCloser(strings.NewReader(preFlagScopingSnapshot)))
+	if err == nil {
+		t.Fatal("expected Restore to reject a snapshot with pre-environment-scoped flags")
 	}
 }
 
@@ -177,6 +192,60 @@ func TestFSMApplyRejectsAdminGroupMutationEvenIfSuccessfullyRaftCommitted(t *tes
 
 	if got := f.groups[AdminGroupID]; got.Name != "Admin" {
 		t.Fatalf("expected Admin group to be unchanged, got %+v", got)
+	}
+}
+
+func TestFSMApplyFlagRejectsUnknownEnvironment(t *testing.T) {
+	f := newFSM()
+
+	resp := f.applyFlag(1, command{Op: opSet, Entity: entityFlag, Flag: &Flag{EnvironmentID: "does-not-exist", Key: "checkout", Enabled: true}})
+	respErr, ok := resp.(error)
+	if !ok {
+		t.Fatalf("expected applyFlag to return an error for an unknown environment, got %+v", resp)
+	}
+	if !errors.Is(respErr, ErrUnknownEnvironment) {
+		t.Fatalf("expected error to be ErrUnknownEnvironment, got %v", respErr)
+	}
+}
+
+func TestFSMApplyFlagSetBatchRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) {
+	f := newFSM()
+	f.environments["a"] = Environment{ID: "a", Name: "A"}
+	f.environments["b"] = Environment{ID: "b", Name: "B"}
+
+	resp := f.applyFlag(1, command{Op: opSetBatch, Entity: entityFlag, Flags: []Flag{
+		{EnvironmentID: "a", Key: "checkout", Enabled: true},
+		{EnvironmentID: "does-not-exist", Key: "checkout", Enabled: true},
+		{EnvironmentID: "b", Key: "checkout", Enabled: true},
+	}})
+	respErr, ok := resp.(error)
+	if !ok {
+		t.Fatalf("expected applyFlag to return an error for an unknown environment in the batch, got %+v", resp)
+	}
+	if !errors.Is(respErr, ErrUnknownEnvironment) {
+		t.Fatalf("expected error to be ErrUnknownEnvironment, got %v", respErr)
+	}
+	if len(f.flags) != 0 {
+		t.Fatalf("expected zero partial writes when the batch is rejected, got %+v", f.flags)
+	}
+}
+
+func TestFSMApplyEnvironmentRejectsDeletingEnvironmentWithFlags(t *testing.T) {
+	f := newFSM()
+	f.environments["prod"] = Environment{ID: "prod", Name: "Production"}
+	f.environments["staging"] = Environment{ID: "staging", Name: "Staging"}
+	f.flags[flagMapKey("prod", "checkout")] = Flag{EnvironmentID: "prod", Key: "checkout", Enabled: true}
+
+	resp := f.applyEnvironment(3, command{Op: opDelete, Entity: entityEnvironment, Key: "prod"})
+	respErr, ok := resp.(error)
+	if !ok {
+		t.Fatalf("expected applyEnvironment to return an error deleting an environment with flags, got %+v", resp)
+	}
+	if !errors.Is(respErr, ErrEnvironmentHasFlags) {
+		t.Fatalf("expected error to be ErrEnvironmentHasFlags, got %v", respErr)
+	}
+	if _, exists := f.environments["prod"]; !exists {
+		t.Fatal("expected the environment to not be deleted")
 	}
 }
 
