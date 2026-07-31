@@ -17,6 +17,7 @@ export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 	const body = await request.json().catch(() => null);
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 	const permissions = Array.isArray(body?.permissions) ? body.permissions.map(String) : [];
+	const environmentIds = Array.isArray(body?.environmentIds) ? body.environmentIds.map(String) : [];
 
 	if (!name) {
 		return json({ error: 'Name is required.' }, { status: 400 });
@@ -24,7 +25,7 @@ export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 
 	const token = getAuthToken(cookies);
 	const result = token
-		? await updateGroup(token, params.id, { name, permissions })
+		? await updateGroup(token, params.id, { name, permissions, environmentIds })
 		: { error: 'Not authenticated.', status: 401 };
 	if (result.error) {
 		return json({ error: result.error }, { status: result.status });

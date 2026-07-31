@@ -4,6 +4,7 @@ export interface GroupSummary {
 	id: string;
 	name: string;
 	permissions: string[];
+	environmentIds: string[];
 	system: boolean;
 }
 
@@ -59,7 +60,7 @@ export async function listGroups(token: string): Promise<GroupSummary[]> {
 
 export async function createGroup(
 	token: string,
-	input: { name: string; permissions: string[] }
+	input: { name: string; permissions: string[]; environmentIds: string[] }
 ): Promise<GroupResult> {
 	const response = await fetch(`${API_ORIGIN}/api/groups`, {
 		method: 'POST',
@@ -81,7 +82,7 @@ export async function createGroup(
 export async function updateGroup(
 	token: string,
 	id: string,
-	input: { name: string; permissions: string[] }
+	input: { name: string; permissions: string[]; environmentIds: string[] }
 ): Promise<GroupResult> {
 	const response = await fetch(`${API_ORIGIN}/api/groups/${encodeURIComponent(id)}`, {
 		method: 'PUT',

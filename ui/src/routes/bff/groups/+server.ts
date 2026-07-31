@@ -13,6 +13,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const body = await request.json().catch(() => null);
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 	const permissions = Array.isArray(body?.permissions) ? body.permissions.map(String) : [];
+	const environmentIds = Array.isArray(body?.environmentIds) ? body.environmentIds.map(String) : [];
 
 	if (!name) {
 		return json({ error: 'Name is required.' }, { status: 400 });
@@ -20,7 +21,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	const token = getAuthToken(cookies);
 	const result = token
-		? await createGroup(token, { name, permissions })
+		? await createGroup(token, { name, permissions, environmentIds })
 		: { error: 'Not authenticated.', status: 401 };
 	if (result.error) {
 		return json({ error: result.error }, { status: result.status });

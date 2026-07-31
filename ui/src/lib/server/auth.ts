@@ -7,19 +7,22 @@ export interface Session {
 	username: string;
 	isAdmin: boolean;
 	permissions: string[];
+	environmentIds: string[];
 }
 
 const AUTH_COOKIE = 'aerendil.auth';
+const SELECTED_ENV_COOKIE = 'aerendil.selected-environment';
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 function parseSession(payload: unknown): Session | null {
 	if (typeof payload !== 'object' || payload === null) {
 		return null;
 	}
-	const { user, isAdmin, permissions } = payload as {
+	const { user, isAdmin, permissions, environments } = payload as {
 		user?: unknown;
 		isAdmin?: unknown;
 		permissions?: unknown;
+		environments?: unknown;
 	};
 	if (typeof user !== 'object' || user === null) {
 		return null;
@@ -30,11 +33,13 @@ function parseSession(payload: unknown): Session | null {
 		typeof username !== 'string' ||
 		typeof isAdmin !== 'boolean' ||
 		!Array.isArray(permissions) ||
-		!permissions.every((p) => typeof p === 'string')
+		!permissions.every((p) => typeof p === 'string') ||
+		!Array.isArray(environments) ||
+		!environments.every((e) => typeof e === 'string')
 	) {
 		return null;
 	}
-	return { id, username, isAdmin, permissions };
+	return { id, username, isAdmin, permissions, environmentIds: environments };
 }
 
 export async function login(username: string, password: string): Promise<{ token: string } | null> {
@@ -91,4 +96,23 @@ export function clearAuthCookie(cookies: Cookies) {
 
 export function getAuthToken(cookies: Cookies): string | null {
 	return cookies.get(AUTH_COOKIE) ?? null;
+}
+
+// The selected environment is a UI preference, not a security boundary --
+// the bff/selected-environment route still re-validates the posted ID
+// against the caller's session-visible environmentIds before storing it, so
+// an httpOnly cookie here is just consistency with AUTH_COOKIE's pattern,
+// not a trust mechanism.
+export function setSelectedEnvironmentCookie(cookies: Cookies, environmentId: string) {
+	cookies.set(SELECTED_ENV_COOKIE, environmentId, {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax',
+		secure: !dev,
+		maxAge: 60 * 60 * 24 * 365
+	});
+}
+
+export function getSelectedEnvironmentId(cookies: Cookies): string | null {
+	return cookies.get(SELECTED_ENV_COOKIE) ?? null;
 }

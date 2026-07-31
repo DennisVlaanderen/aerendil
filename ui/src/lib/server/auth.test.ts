@@ -86,7 +86,8 @@ describe('getSession', () => {
 			jsonResponse(200, {
 				user: { id: 'u2', username: 'someone' },
 				isAdmin: false,
-				permissions: ['flags:read']
+				permissions: ['flags:read'],
+				environments: ['env1']
 			})
 		);
 
@@ -96,7 +97,8 @@ describe('getSession', () => {
 			id: 'u2',
 			username: 'someone',
 			isAdmin: false,
-			permissions: ['flags:read']
+			permissions: ['flags:read'],
+			environmentIds: ['env1']
 		});
 		expect(fetch).toHaveBeenCalledWith(
 			expect.stringContaining('/api/auth/me'),
