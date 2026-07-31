@@ -14,7 +14,15 @@ import (
 type resolvedPrincipal struct {
 	User    *auth.User
 	Perms   auth.PermissionSet
+	Envs    auth.EnvironmentSet
 	IsAdmin bool
+}
+
+// hasEnvironmentAccess reports whether p may read/write the given
+// environment's flags: Admin's usual unconditional bypass, or explicit
+// membership in the environment set resolved from p's groups.
+func (p resolvedPrincipal) hasEnvironmentAccess(environmentID string) bool {
+	return p.IsAdmin || p.Envs.Has(environmentID)
 }
 
 // authenticateRequest parses the bearer token and resolves the caller's
@@ -25,17 +33,17 @@ type resolvedPrincipal struct {
 func authenticateRequest(w http.ResponseWriter, r *http.Request) (resolvedPrincipal, bool) {
 	authorization := r.Header.Get("Authorization")
 	if authorization == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing authorization header"})
+		writeError(w, http.StatusUnauthorized, "missing authorization header")
 		return resolvedPrincipal{}, false
 	}
 
-	principal, perms, isAdmin, err := authService.AuthenticateToken(authorization)
+	principal, perms, envs, isAdmin, err := authService.AuthenticateToken(authorization)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		writeError(w, http.StatusUnauthorized, "invalid token")
 		return resolvedPrincipal{}, false
 	}
 
-	return resolvedPrincipal{User: principal, Perms: perms, IsAdmin: isAdmin}, true
+	return resolvedPrincipal{User: principal, Perms: perms, Envs: envs, IsAdmin: isAdmin}, true
 }
 
 type principalContextKey struct{}
@@ -67,7 +75,7 @@ func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if !principal.IsAdmin && !principal.Perms.Has(perm) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+			writeError(w, http.StatusForbidden, "forbidden")
 			return
 		}
 

@@ -21,28 +21,26 @@ func toEnvironmentResponse(e store.Environment) environmentResponse {
 	}
 }
 
-func environmentsGetHandler(w http.ResponseWriter, r *http.Request) {
+func environmentsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	environments := dataStore.Environments().List()
 	resp := make([]environmentResponse, 0, len(environments))
 	for _, e := range environments {
 		resp = append(resp, toEnvironmentResponse(e))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"environments": resp})
+	return ok(w, map[string]any{"environments": resp})
 }
 
-func environmentsPostHandler(w http.ResponseWriter, r *http.Request) {
+func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	var payload struct {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+		return badRequest("invalid request body")
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
-		return
+		return badRequest("name is required")
 	}
 
 	env, err := dataStore.Environments().Set(store.Environment{
@@ -51,33 +49,29 @@ func environmentsPostHandler(w http.ResponseWriter, r *http.Request) {
 		Order: len(dataStore.Environments().List()),
 	})
 	if err != nil {
-		writeStoreError(w, err)
-		return
+		return err
 	}
-	writeJSON(w, http.StatusCreated, toEnvironmentResponse(env))
+	return created(w, toEnvironmentResponse(env))
 }
 
-func environmentsPutHandler(w http.ResponseWriter, r *http.Request) {
+func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
-	existing, ok := dataStore.Environments().Get(id)
-	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "environment not found"})
-		return
+	existing, found := dataStore.Environments().Get(id)
+	if !found {
+		return notFound("environment not found")
 	}
 
 	var payload struct {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+		return badRequest("invalid request body")
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name is required"})
-		return
+		return badRequest("name is required")
 	}
 
 	// Order is intentionally not accepted from the request body -- it's
@@ -89,23 +83,20 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) {
 		Order: existing.Order,
 	})
 	if err != nil {
-		writeStoreError(w, err)
-		return
+		return err
 	}
-	writeJSON(w, http.StatusOK, toEnvironmentResponse(env))
+	return ok(w, toEnvironmentResponse(env))
 }
 
-func environmentsDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func environmentsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
-	if _, ok := dataStore.Environments().Get(id); !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "environment not found"})
-		return
+	if _, found := dataStore.Environments().Get(id); !found {
+		return notFound("environment not found")
 	}
 
 	if err := dataStore.Environments().Delete(id); err != nil {
-		writeStoreError(w, err)
-		return
+		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	return ok(w, map[string]string{"status": "deleted"})
 }
