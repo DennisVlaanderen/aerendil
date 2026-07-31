@@ -245,7 +245,7 @@ func meHandler(w http.ResponseWriter, r *http.Request) error {
 		"user":         principal.User,
 		"isAdmin":      principal.IsAdmin,
 		"permissions":  principal.Perms.Keys(),
-		"environments": principal.Envs.Keys(),
+		"environments": resolveEnvironmentSummaries(principal),
 	})
 }
 

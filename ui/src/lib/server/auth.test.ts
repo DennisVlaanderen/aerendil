@@ -87,7 +87,7 @@ describe('getSession', () => {
 				user: { id: 'u2', username: 'someone' },
 				isAdmin: false,
 				permissions: ['flags:read'],
-				environments: ['env1']
+				environments: [{ id: 'env1', name: 'Production', order: 0 }]
 			})
 		);
 
@@ -98,6 +98,7 @@ describe('getSession', () => {
 			username: 'someone',
 			isAdmin: false,
 			permissions: ['flags:read'],
+			environments: [{ id: 'env1', name: 'Production', order: 0 }],
 			environmentIds: ['env1']
 		});
 		expect(fetch).toHaveBeenCalledWith(

@@ -21,6 +21,28 @@ func toEnvironmentResponse(e store.Environment) environmentResponse {
 	}
 }
 
+// resolveEnvironmentSummaries returns the environments principal should see
+// in /api/auth/me: every environment for Admin (mirroring the unconditional
+// bypass used everywhere else), else only the ones principal.Envs actually
+// grants -- resolved to real Environment records here (not left as bare
+// IDs) so a client never needs environments:read just to learn the *names*
+// of environments it already has access to; that permission stays reserved
+// for the admin configuration surface (GET/POST/PUT/DELETE
+// /api/environments). Filters dataStore.Environments().List() (already
+// Order-sorted) rather than iterating principal.Envs.Keys() directly, since
+// Keys() sorts alphabetically by ID and would silently break the
+// lowest-Order-first ordering callers rely on.
+func resolveEnvironmentSummaries(principal resolvedPrincipal) []environmentResponse {
+	all := dataStore.Environments().List()
+	resp := make([]environmentResponse, 0, len(all))
+	for _, e := range all {
+		if principal.IsAdmin || principal.Envs.Has(e.ID) {
+			resp = append(resp, toEnvironmentResponse(e))
+		}
+	}
+	return resp
+}
+
 func environmentsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	environments := dataStore.Environments().List()
 	resp := make([]environmentResponse, 0, len(environments))

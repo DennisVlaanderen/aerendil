@@ -4,8 +4,18 @@
 	import { theme } from '$lib/theme.svelte';
 	import { getInitials } from '$lib/initials';
 	import LocaleSwitcher from './LocaleSwitcher.svelte';
+	import EnvironmentSwitcher from './EnvironmentSwitcher.svelte';
+	import type { EnvironmentSummary } from '$lib/server/environments';
 
-	let { username }: { username: string } = $props();
+	let {
+		username,
+		environments,
+		selectedEnvironmentId
+	}: {
+		username: string;
+		environments: EnvironmentSummary[];
+		selectedEnvironmentId: string | undefined;
+	} = $props();
 
 	function resolveTitle(pathname: string, data: Record<string, unknown>) {
 		if (pathname.startsWith('/dashboard/flags/')) {
@@ -29,6 +39,8 @@
 	<div class="truncate text-base font-semibold text-ink">{title}</div>
 
 	<div class="flex items-center gap-4">
+		<EnvironmentSwitcher {environments} {selectedEnvironmentId} />
+
 		<button
 			type="button"
 			class="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-control text-ink-muted"

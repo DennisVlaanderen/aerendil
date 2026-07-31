@@ -51,7 +51,8 @@
 			method: 'PUT',
 			body: JSON.stringify({
 				name: (data.get('name') ?? '').toString(),
-				permissions: data.getAll('permissions').map(String)
+				permissions: data.getAll('permissions').map(String),
+				environmentIds: data.getAll('environmentIds').map(String)
 			})
 		});
 
@@ -79,7 +80,8 @@
 			method: 'POST',
 			body: JSON.stringify({
 				name: (data.get('name') ?? '').toString(),
-				permissions: data.getAll('permissions').map(String)
+				permissions: data.getAll('permissions').map(String),
+				environmentIds: data.getAll('environmentIds').map(String)
 			})
 		});
 
@@ -154,6 +156,25 @@
 								{/each}
 							</div>
 
+							<fieldset class="grid gap-1.5">
+								<legend class="text-sm font-medium text-ink"
+									>{m.groups_create_environments_label()}</legend
+								>
+								<div class="flex flex-wrap gap-3">
+									{#each data.environments as environment (environment.id)}
+										<label class="flex items-center gap-1.5 text-sm text-ink">
+											<input
+												type="checkbox"
+												name="environmentIds"
+												value={environment.id}
+												checked={group.environmentIds.includes(environment.id)}
+											/>
+											{environment.name}
+										</label>
+									{/each}
+								</div>
+							</fieldset>
+
 							{#if updateErrors[group.id]}
 								<p class="flex items-center gap-2 text-sm text-error">
 									<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"
@@ -196,6 +217,18 @@
 						<label class="flex items-center gap-1.5 text-sm text-ink">
 							<input type="checkbox" name="permissions" value={perm} />
 							{perm}
+						</label>
+					{/each}
+				</div>
+			</fieldset>
+
+			<fieldset class="grid gap-1.5">
+				<legend class="text-sm font-medium text-ink">{m.groups_create_environments_label()}</legend>
+				<div class="flex flex-wrap gap-3">
+					{#each data.environments as environment (environment.id)}
+						<label class="flex items-center gap-1.5 text-sm text-ink">
+							<input type="checkbox" name="environmentIds" value={environment.id} />
+							{environment.name}
 						</label>
 					{/each}
 				</div>

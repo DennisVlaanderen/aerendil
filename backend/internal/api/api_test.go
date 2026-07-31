@@ -1,12 +1,14 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"aerendil/backend/internal/auth"
 	"aerendil/backend/internal/store"
 )
 
@@ -120,6 +122,40 @@ func TestMeHandlerReturnsResolvedPrincipal(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"permissions"`) || !strings.Contains(rec.Body.String(), `"isAdmin"`) {
 		t.Fatalf("expected resolved principal shape in response, got %s", rec.Body.String())
+	}
+}
+
+// TestMeHandlerResolvesEnvironmentNamesWithoutEnvironmentsReadPermission
+// guards against a regression where the UI's environment selector/flag
+// scoping silently broke for any user without environments:read -- that
+// permission gates the admin configuration surface (POST/PUT/DELETE
+// /api/environments, and GET for the full list), not a user's ability to
+// learn the *names* of environments their own groups already grant them.
+func TestMeHandlerResolvesEnvironmentNamesWithoutEnvironmentsReadPermission(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Staging")
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Environments []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"environments"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.Environments) != 1 || payload.Environments[0].ID != envID || payload.Environments[0].Name != "Staging" {
+		t.Fatalf("expected the granted environment resolved with its name, got %+v", payload.Environments)
 	}
 }
 

@@ -23,7 +23,7 @@ export async function listFlags(token: string, environmentId: string): Promise<F
 			headers: { Authorization: `Bearer ${token}` }
 		}
 	).catch(() => null);
-	if (!response || !response.ok) {
+	if (!response?.ok) {
 		// See the identical comment in lib/server/groups.ts's listGroups.
 		console.error(`listFlags: backend returned ${response ? response.status : 'no response'}`);
 		return [];

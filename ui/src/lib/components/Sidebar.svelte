@@ -26,6 +26,7 @@
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
 	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
 	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
+	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
 	const canSeeEnvironmentsSettings = $derived(
 		hasPermission({ isAdmin, permissions }, 'environments:read')
 	);
@@ -233,12 +234,23 @@
 		{/if}
 
 		{#if !collapsed}
-			<p
-				class="mt-3 mb-0.5 flex items-center gap-1.5 px-2.5 text-[11px] font-semibold tracking-wide text-nav-inactive uppercase"
-			>
-				<span class="icon-[lucide--flag] size-3.5" aria-hidden="true"></span>
-				{m.nav_flags()}
-			</p>
+			<div class="mt-3 mb-0.5 flex items-center justify-between gap-1.5 px-2.5">
+				<p
+					class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-nav-inactive uppercase"
+				>
+					<span class="icon-[lucide--flag] size-3.5" aria-hidden="true"></span>
+					{m.nav_flags()}
+				</p>
+				{#if canCreateFlags}
+					<a
+						class="flex size-4.5 shrink-0 items-center justify-center rounded text-nav-inactive no-underline hover:bg-line-3 hover:text-nav-active"
+						href={resolve(localizeHref('/dashboard/flags/new') as Pathname)}
+						aria-label={m.nav_new_flag()}
+					>
+						<span class="icon-[lucide--plus] size-3.5" aria-hidden="true"></span>
+					</a>
+				{/if}
+			</div>
 		{/if}
 
 		{#if flags.length === 0 && !collapsed}
