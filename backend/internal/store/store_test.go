@@ -389,6 +389,85 @@ func TestStoreAuditsAppendAndList(t *testing.T) {
 	}
 }
 
+func TestStoreSetAndGetEnvironment(t *testing.T) {
+	s := newTestStore(t)
+
+	applied, err := s.Environments().Set(Environment{ID: "prod", Name: "Production"})
+	if err != nil {
+		t.Fatalf("expected SetEnvironment to succeed: %v", err)
+	}
+	if applied.Version == 0 {
+		t.Fatal("expected applied environment to have a non-zero version")
+	}
+
+	got, ok := s.Environments().Get("prod")
+	if !ok {
+		t.Fatal("expected environment to be present after SetEnvironment")
+	}
+	if got.Name != "Production" {
+		t.Fatalf("unexpected environment state: %+v", got)
+	}
+
+	if len(s.Environments().List()) != 1 {
+		t.Fatalf("expected 1 environment, got %d", len(s.Environments().List()))
+	}
+}
+
+func TestStoreListEnvironmentsReturnsStableOrder(t *testing.T) {
+	s := newTestStore(t)
+
+	if _, err := s.Environments().Set(Environment{ID: "c", Name: "Third", Order: 2}); err != nil {
+		t.Fatalf("expected Set to succeed: %v", err)
+	}
+	if _, err := s.Environments().Set(Environment{ID: "a", Name: "First", Order: 0}); err != nil {
+		t.Fatalf("expected Set to succeed: %v", err)
+	}
+	if _, err := s.Environments().Set(Environment{ID: "b", Name: "Second", Order: 1}); err != nil {
+		t.Fatalf("expected Set to succeed: %v", err)
+	}
+
+	got := s.Environments().List()
+	if len(got) != 3 {
+		t.Fatalf("expected 3 environments, got %d", len(got))
+	}
+	if got[0].ID != "a" || got[1].ID != "b" || got[2].ID != "c" {
+		t.Fatalf("expected List to be ordered by Order ascending, got %+v", got)
+	}
+}
+
+func TestStoreDeleteEnvironmentAllowsNonLastEnvironment(t *testing.T) {
+	s := newTestStore(t)
+
+	if _, err := s.Environments().Set(Environment{ID: "prod", Name: "Production", Order: 0}); err != nil {
+		t.Fatalf("expected Set to succeed: %v", err)
+	}
+	if _, err := s.Environments().Set(Environment{ID: "staging", Name: "Staging", Order: 1}); err != nil {
+		t.Fatalf("expected Set to succeed: %v", err)
+	}
+
+	if err := s.Environments().Delete("staging"); err != nil {
+		t.Fatalf("expected DeleteEnvironment to succeed when another environment remains: %v", err)
+	}
+	if _, ok := s.Environments().Get("staging"); ok {
+		t.Fatal("expected environment to be gone after DeleteEnvironment")
+	}
+}
+
+func TestStoreDeleteEnvironmentRejectsLastEnvironment(t *testing.T) {
+	s := newTestStore(t)
+
+	if _, err := s.Environments().Set(Environment{ID: "prod", Name: "Production", Order: 0}); err != nil {
+		t.Fatalf("expected Set to succeed: %v", err)
+	}
+
+	if err := s.Environments().Delete("prod"); !errors.Is(err, ErrLastEnvironment) {
+		t.Fatalf("expected ErrLastEnvironment deleting the last remaining environment, got %v", err)
+	}
+	if _, ok := s.Environments().Get("prod"); !ok {
+		t.Fatal("expected the last environment to still exist after rejected delete")
+	}
+}
+
 type memSnapshotSink struct {
 	buf bytes.Buffer
 }

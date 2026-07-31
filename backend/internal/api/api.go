@@ -104,6 +104,28 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 	}, groupsDeleteHandler)))
 
 	mux.HandleFunc("GET /api/audits", requirePermission(auth.PermAuditsRead, auditsGetHandler))
+
+	mux.HandleFunc("GET /api/environments", requirePermission(auth.PermEnvironmentsRead, environmentsGetHandler))
+	mux.HandleFunc("POST /api/environments", requirePermission(auth.PermEnvironmentsCreate, withAudit(auditConfig{
+		Action:     "environment.create",
+		TargetType: "environment",
+	}, environmentsPostHandler)))
+	mux.HandleFunc("PUT /api/environments/{id}", requirePermission(auth.PermEnvironmentsUpdate, withAudit(auditConfig{
+		Action:     "environment.update",
+		TargetType: "environment",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			e, ok := dataStore.Environments().Get(r.PathValue("id"))
+			return toEnvironmentResponse(e), ok
+		},
+	}, environmentsPutHandler)))
+	mux.HandleFunc("DELETE /api/environments/{id}", requirePermission(auth.PermEnvironmentsDelete, withAudit(auditConfig{
+		Action:     "environment.delete",
+		TargetType: "environment",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			e, ok := dataStore.Environments().Get(r.PathValue("id"))
+			return toEnvironmentResponse(e), ok
+		},
+	}, environmentsDeleteHandler)))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -209,6 +231,10 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		return
 	}
 	if errors.Is(err, store.ErrProtectedSystemGroup) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		return
+	}
+	if errors.Is(err, store.ErrLastEnvironment) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
 	}

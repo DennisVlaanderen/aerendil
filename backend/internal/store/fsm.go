@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"sync"
 
 	"github.com/hashicorp/raft"
@@ -19,10 +20,11 @@ const (
 type entity string
 
 const (
-	entityFlag  entity = "flag"
-	entityUser  entity = "user"
-	entityGroup entity = "group"
-	entityAudit entity = "audit"
+	entityFlag        entity = "flag"
+	entityUser        entity = "user"
+	entityGroup       entity = "group"
+	entityAudit       entity = "audit"
+	entityEnvironment entity = "environment"
 )
 
 // command is the single Raft log entry shape for every entity kind this
@@ -39,6 +41,7 @@ type command struct {
 	User   		*User  		`json:"user,omitempty"`
 	Group  		*Group 		`json:"group,omitempty"`
 	AuditEntry  *AuditEntry `json:"audit,omitempty"`
+	Environment *Environment `json:"environment,omitempty"`
 }
 
 // fsm is the Raft finite state machine: in-memory maps of stored entitires, 
@@ -57,6 +60,7 @@ type fsm struct {
 	users  			map[string]User
 	groups 			map[string]Group
 	auditEntries 	map[uint64]AuditEntry
+	environments 	map[string]Environment
 }
 
 func newFSM() *fsm {
@@ -65,6 +69,7 @@ func newFSM() *fsm {
 		users:  make(map[string]User),
 		groups: make(map[string]Group),
 		auditEntries: make(map[uint64]AuditEntry),
+		environments: make(map[string]Environment),
 	}
 }
 
@@ -72,7 +77,7 @@ func newFSM() *fsm {
 // node. Invariants that must hold cluster-wide (e.g. the Admin group's
 // immutability) are enforced here rather than only in Store's pre-checks,
 // since Apply is the one place guaranteed to run exactly once per entry.
-func (f *fsm) Apply(log *raft.Log) interface{} {
+func (f *fsm) Apply(log *raft.Log) any {
 	var cmd command
 	if err := json.Unmarshal(log.Data, &cmd); err != nil {
 		return fmt.Errorf("decode command: %w", err)
@@ -90,6 +95,8 @@ func (f *fsm) Apply(log *raft.Log) interface{} {
 		return f.applyGroup(log.Index, cmd)
 	case entityAudit:
 		return f.applyAuditEntry(log.Index, cmd)
+	case entityEnvironment:
+		return f.applyEnvironment(log.Index, cmd)
 	default:
 		return fmt.Errorf("unknown command entity %q", cmd.Entity)
 	}
@@ -104,6 +111,7 @@ type snapshotDoc struct {
 	Users  map[string]User  `json:"users"`
 	Groups map[string]Group `json:"groups"`
 	AuditEntries map[uint64]AuditEntry `json:"auditEntries"`
+	Environments map[string]Environment `json:"environments"`
 }
 
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
@@ -115,19 +123,13 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		Users:  make(map[string]User, len(f.users)),
 		Groups: make(map[string]Group, len(f.groups)),
 		AuditEntries: make(map[uint64]AuditEntry, len(f.auditEntries)),
+		Environments: make(map[string]Environment, len(f.environments)),
 	}
-	for k, v := range f.flags {
-		doc.Flags[k] = v
-	}
-	for k, v := range f.users {
-		doc.Users[k] = v
-	}
-	for k, v := range f.groups {
-		doc.Groups[k] = v
-	}
-	for k, v := range f.auditEntries {
-		doc.AuditEntries[k] = v
-	}
+	maps.Copy(doc.Flags, f.flags)
+	maps.Copy(doc.Users, f.users)
+	maps.Copy(doc.Groups, f.groups)
+	maps.Copy(doc.AuditEntries, f.auditEntries)
+	maps.Copy(doc.Environments, f.environments)
 	return &fsmSnapshot{doc: doc}, nil
 }
 
@@ -175,6 +177,14 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	if doc.AuditEntries == nil {
 		doc.AuditEntries = make(map[uint64]AuditEntry)
 	}
+	if doc.Environments == nil {
+		// Not part of the pre-user/group legacy-format check above: an
+		// existing snapshot legitimately has flags/users/groups but no
+		// environments key yet, since Environment didn't exist when it was
+		// written. That's a normal upgrade, not the unrecognized-format
+		// case -- default to empty rather than failing loudly.
+		doc.Environments = make(map[string]Environment)
+	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -182,6 +192,7 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.users = doc.Users
 	f.groups = doc.Groups
 	f.auditEntries = doc.AuditEntries
+	f.environments = doc.Environments
 	return nil
 }
 

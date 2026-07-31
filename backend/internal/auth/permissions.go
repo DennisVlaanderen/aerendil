@@ -2,23 +2,28 @@ package auth
 
 import (
 	"errors"
+	"slices"
 	"sort"
 
 	"aerendil/backend/internal/store"
 )
 
 const (
-	PermFlagsRead    = "flags:read"
-	PermFlagsWrite   = "flags:write"
-	PermUsersRead    = "users:read"
-	PermUsersCreate  = "users:create"
-	PermUsersUpdate  = "users:update"
-	PermUsersDelete  = "users:delete"
-	PermGroupsRead   = "groups:read"
-	PermGroupsCreate = "groups:create"
-	PermGroupsUpdate = "groups:update"
-	PermGroupsDelete = "groups:delete"
-	PermAuditsRead   = "audits:read"
+	PermFlagsRead          = "flags:read"
+	PermFlagsWrite         = "flags:write"
+	PermUsersRead          = "users:read"
+	PermUsersCreate        = "users:create"
+	PermUsersUpdate        = "users:update"
+	PermUsersDelete        = "users:delete"
+	PermGroupsRead         = "groups:read"
+	PermGroupsCreate       = "groups:create"
+	PermGroupsUpdate       = "groups:update"
+	PermGroupsDelete       = "groups:delete"
+	PermAuditsRead         = "audits:read"
+	PermEnvironmentsRead   = "environments:read"
+	PermEnvironmentsCreate = "environments:create"
+	PermEnvironmentsUpdate = "environments:update"
+	PermEnvironmentsDelete = "environments:delete"
 )
 
 // AllPermissions is the catalog of every known permission string --
@@ -38,16 +43,12 @@ var AllPermissions = []string{
 	PermUsersRead, PermUsersCreate, PermUsersUpdate, PermUsersDelete,
 	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
 	PermAuditsRead,
+	PermEnvironmentsRead, PermEnvironmentsCreate, PermEnvironmentsUpdate, PermEnvironmentsDelete,
 }
 
 // IsKnownPermission reports whether perm is one of AllPermissions.
 func IsKnownPermission(perm string) bool {
-	for _, p := range AllPermissions {
-		if p == perm {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllPermissions, perm)
 }
 
 // PermissionSet is a resolved, deduplicated set of permission strings.

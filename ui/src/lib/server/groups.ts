@@ -22,7 +22,11 @@ export const ALL_PERMISSIONS = [
 	'groups:create',
 	'groups:update',
 	'groups:delete',
-	'audits:read'
+	'audits:read',
+	'environments:read',
+	'environments:create',
+	'environments:update',
+	'environments:delete'
 ] as const;
 
 // `status` mirrors the backend's own HTTP status verbatim -- see the

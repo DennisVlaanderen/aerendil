@@ -14,6 +14,7 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 	f.groups["editors"] = Group{ID: "editors", Name: "Editors", Permissions: []string{"flags:read"}, Version: 3}
 	f.groups[AdminGroupID] = Group{ID: AdminGroupID, Name: "Admin", System: true, Version: 4}
 	f.auditEntries[5] = AuditEntry{ID: 5, Timestamp: 1234, ActorID: "u1", Action: "flag.set", TargetType: "flag", TargetID: "a", Success: true, StatusCode: 200}
+	f.environments["prod"] = Environment{ID: "prod", Name: "Production", Order: 0, Version: 6}
 
 	snap, err := f.Snapshot()
 	if err != nil {
@@ -51,6 +52,52 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 	if !ok || restoredEntry.Action != "flag.set" || restoredEntry.TargetID != "a" {
 		t.Fatalf("unexpected restored audit entries: %+v (ok=%v)", restoredEntry, ok)
 	}
+
+	restoredEnv, ok := restored.environments["prod"]
+	if !ok || restoredEnv.Name != "Production" || restoredEnv.Version != 6 {
+		t.Fatalf("unexpected restored environments: %+v (ok=%v)", restoredEnv, ok)
+	}
+}
+
+// TestFSMRestoreToleratesSnapshotWithoutEnvironmentsKey guards the upgrade
+// path: an existing snapshot written before Environment existed has
+// "flags"/"users"/"groups" but no "environments" key at all. That must
+// restore cleanly with environments defaulting to empty, not be rejected by
+// the pre-user/group legacy-format check (which is about detecting the much
+// older flat-map-only format, not about requiring every field that will
+// ever exist).
+func TestFSMRestoreToleratesSnapshotWithoutEnvironmentsKey(t *testing.T) {
+	f := newFSM()
+	preEnvironmentSnapshot := `{"flags": {"a": {"key": "a", "enabled": true, "version": 1}}, "users": {}, "groups": {}, "auditEntries": {}}`
+	if err := f.Restore(io.NopCloser(strings.NewReader(preEnvironmentSnapshot))); err != nil {
+		t.Fatalf("expected Restore to tolerate a snapshot without an environments key, got %v", err)
+	}
+	if f.environments == nil || len(f.environments) != 0 {
+		t.Fatalf("expected environments to default to an empty map, got %+v", f.environments)
+	}
+	if !f.flags["a"].Enabled {
+		t.Fatalf("expected pre-existing flags to still restore correctly, got %+v", f.flags)
+	}
+}
+
+// TestFSMApplyEnvironmentRejectsDeletingLastEnvironment guards the
+// last-environment invariant at the FSM level -- the ultimate source of
+// truth, same as the Admin group's protections.
+func TestFSMApplyEnvironmentRejectsDeletingLastEnvironment(t *testing.T) {
+	f := newFSM()
+	f.environments["prod"] = Environment{ID: "prod", Name: "Production", Order: 0, Version: 1}
+
+	resp := f.applyEnvironment(2, command{Op: opDelete, Entity: entityEnvironment, Key: "prod"})
+	respErr, ok := resp.(error)
+	if !ok {
+		t.Fatalf("expected applyEnvironment to return an error deleting the last environment, got %+v", resp)
+	}
+	if !errors.Is(respErr, ErrLastEnvironment) {
+		t.Fatalf("expected error to be ErrLastEnvironment, got %v", respErr)
+	}
+	if _, exists := f.environments["prod"]; !exists {
+		t.Fatal("expected the last environment to not be deleted")
+	}
 }
 
 // TestFSMRestoreRejectsPreUserGroupSnapshotFormat guards against silently
@@ -74,8 +121,8 @@ func TestFSMRestoreToleratesEmptySnapshot(t *testing.T) {
 	if err := f.Restore(io.NopCloser(strings.NewReader(""))); err != nil {
 		t.Fatalf("expected Restore to tolerate an empty snapshot, got %v", err)
 	}
-	if f.flags == nil || f.users == nil || f.groups == nil || f.auditEntries == nil {
-		t.Fatalf("expected all maps to default to empty, got flags=%v users=%v groups=%v auditEntries=%v", f.flags, f.users, f.groups, f.auditEntries)
+	if f.flags == nil || f.users == nil || f.groups == nil || f.auditEntries == nil || f.environments == nil {
+		t.Fatalf("expected all maps to default to empty, got flags=%v users=%v groups=%v auditEntries=%v environments=%v", f.flags, f.users, f.groups, f.auditEntries, f.environments)
 	}
 }
 
