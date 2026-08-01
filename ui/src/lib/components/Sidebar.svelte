@@ -19,17 +19,28 @@
 	let collapsed = $state(false);
 	let userManagementOpen = $state(false);
 	let userManagementContainer: HTMLDivElement | undefined = $state();
+	let applicationSettingsOpen = $state(false);
+	let applicationSettingsContainer: HTMLDivElement | undefined = $state();
 
 	const canSeeUsers = $derived(hasPermission({ isAdmin, permissions }, 'users:read'));
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
 	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
 	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
+	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
+	const canSeeEnvironmentsSettings = $derived(
+		hasPermission({ isAdmin, permissions }, 'environments:read')
+	);
+	// OR chain even though it's a single term today, matching how
+	// canSeeUserManagement is already an OR of its children -- adding a
+	// second settings permission later is a one-line change here, not a nav
+	// restructure.
+	const canSeeApplicationSettings = $derived(canSeeEnvironmentsSettings);
 
 	function isActive(pathname: string) {
 		return page.url.pathname === pathname;
 	}
 
-	function handleClickOutsideUserManagement(event: MouseEvent) {
+	function handleClickOutsideDropdowns(event: MouseEvent) {
 		if (
 			userManagementOpen &&
 			userManagementContainer &&
@@ -37,16 +48,24 @@
 		) {
 			userManagementOpen = false;
 		}
+		if (
+			applicationSettingsOpen &&
+			applicationSettingsContainer &&
+			!applicationSettingsContainer.contains(event.target as Node)
+		) {
+			applicationSettingsOpen = false;
+		}
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') {
 			userManagementOpen = false;
+			applicationSettingsOpen = false;
 		}
 	}
 </script>
 
-<svelte:window onclick={handleClickOutsideUserManagement} onkeydown={handleKeydown} />
+<svelte:window onclick={handleClickOutsideDropdowns} onkeydown={handleKeydown} />
 
 <aside
 	class="flex h-full shrink-0 flex-col border-r border-line-2 bg-sidebar transition-[width] duration-200 {collapsed
@@ -142,6 +161,62 @@
 			</div>
 		{/if}
 
+		{#if canSeeApplicationSettings}
+			<div bind:this={applicationSettingsContainer}>
+				<div
+					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive(
+						'/dashboard/settings/environments'
+					)
+						? 'bg-nav-active-bg text-nav-active'
+						: 'text-nav-inactive'}"
+				>
+					<a
+						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
+						href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
+					>
+						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
+							<span class="icon-[lucide--settings] size-4.5"></span>
+						</span>
+						{#if !collapsed}<span>{m.nav_application_settings()}</span>{/if}
+					</a>
+					{#if !collapsed}
+						<button
+							type="button"
+							class="flex shrink-0 cursor-pointer items-center justify-center px-2.5 py-2.25"
+							aria-haspopup="true"
+							aria-expanded={applicationSettingsOpen}
+							aria-label={m.nav_application_settings_toggle()}
+							onclick={() => (applicationSettingsOpen = !applicationSettingsOpen)}
+						>
+							<span
+								class="icon-[lucide--chevron-down] size-3.5 transition-transform duration-150 {applicationSettingsOpen
+									? 'rotate-180'
+									: ''}"
+								aria-hidden="true"
+							></span>
+						</button>
+					{/if}
+				</div>
+
+				{#if applicationSettingsOpen && !collapsed}
+					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-line-3 pl-2.5">
+						{#if canSeeEnvironmentsSettings}
+							<a
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+									'/dashboard/settings/environments'
+								)
+									? 'bg-nav-active-bg text-nav-active'
+									: 'text-nav-inactive'}"
+								href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
+							>
+								{m.nav_environments()}
+							</a>
+						{/if}
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		{#if canSeeAuditLog}
 			<a
 				class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-line-3 {isActive(
@@ -159,12 +234,23 @@
 		{/if}
 
 		{#if !collapsed}
-			<p
-				class="mt-3 mb-0.5 flex items-center gap-1.5 px-2.5 text-[11px] font-semibold tracking-wide text-nav-inactive uppercase"
-			>
-				<span class="icon-[lucide--flag] size-3.5" aria-hidden="true"></span>
-				{m.nav_flags()}
-			</p>
+			<div class="mt-3 mb-0.5 flex items-center justify-between gap-1.5 px-2.5">
+				<p
+					class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-nav-inactive uppercase"
+				>
+					<span class="icon-[lucide--flag] size-3.5" aria-hidden="true"></span>
+					{m.nav_flags()}
+				</p>
+				{#if canCreateFlags}
+					<a
+						class="flex size-4.5 shrink-0 items-center justify-center rounded text-nav-inactive no-underline hover:bg-line-3 hover:text-nav-active"
+						href={resolve(localizeHref('/dashboard/flags/new') as Pathname)}
+						aria-label={m.nav_new_flag()}
+					>
+						<span class="icon-[lucide--plus] size-3.5" aria-hidden="true"></span>
+					</a>
+				{/if}
+			</div>
 		{/if}
 
 		{#if flags.length === 0 && !collapsed}

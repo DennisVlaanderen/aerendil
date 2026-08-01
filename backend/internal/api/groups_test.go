@@ -26,6 +26,44 @@ func TestGroupsPostRejectsUnknownPermission(t *testing.T) {
 	}
 }
 
+func TestGroupsPostRejectsUnknownEnvironment(t *testing.T) {
+	mux := newTestMux(t)
+
+	body, _ := json.Marshal(map[string]any{"name": "Editors", "environmentIds": []string{"does-not-exist"}})
+	req := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsCreate))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for an unknown environment ID, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGroupsPostAcceptsKnownEnvironment(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+
+	body, _ := json.Marshal(map[string]any{"name": "Editors", "environmentIds": []string{envID}})
+	req := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsCreate))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	environmentIDs, ok := raw["environmentIds"].([]any)
+	if !ok || len(environmentIDs) != 1 || environmentIDs[0] != envID {
+		t.Fatalf("expected environmentIds to include %q, got %+v", envID, raw["environmentIds"])
+	}
+}
+
 func TestGroupsPostForcesNonSystem(t *testing.T) {
 	mux := newTestMux(t)
 
@@ -112,6 +150,9 @@ func TestGroupsResponsesNeverReturnNullPermissions(t *testing.T) {
 	if bytes.Contains(rec.Body.Bytes(), []byte(`"permissions":null`)) {
 		t.Fatalf("expected create response to never have null permissions, got %s", rec.Body.String())
 	}
+	if bytes.Contains(rec.Body.Bytes(), []byte(`"environmentIds":null`)) {
+		t.Fatalf("expected create response to never have null environmentIds, got %s", rec.Body.String())
+	}
 
 	getReq := httptest.NewRequest(http.MethodGet, "/api/groups", nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
@@ -119,6 +160,9 @@ func TestGroupsResponsesNeverReturnNullPermissions(t *testing.T) {
 	mux.ServeHTTP(getRec, getReq)
 	if bytes.Contains(getRec.Body.Bytes(), []byte(`"permissions":null`)) {
 		t.Fatalf("expected list response to never have null permissions, got %s", getRec.Body.String())
+	}
+	if bytes.Contains(getRec.Body.Bytes(), []byte(`"environmentIds":null`)) {
+		t.Fatalf("expected list response to never have null environmentIds, got %s", getRec.Body.String())
 	}
 }
 

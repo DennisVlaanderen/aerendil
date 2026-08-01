@@ -2,23 +2,28 @@ package auth
 
 import (
 	"errors"
+	"slices"
 	"sort"
 
 	"aerendil/backend/internal/store"
 )
 
 const (
-	PermFlagsRead    = "flags:read"
-	PermFlagsWrite   = "flags:write"
-	PermUsersRead    = "users:read"
-	PermUsersCreate  = "users:create"
-	PermUsersUpdate  = "users:update"
-	PermUsersDelete  = "users:delete"
-	PermGroupsRead   = "groups:read"
-	PermGroupsCreate = "groups:create"
-	PermGroupsUpdate = "groups:update"
-	PermGroupsDelete = "groups:delete"
-	PermAuditsRead   = "audits:read"
+	PermFlagsRead          = "flags:read"
+	PermFlagsWrite         = "flags:write"
+	PermUsersRead          = "users:read"
+	PermUsersCreate        = "users:create"
+	PermUsersUpdate        = "users:update"
+	PermUsersDelete        = "users:delete"
+	PermGroupsRead         = "groups:read"
+	PermGroupsCreate       = "groups:create"
+	PermGroupsUpdate       = "groups:update"
+	PermGroupsDelete       = "groups:delete"
+	PermAuditsRead         = "audits:read"
+	PermEnvironmentsRead   = "environments:read"
+	PermEnvironmentsCreate = "environments:create"
+	PermEnvironmentsUpdate = "environments:update"
+	PermEnvironmentsDelete = "environments:delete"
 )
 
 // AllPermissions is the catalog of every known permission string --
@@ -38,16 +43,12 @@ var AllPermissions = []string{
 	PermUsersRead, PermUsersCreate, PermUsersUpdate, PermUsersDelete,
 	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
 	PermAuditsRead,
+	PermEnvironmentsRead, PermEnvironmentsCreate, PermEnvironmentsUpdate, PermEnvironmentsDelete,
 }
 
 // IsKnownPermission reports whether perm is one of AllPermissions.
 func IsKnownPermission(perm string) bool {
-	for _, p := range AllPermissions {
-		if p == perm {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(AllPermissions, perm)
 }
 
 // PermissionSet is a resolved, deduplicated set of permission strings.
@@ -70,39 +71,68 @@ func (p PermissionSet) Keys() []string {
 	return keys
 }
 
-// Resolve computes the effective, live permission set for a user: the
-// Admin group short-circuits to "all access" (isAdmin=true); otherwise
-// perms is the union of all permissions across the user's groups. This is
-// called fresh on every permission-gated request -- no caching, nothing
-// baked into the JWT -- so group membership/permission changes and
-// deactivation take effect on the user's very next request.
-func (s *Service) Resolve(userID string) (perms PermissionSet, isAdmin bool, err error) {
-	u, ok := s.store.Users().Get(userID)
-	if !ok || !u.Active {
-		return nil, false, errors.New("user not found or inactive")
-	}
+// EnvironmentSet is a resolved, deduplicated set of environment IDs a
+// principal has been granted access to via their groups' EnvironmentIDs.
+// Structurally identical to PermissionSet -- kept as a distinct type so a
+// caller can't accidentally pass one where the other is expected.
+type EnvironmentSet map[string]struct{}
 
-	perms, isAdmin = s.resolvePermissionsForUser(u)
-	return perms, isAdmin, nil
+// Has reports whether environmentID is in the set.
+func (e EnvironmentSet) Has(environmentID string) bool {
+	_, ok := e[environmentID]
+	return ok
 }
 
-// resolvePermissionsForUser computes the effective permission set for an
-// already-fetched user record, without an additional store lookup -- the
-// shared logic behind both Resolve and AuthenticateToken (service.go), so a
-// call site that already has the user in hand never re-fetches it.
-func (s *Service) resolvePermissionsForUser(u store.User) (perms PermissionSet, isAdmin bool) {
+// Keys returns the environment IDs in the set, sorted for stable
+// JSON/test output.
+func (e EnvironmentSet) Keys() []string {
+	keys := make([]string, 0, len(e))
+	for k := range e {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Resolve computes the effective, live permission and environment-access
+// sets for a user: the Admin group short-circuits to "all access"
+// (isAdmin=true); otherwise perms/envs are the union of all
+// permissions/EnvironmentIDs across the user's groups. This is called fresh
+// on every permission-gated request -- no caching, nothing baked into the
+// JWT -- so group membership/permission changes and deactivation take
+// effect on the user's very next request.
+func (s *Service) Resolve(userID string) (perms PermissionSet, envs EnvironmentSet, isAdmin bool, err error) {
+	u, ok := s.store.Users().Get(userID)
+	if !ok || !u.Active {
+		return nil, nil, false, errors.New("user not found or inactive")
+	}
+
+	perms, envs, isAdmin = s.resolvePermissionsForUser(u)
+	return perms, envs, isAdmin, nil
+}
+
+// resolvePermissionsForUser computes the effective permission and
+// environment-access sets for an already-fetched user record, without an
+// additional store lookup -- the shared logic behind both Resolve and
+// AuthenticateToken (service.go), so a call site that already has the user
+// in hand never re-fetches it.
+func (s *Service) resolvePermissionsForUser(u store.User) (perms PermissionSet, envs EnvironmentSet, isAdmin bool) {
 	perms = PermissionSet{}
+	envs = EnvironmentSet{}
 	for _, groupID := range u.GroupIDs {
 		g, ok := s.store.Groups().Get(groupID)
 		if !ok {
 			continue
 		}
 		if g.ID == store.AdminGroupID && g.System {
-			return nil, true
+			return nil, nil, true
 		}
 		for _, perm := range g.Permissions {
 			perms[perm] = struct{}{}
 		}
+		for _, envID := range g.EnvironmentIDs {
+			envs[envID] = struct{}{}
+		}
 	}
-	return perms, false
+	return perms, envs, false
 }

@@ -42,9 +42,15 @@ func newTestMux(t *testing.T) *http.ServeMux {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 
+	// Groups().Set is the warmup probe (not Flags().Set) because Flag.Set now
+	// validates its EnvironmentID against an existing Environment -- there is
+	// none yet at this point, so it would never succeed. A throwaway,
+	// never-referenced Group has no such referential-integrity or ordering
+	// side effects on other tests (unlike Environment, whose Order field
+	// several environments_test.go assertions depend on being 0-based).
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if _, err := s.Flags().Set(store.Flag{Key: "warmup", Enabled: true}); err == nil {
+		if _, err := s.Groups().Set(store.Group{ID: store.NewID(), Name: "warmup"}); err == nil {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -69,6 +75,32 @@ func tokenFor(t *testing.T, perms ...string) string {
 		t.Fatalf("create test group: %v", err)
 	}
 	return tokenForGroups(t, groupID)
+}
+
+// tokenForWithEnvironments is tokenFor's environment-aware counterpart --
+// creates a group holding both perms and access to environmentIDs, and
+// returns a bearer token for a new user in that group.
+func tokenForWithEnvironments(t *testing.T, environmentIDs []string, perms ...string) string {
+	t.Helper()
+
+	groupID := store.NewID()
+	if _, err := dataStore.Groups().Set(store.Group{ID: groupID, Name: "test-group", Permissions: perms, EnvironmentIDs: environmentIDs}); err != nil {
+		t.Fatalf("create test group: %v", err)
+	}
+	return tokenForGroups(t, groupID)
+}
+
+// seedEnvironmentForTest creates an Environment via the package-level
+// dataStore and returns its ID -- for tests that need one to scope flags
+// to. Call newTestMux first so dataStore is wired up.
+func seedEnvironmentForTest(t *testing.T, name string) string {
+	t.Helper()
+
+	env, err := dataStore.Environments().Set(store.Environment{ID: store.NewID(), Name: name})
+	if err != nil {
+		t.Fatalf("seed environment %q: %v", name, err)
+	}
+	return env.ID
 }
 
 // adminToken creates a user in the (seeded-if-needed) Admin group and
@@ -131,14 +163,43 @@ func TestFlagsGetRequiresReadPermission(t *testing.T) {
 
 func TestFlagsGetSucceedsWithReadPermission(t *testing.T) {
 	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for a user with flags:read and environment access, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestFlagsGetRequiresEnvironmentIDQueryParam(t *testing.T) {
+	mux := newTestMux(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/flags", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermFlagsRead))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for a user with flags:read, got %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 with no environmentId query param, got %d", rec.Code)
+	}
+}
+
+func TestFlagsGetRequiresEnvironmentAccess(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil)
+	// flags:read but no grant for this specific environment.
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermFlagsRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for flags:read without access to this environment, got %d", rec.Code)
 	}
 }
 
@@ -159,33 +220,59 @@ func TestFlagsPostRequiresWritePermission(t *testing.T) {
 
 func TestFlagsPostSucceedsWithWritePermission(t *testing.T) {
 	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
 
-	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on"})
+	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermFlagsWrite))
+	req.Header.Set("Authorization", "Bearer "+tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for a user with flags:write, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 200 for a user with flags:write and environment access, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var flag store.Flag
-	if err := json.Unmarshal(rec.Body.Bytes(), &flag); err != nil {
+	var resp struct {
+		Flags []store.Flag `json:"flags"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if flag.Key != "checkout" || !flag.Enabled || flag.Value != "on" {
-		t.Fatalf("unexpected flag in response: %+v", flag)
+	if len(resp.Flags) != 1 || resp.Flags[0].Key != "checkout" || !resp.Flags[0].Enabled || resp.Flags[0].Value != "on" {
+		t.Fatalf("unexpected flags in response: %+v", resp.Flags)
+	}
+}
+
+func TestFlagsPostRequiresEnvironmentAccessForEveryRequestedEnvironment(t *testing.T) {
+	mux := newTestMux(t)
+	grantedID := seedEnvironmentForTest(t, "Production")
+	ungrantedID := seedEnvironmentForTest(t, "Staging")
+
+	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{grantedID, ungrantedID}})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
+	// Only granted access to one of the two requested environments.
+	req.Header.Set("Authorization", "Bearer "+tokenForWithEnvironments(t, []string{grantedID}, auth.PermFlagsWrite))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when access to any requested environment is missing, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if _, ok := dataStore.Flags().Get(grantedID, "checkout"); ok {
+		t.Fatal("expected no flag to be written to the granted environment when the request as a whole is rejected")
 	}
 }
 
 func TestAdminGroupBypassesAllPermissionChecks(t *testing.T) {
 	mux := newTestMux(t)
 	token := adminToken(t)
+	envID := seedEnvironmentForTest(t, "Production")
 
 	for _, req := range []*http.Request{
-		httptest.NewRequest(http.MethodGet, "/api/flags", nil),
+		httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil),
 		httptest.NewRequest(http.MethodGet, "/api/users", nil),
 		httptest.NewRequest(http.MethodGet, "/api/groups", nil),
 	} {

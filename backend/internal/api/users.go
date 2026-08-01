@@ -46,65 +46,57 @@ func toUserResponse(u store.User) userResponse {
 	}
 }
 
-func usersGetHandler(w http.ResponseWriter, r *http.Request) {
+func usersGetHandler(w http.ResponseWriter, r *http.Request) error {
 	users := dataStore.Users().List()
 	resp := make([]userResponse, 0, len(users))
 	for _, u := range users {
 		resp = append(resp, toUserResponse(u))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": resp})
+	return ok(w, map[string]any{"users": resp})
 }
 
-func usersPostHandler(w http.ResponseWriter, r *http.Request) {
+func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 	var payload struct {
 		Username string   `json:"username"`
 		Password string   `json:"password"`
 		GroupIDs []string `json:"groupIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+		return badRequest("invalid request body")
 	}
 
 	username := strings.ToLower(strings.TrimSpace(payload.Username))
 	if username == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username is required"})
-		return
+		return badRequest("username is required")
 	}
 	if payload.Password == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password is required"})
-		return
+		return badRequest("password is required")
 	}
 	if len(payload.Password) < minPasswordLength {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
-		return
+		return badRequest("password must be at least 8 characters")
 	}
 	if len(payload.Password) > maxPasswordLength {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at most 72 characters"})
-		return
+		return badRequest("password must be at most 72 characters")
 	}
 
-	if !requireAdminForAdminGroupChange(w, r, payload.GroupIDs) {
-		return
+	if err := requireAdminForAdminGroupChange(r, payload.GroupIDs); err != nil {
+		return err
 	}
 
 	// Fast pre-check; fsm.applyUser is the authoritative enforcement point
 	// for username uniqueness (see store.ErrUsernameTaken).
 	if _, exists := dataStore.Users().GetByUsername(username); exists {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "username is already taken"})
-		return
+		return conflict("username is already taken")
 	}
 	for _, groupID := range payload.GroupIDs {
 		if _, ok := dataStore.Groups().Get(groupID); !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown group id: " + groupID})
-			return
+			return badRequest("unknown group id: " + groupID)
 		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
-		return
+		return internalError("failed to hash password")
 	}
 
 	user, err := dataStore.Users().Set(store.User{
@@ -115,10 +107,9 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) {
 		Active:       true,
 	})
 	if err != nil {
-		writeStoreError(w, err)
-		return
+		return err
 	}
-	writeJSON(w, http.StatusCreated, toUserResponse(user))
+	return created(w, toUserResponse(user))
 }
 
 // requireAdminForAdminGroupChange returns false (having already written a
@@ -130,7 +121,7 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) {
 // whichever of a user's current and/or proposed group lists are relevant:
 // touching the Admin group from either side requires the caller to already
 // be an admin.
-func requireAdminForAdminGroupChange(w http.ResponseWriter, r *http.Request, groupSets ...[]string) bool {
+func requireAdminForAdminGroupChange(r *http.Request, groupSets ...[]string) error {
 	touchesAdmin := false
 	for _, groupIDs := range groupSets {
 		if slices.Contains(groupIDs, store.AdminGroupID) {
@@ -139,22 +130,20 @@ func requireAdminForAdminGroupChange(w http.ResponseWriter, r *http.Request, gro
 		}
 	}
 	if !touchesAdmin {
-		return true
+		return nil
 	}
 	principal, _ := principalFromContext(r)
 	if !principal.IsAdmin {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only an Admin can modify Admin group membership"})
-		return false
+		return forbidden("only an Admin can modify Admin group membership")
 	}
-	return true
+	return nil
 }
 
-func usersPutHandler(w http.ResponseWriter, r *http.Request) {
+func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
-	existing, ok := dataStore.Users().Get(id)
-	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
-		return
+	existing, found := dataStore.Users().Get(id)
+	if !found {
+		return notFound("user not found")
 	}
 
 	var payload struct {
@@ -164,22 +153,18 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) {
 		Active   bool      `json:"active"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
+		return badRequest("invalid request body")
 	}
 
 	username := strings.ToLower(strings.TrimSpace(payload.Username))
 	if username == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username is required"})
-		return
+		return badRequest("username is required")
 	}
 	if payload.Password != "" && len(payload.Password) < minPasswordLength {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at least 8 characters"})
-		return
+		return badRequest("password must be at least 8 characters")
 	}
 	if payload.Password != "" && len(payload.Password) > maxPasswordLength {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be at most 72 characters"})
-		return
+		return badRequest("password must be at most 72 characters")
 	}
 
 	// A missing/nil groupIds field means "leave group membership unchanged"
@@ -193,21 +178,19 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) {
 		groupIDs = *payload.GroupIDs
 	}
 
-	if !requireAdminForAdminGroupChange(w, r, existing.GroupIDs, groupIDs) {
-		return
+	if err := requireAdminForAdminGroupChange(r, existing.GroupIDs, groupIDs); err != nil {
+		return err
 	}
 
 	// Fast pre-check; fsm.applyUser is the authoritative enforcement point
 	// for username uniqueness (see store.ErrUsernameTaken). Excludes this
 	// user's own record so keeping the same username isn't a false conflict.
 	if other, exists := dataStore.Users().GetByUsername(username); exists && other.ID != id {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "username is already taken"})
-		return
+		return conflict("username is already taken")
 	}
 	for _, groupID := range groupIDs {
 		if _, ok := dataStore.Groups().Get(groupID); !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown group id: " + groupID})
-			return
+			return badRequest("unknown group id: " + groupID)
 		}
 	}
 
@@ -219,8 +202,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) {
 	if payload.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to hash password"})
-			return
+			return internalError("failed to hash password")
 		}
 		passwordHash = hash
 	}
@@ -233,17 +215,15 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) {
 		Active:       payload.Active,
 	})
 	if err != nil {
-		writeStoreError(w, err)
-		return
+		return err
 	}
-	writeJSON(w, http.StatusOK, toUserResponse(user))
+	return ok(w, toUserResponse(user))
 }
 
-func usersDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func usersDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
-	if _, ok := dataStore.Users().Get(id); !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
-		return
+	if _, found := dataStore.Users().Get(id); !found {
+		return notFound("user not found")
 	}
 
 	// Deleting a user is hardcoded to admins only for now, on top of the
@@ -253,13 +233,11 @@ func usersDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	// delete users.
 	principal, _ := principalFromContext(r)
 	if !principal.IsAdmin {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only an Admin can delete users"})
-		return
+		return forbidden("only an Admin can delete users")
 	}
 
 	if err := dataStore.Users().Delete(id); err != nil {
-		writeStoreError(w, err)
-		return
+		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+	return ok(w, map[string]string{"status": "deleted"})
 }

@@ -147,12 +147,13 @@ func TestAuditRecordsRejectedMutation(t *testing.T) {
 
 func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
 	mux := newTestMux(t)
-	writeToken := tokenFor(t, auth.PermFlagsWrite)
+	envID := seedEnvironmentForTest(t, "Production")
+	writeToken := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
 	readToken := tokenFor(t, auth.PermAuditsRead)
 
 	key := fmt.Sprintf("flag-%s", store.NewID())
 
-	firstBody, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "value": "on"})
+	firstBody, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "value": "on", "environmentIds": []string{envID}})
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(firstBody))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec := httptest.NewRecorder()
@@ -161,7 +162,7 @@ func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
 		t.Fatalf("expected 200 on first flag set, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	secondBody, _ := json.Marshal(map[string]any{"key": key, "enabled": false, "value": "off"})
+	secondBody, _ := json.Marshal(map[string]any{"key": key, "enabled": false, "value": "off", "environmentIds": []string{envID}})
 	req = httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(secondBody))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec = httptest.NewRecorder()
@@ -190,11 +191,12 @@ func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
 
 func TestAuditsListFiltersByActorID(t *testing.T) {
 	mux := newTestMux(t)
-	writeToken := tokenFor(t, auth.PermFlagsWrite)
+	envID := seedEnvironmentForTest(t, "Production")
+	writeToken := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
 	readToken := tokenFor(t, auth.PermAuditsRead)
 
 	key := fmt.Sprintf("actor-filter-flag-%s", store.NewID())
-	body, _ := json.Marshal(map[string]any{"key": key, "enabled": true})
+	body, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "environmentIds": []string{envID}})
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec := httptest.NewRecorder()

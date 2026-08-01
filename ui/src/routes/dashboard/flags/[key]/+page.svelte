@@ -3,6 +3,14 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	// data.environments/selectedEnvironmentId cascade down from
+	// dashboard/+layout.server.ts -- the same key can now exist
+	// independently per environment, so the detail view needs to say which
+	// one it's showing.
+	let selectedEnvironmentName = $derived(
+		data.environments.find((e) => e.id === data.selectedEnvironmentId)?.name
+	);
 </script>
 
 <svelte:head>
@@ -14,10 +22,13 @@
 		<p class="mb-1 text-xs font-semibold tracking-widest text-nav-active uppercase">
 			{m.nav_flags()}
 		</p>
-		<h1 class="mb-5 flex items-center gap-3 text-xl font-semibold break-words text-ink">
+		<h1 class="mb-1 flex items-center gap-3 text-xl font-semibold break-words text-ink">
 			<span class="icon-[lucide--flag] size-6 shrink-0 text-gold" aria-hidden="true"></span>
 			{data.flag.key}
 		</h1>
+		<p class="mb-5 text-sm text-ink-muted">
+			{selectedEnvironmentName ? m.flag_detail_environment({ name: selectedEnvironmentName }) : ''}
+		</p>
 
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
 			<div class="grid gap-1.5 rounded-lg border border-line-1 bg-page p-4">

@@ -4,6 +4,7 @@ export interface GroupSummary {
 	id: string;
 	name: string;
 	permissions: string[];
+	environmentIds: string[];
 	system: boolean;
 }
 
@@ -22,7 +23,11 @@ export const ALL_PERMISSIONS = [
 	'groups:create',
 	'groups:update',
 	'groups:delete',
-	'audits:read'
+	'audits:read',
+	'environments:read',
+	'environments:create',
+	'environments:update',
+	'environments:delete'
 ] as const;
 
 // `status` mirrors the backend's own HTTP status verbatim -- see the
@@ -55,7 +60,7 @@ export async function listGroups(token: string): Promise<GroupSummary[]> {
 
 export async function createGroup(
 	token: string,
-	input: { name: string; permissions: string[] }
+	input: { name: string; permissions: string[]; environmentIds: string[] }
 ): Promise<GroupResult> {
 	const response = await fetch(`${API_ORIGIN}/api/groups`, {
 		method: 'POST',
@@ -77,7 +82,7 @@ export async function createGroup(
 export async function updateGroup(
 	token: string,
 	id: string,
-	input: { name: string; permissions: string[] }
+	input: { name: string; permissions: string[]; environmentIds: string[] }
 ): Promise<GroupResult> {
 	const response = await fetch(`${API_ORIGIN}/api/groups/${encodeURIComponent(id)}`, {
 		method: 'PUT',

@@ -155,22 +155,22 @@ func (s *Service) parseTokenSubject(tokenString string) (string, error) {
 	return userID, nil
 }
 
-// AuthenticateToken validates a bearer token and resolves its principal and
-// permission set in a single store fetch of the user -- the combined form
-// api.authenticateRequest uses on every request, replacing what used to be
-// a ParseToken call followed by a separate Resolve call that each
-// independently fetched the same user record.
-func (s *Service) AuthenticateToken(tokenString string) (*User, PermissionSet, bool, error) {
+// AuthenticateToken validates a bearer token and resolves its principal,
+// permission set, and environment-access set in a single store fetch of the
+// user -- the combined form api.authenticateRequest uses on every request,
+// replacing what used to be a ParseToken call followed by a separate
+// Resolve call that each independently fetched the same user record.
+func (s *Service) AuthenticateToken(tokenString string) (*User, PermissionSet, EnvironmentSet, bool, error) {
 	userID, err := s.parseTokenSubject(tokenString)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 
 	u, ok := s.store.Users().Get(userID)
 	if !ok || !u.Active {
-		return nil, nil, false, errors.New("user not found or inactive")
+		return nil, nil, nil, false, errors.New("user not found or inactive")
 	}
 
-	perms, isAdmin := s.resolvePermissionsForUser(u)
-	return &User{ID: u.ID, Username: u.Username}, perms, isAdmin, nil
+	perms, envs, isAdmin := s.resolvePermissionsForUser(u)
+	return &User{ID: u.ID, Username: u.Username}, perms, envs, isAdmin, nil
 }

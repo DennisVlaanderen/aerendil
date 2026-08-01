@@ -45,7 +45,11 @@ describe('createGroup', () => {
 			jsonResponse(200, { id: 'g1', name: 'Editors', permissions: ['flags:read'], system: false })
 		);
 
-		const result = await createGroup('a-token', { name: 'Editors', permissions: ['flags:read'] });
+		const result = await createGroup('a-token', {
+			name: 'Editors',
+			permissions: ['flags:read'],
+			environmentIds: []
+		});
 
 		expect(result).toEqual({
 			group: { id: 'g1', name: 'Editors', permissions: ['flags:read'], system: false }
@@ -55,7 +59,11 @@ describe('createGroup', () => {
 	it('returns the backend error message and status on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(400, { error: 'unknown permission' }));
 
-		const result = await createGroup('a-token', { name: 'Editors', permissions: ['bogus'] });
+		const result = await createGroup('a-token', {
+			name: 'Editors',
+			permissions: ['bogus'],
+			environmentIds: []
+		});
 
 		expect(result).toEqual({ error: 'unknown permission', status: 400 });
 	});
@@ -67,7 +75,11 @@ describe('updateGroup', () => {
 			jsonResponse(403, { error: 'the Admin group cannot be modified' })
 		);
 
-		const result = await updateGroup('a-token', 'admin', { name: 'Renamed', permissions: [] });
+		const result = await updateGroup('a-token', 'admin', {
+			name: 'Renamed',
+			permissions: [],
+			environmentIds: []
+		});
 
 		expect(result).toEqual({ error: 'the Admin group cannot be modified', status: 403 });
 		expect(fetch).toHaveBeenCalledWith(

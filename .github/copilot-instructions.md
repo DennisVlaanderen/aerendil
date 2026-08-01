@@ -64,37 +64,69 @@ contain logic: it opens the `store.Store`, starts the FQDP TCP listener in a
 goroutine, and starts the HTTP API — all sharing the same underlying flag
 store.
 
-- **`store/`** — the flag data layer, built directly on `hashicorp/raft`:
+- **`store/`** — the Raft-replicated data layer, built directly on
+  `hashicorp/raft`:
   - `cluster.go` (`newRaft`) sets up a Raft node backed by BoltDB
     (`raft-boltdb`) for the log/stable store and a file snapshot store. On
     first run with `Bootstrap: true` it bootstraps a single-member cluster;
     on restart it rejoins existing on-disk state instead of re-bootstrapping.
-  - `fsm.go` is the Raft FSM: an in-memory `map[string]Flag` guarded by a
-    `sync.RWMutex`. There is deliberately no separate embedded DB for
-    application data — Raft's replicated log plus FSM snapshot/restore is the
-    durability mechanism.
+  - `fsm.go` is the Raft FSM: one `command{Op, Entity, Flag, User, Group,
+    AuditEntry, Environment}` envelope dispatched by `Entity`, backing one
+    in-memory map per entity (`flags`, `users`, `groups`, `auditEntries`,
+    `environments`), all guarded by a single `sync.RWMutex`. A single
+    composite `snapshotDoc` covers every entity for Raft snapshot/restore.
+    There is deliberately no separate embedded DB for application data —
+    Raft's replicated log plus FSM snapshot/restore is the durability
+    mechanism. Project stance (pre-v1, no real deployments to migrate):
+    schema-breaking changes to this command/snapshot format require wiping
+    the Raft data dir on upgrade rather than migrating it — see the comment
+    on `command` in `fsm.go`.
   - `store.go` (`Store`) is the public API: `Get`/`List` read the FSM
-    directly; `Set` only succeeds when the local node is Raft leader (it
-    encodes a `command` and calls `raft.Apply`) — with today's single-node
-    bootstrap that's always true, but multi-node behavior depends on this.
-  - `flag.go` defines `Flag{Key, Enabled, Value, Version}`; `Version` is set
-    from the Raft log index on apply, not a separately tracked counter.
+    directly; `Set`/`Delete` only succeed when the local node is Raft leader
+    (they encode a `command` and call `raft.Apply`) — with today's
+    single-node bootstrap that's always true, but multi-node behavior
+    depends on this. Entity-specific operations are grouped into
+    repositories — `Store.Flags()`, `Store.Users()`, `Store.Groups()`,
+    `Store.Audits()`, `Store.Environments()` — rather than living directly
+    on `Store`.
+  - `flag.go` defines `Flag{Key, Enabled, Value, Version}`; `environment.go`
+    defines `Environment{ID, Name, Order, Version}` (the deployment targets
+    flags/permissions will be scoped to — see Epic 6 in
+    `docs/user-stories.md`). `Version` on every entity is set from the Raft
+    log index on apply, not a separately tracked counter.
 
 - **`api/`** — `net/http` (stdlib `ServeMux` with Go 1.22+ method patterns,
-  e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires
-  `/api/health`, `/api/flags` (GET for admin+user, POST for admin only),
-  `/api/auth/login`, `/api/auth/me`. `middleware.go`'s `requireRoles` wraps a
-  handler with bearer-token parsing + role check via the `auth` package.
-  Route handlers currently do minimal validation — check `api.go` directly
-  rather than assuming REST conventions beyond what's there.
+  e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires routes for
+  flags, auth, users, groups, audits, and environments — check `api.go`
+  directly for the exact list rather than assuming it here, since it grows
+  over time. Every mutating route follows the same `requirePermission(perm,
+  withAudit(cfg, handler))` nesting (order matters — `withAudit` needs the
+  principal `requirePermission` already attached to the request context).
+  `middleware.go`'s `requirePermission` wraps a handler with bearer-token
+  parsing plus a single permission-string check via the `auth` package.
+  Route handlers currently do minimal validation — check the relevant
+  `api/*.go` file directly rather than assuming REST conventions beyond
+  what's there.
 
 - **`auth/`** — `Service` in `service.go` issues/parses HS256 JWTs
-  (`golang-jwt/jwt`) and hashes passwords with bcrypt. There are exactly two
-  accounts today: a configurable admin (`AERENDIL_ADMIN_USERNAME` /
-  `AERENDIL_ADMIN_PASSWORD`, bcrypt-hashed at startup) and a hardcoded
-  `user`/`user123` — this is not yet a real user store (see Epic 7 in
-  `docs/user-stories.md` for where this is headed). Roles are the plain
-  strings `RoleAdmin` ("admin") / `RoleUser` ("user").
+  (`golang-jwt/jwt`) and hashes passwords with bcrypt; JWT claims are just
+  `sub`/`exp`/`iat` — nothing else is baked in, since `Service.Resolve`
+  re-fetches the live user and re-resolves permissions on every request.
+  There is one seeded account: `bootstrap.go`'s `SeedAdminGroupAndUser`
+  creates a configurable admin user (`AERENDIL_ADMIN_USERNAME` /
+  `AERENDIL_ADMIN_PASSWORD`, bcrypt-hashed at startup) and an immutable,
+  `System: true` Admin `Group` (`store.AdminGroupID = "admin"`) whose
+  membership bypasses every permission check. All other access is
+  group-based: `permissions.go` holds a flat catalog of permission strings
+  (`PermFlagsRead/Write`, `PermUsersRead/Create/Update/Delete`,
+  `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`,
+  `PermEnvironmentsRead/Create/Update/Delete`) attached to
+  `store.Group.Permissions` and resolved live — no caching, nothing baked
+  into the JWT — via `Service.Resolve`, so group/permission changes and
+  deactivation take effect on a user's very next request. There is no
+  `RoleAdmin`/`RoleUser` constant anywhere in the codebase; don't assume
+  that model (see Epic 7 in `docs/user-stories.md` for where identity is
+  headed next).
 
 - **`fqdp/`** — the FQDP binary protocol server described in
   `docs/fqdp.md`. **Currently a stub**: `server.go` implements the
@@ -109,22 +141,44 @@ store.
 
 SvelteKit with server-side rendering; the app never talks to FQDP (browsers
 can't hold raw TCP sockets) — it only calls the backend's HTTP API, and only
-from server-side code (`+page.server.ts` / `lib/server/`), never directly
-from the browser.
+from server-side code (`+page.server.ts` / `lib/server/` / `routes/bff/`),
+never directly from the browser.
 
-- **`lib/server/auth.ts`** is the only bridge to the backend API
-  (`AERENDIL_API_ORIGIN` env var, default `http://127.0.0.1:8080`). `login()`
-  POSTs to `/api/auth/login`; `getSession()` reads the `aerendil.auth` httpOnly
-  cookie and validates it against `/api/auth/me` on every call (no local
-  session cache) — the JWT itself lives only in that cookie.
-  `setAuthCookie`/`clearAuthCookie` manage it (`secure` in non-dev).
+- **`lib/server/*.ts`** are the only bridge to the backend API
+  (`AERENDIL_API_ORIGIN` env var, default `http://127.0.0.1:8080`) — one
+  file per resource (`auth.ts`, `flags.ts`, `groups.ts`, `users.ts`,
+  `auditLog.ts`, `environments.ts`), each following the same shape: an
+  `API_ORIGIN` const, bearer-token `fetch` calls, and (for mutations) a
+  `{ x } | { error, status }` result union that mirrors the backend's real
+  HTTP status verbatim. `auth.ts`'s `getSession()` reads the
+  `aerendil.auth` httpOnly cookie and validates it against `/api/auth/me`
+  on every call (no local session cache) — the JWT itself lives only in
+  that cookie. `setAuthCookie`/`clearAuthCookie` manage it (`secure` in
+  non-dev).
+- **`routes/bff/**`** is the proxy layer client components' `apiRequest()`
+  calls hit (see `lib/client/api.ts`) — each `+server.ts` there checks
+  `hasPermission` and then calls the matching `lib/server/*.ts` bridge
+  function, returning the backend's real HTTP status instead of SvelteKit
+  form actions' embedded-status convention.
+- **`lib/permissions.ts`**'s `hasPermission(session, perm)` is the shared
+  gate used both server-side (`+page.server.ts` load functions, throwing
+  `error(403, ...)`) and client-side (`Sidebar.svelte`'s nav visibility) —
+  there is no dedicated `dashboard/admin/` route prefix; permission gating
+  happens per-page.
 - **`routes/login/+page.server.ts`** performs the login action;
-  **`routes/dashboard/+page.server.ts`** shows the pattern for protecting a
-  route: call `getSession`, `redirect(303, '/login')` if absent. Follow this
-  same pattern for any new authenticated route rather than inventing a
+  **`routes/dashboard/+layout.server.ts`** shows the pattern for protecting
+  a route: call `getSession`, `redirect(303, '/login')` if absent, then
+  spread the session plus any layout-wide data into `page.data`. Follow
+  this same pattern for any new authenticated route rather than inventing a
   different guard.
+- `Sidebar.svelte` groups related admin pages into a collapsible dropdown
+  (`User management`, `Application Settings`) that's hidden entirely when
+  none of its children are visible to the current user — follow this
+  pattern for grouping new settings-style pages rather than adding flat
+  top-level links.
 - **`lib/paraglide/`** is generated i18n code (from `project.inlang` /
-  `@inlang/paraglide-js`) — don't hand-edit files under here.
+  `@inlang/paraglide-js`) — don't hand-edit files under here; add new
+  strings to `messages/en.json` / `messages/nl-nl.json` instead.
 
 ## Conventions (from AGENTS.md — keep in sync if that file changes)
 

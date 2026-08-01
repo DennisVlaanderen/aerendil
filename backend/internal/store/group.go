@@ -19,17 +19,30 @@ var ErrProtectedSystemGroup = errors.New("this group is a protected system group
 // bootstrap. It is immutable (System is true) and its bypass of every
 // permission check is anchored on this ID, not on Name or on an explicit
 // "*" permission entry -- see auth.Service.Resolve.
+//
+// EnvironmentIDs grants this group's members access to specific
+// environments' flags; an empty/nil list means no environment access at
+// all (deny-by-default, mirroring how an empty Permissions list already
+// means zero permissions) -- Admin's unconditional bypass covers
+// environments the same way it covers every other permission, so this
+// field is never consulted for the Admin group. Unlike Permissions
+// (validated against auth.IsKnownPermission in api/groups.go),
+// EnvironmentIDs is API-validated only, not FSM-enforced: a dangling ID
+// left behind after an environment is deleted is harmless (it grants
+// access to nothing), unlike a Flag pointing at a deleted environment,
+// which would be silent data loss -- see store.ErrEnvironmentHasFlags.
 type Group struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Permissions []string `json:"permissions,omitempty"`
-	System      bool     `json:"system"`
-	Version     uint64   `json:"version"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Permissions    []string `json:"permissions,omitempty"`
+	EnvironmentIDs []string `json:"environmentIds,omitempty"`
+	System         bool     `json:"system"`
+	Version        uint64   `json:"version"`
 }
 
 const AdminGroupID = "admin"
 
-func (f *fsm) applyGroup(index uint64, cmd command) interface{} {
+func (f *fsm) applyGroup(index uint64, cmd command) any {
 	switch cmd.Op {
 	case opSet:
 		if existing, ok := f.groups[cmd.Group.ID]; ok && existing.System {

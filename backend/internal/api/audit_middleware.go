@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 
 	"aerendil/backend/internal/store"
@@ -15,8 +16,8 @@ import (
 // generated server-side inside the handler, so there is never a prior
 // state); it is set for every route that can genuinely overwrite an
 // existing record: users/groups PUT/DELETE (identified by path {id}) and
-// flags POST, which is an upsert-by-key (identified by the request body's
-// "key" field, not a path param).
+// flags POST, which is an upsert-by-key per environment (identified by the
+// request body's "key" and "environmentIds" fields, not a path param).
 type auditConfig struct {
 	Action     string
 	TargetType string
@@ -79,15 +80,11 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 
 		if _, err := dataStore.Audits().Append(entry); err != nil {
 			log.Printf("api: failed to record audit entry for %s %s (mutation status %d): %v", r.Method, r.URL.Path, status, err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{
-				"error": "the request may have been applied, but recording its audit trail failed; verify before retrying",
-			})
+			writeError(w, http.StatusInternalServerError, "the request may have been applied, but recording its audit trail failed; verify before retrying")
 			return
 		}
 
-		for k, vv := range rec.header {
-			w.Header()[k] = vv
-		}
+		maps.Copy(w.Header(), rec.header)
 		w.WriteHeader(status)
 		_, _ = w.Write(rec.body.Bytes())
 	}
@@ -126,27 +123,39 @@ func (a *auditRecorder) Write(p []byte) (int, error) {
 
 // targetIDFrom resolves the audited entity's identity: the path {id} param
 // for PUT/DELETE routes, else a best-effort "id" (users/groups POST) or
-// "key" (flags POST) field sniffed from the buffered response body. Empty
-// for a rejected create, which never allocated an identity in the first
-// place.
+// "key" (flags POST) field sniffed from the buffered response body -- for
+// flags POST specifically, the response is now {"flags": [...]} (one
+// multi-environment create can span several Flag records sharing one key),
+// so the key is read from the first element of that array instead of a
+// top-level field. Empty for a rejected create, which never allocated an
+// identity in the first place.
 func targetIDFrom(r *http.Request, respBody []byte) string {
 	if id := r.PathValue("id"); id != "" {
 		return id
 	}
 	var probe struct {
-		ID  string `json:"id"`
-		Key string `json:"key"`
+		ID    string `json:"id"`
+		Key   string `json:"key"`
+		Flags []struct {
+			Key string `json:"key"`
+		} `json:"flags"`
 	}
 	_ = json.Unmarshal(respBody, &probe)
 	if probe.ID != "" {
 		return probe.ID
 	}
-	return probe.Key
+	if probe.Key != "" {
+		return probe.Key
+	}
+	if len(probe.Flags) > 0 {
+		return probe.Flags[0].Key
+	}
+	return ""
 }
 
 // extractErrorMessage pulls the "error" field every handler's error
-// response already uses (see writeJSON/writeStoreError call sites), falling
-// back to the raw body if it isn't in that shape.
+// response already uses (see writeError/handleErrors), falling back to the
+// raw body if it isn't in that shape.
 func extractErrorMessage(body []byte) string {
 	var probe struct {
 		Error string `json:"error"`

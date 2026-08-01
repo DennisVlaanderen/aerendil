@@ -77,3 +77,51 @@ describe('Sidebar user management visibility', () => {
 		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();
 	});
 });
+
+describe('Sidebar application settings visibility', () => {
+	test('hides the Application Settings section for a user with no relevant permissions', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: false,
+			permissions: ['flags:read']
+		});
+
+		await expect.element(screen.getByText('Application Settings')).not.toBeInTheDocument();
+	});
+
+	test('shows the Application Settings section when the user has environments:read', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: false,
+			permissions: ['environments:read']
+		});
+
+		await expect.element(screen.getByText('Application Settings')).toBeInTheDocument();
+	});
+
+	test('shows the Application Settings section for an admin with no explicit permissions', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: true,
+			permissions: []
+		});
+
+		await expect.element(screen.getByText('Application Settings')).toBeInTheDocument();
+	});
+
+	test('expands to show the Environments sub-link when clicked', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: true,
+			permissions: []
+		});
+
+		await expect
+			.element(screen.getByRole('link', { name: 'Environments' }))
+			.not.toBeInTheDocument();
+
+		await screen.getByRole('button', { name: 'Toggle Application Settings submenu' }).click();
+
+		await expect.element(screen.getByRole('link', { name: 'Environments' })).toBeInTheDocument();
+	});
+});

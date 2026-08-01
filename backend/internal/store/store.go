@@ -23,10 +23,10 @@ type Config struct {
 }
 
 // Store is an embedded, Raft-replicated key/value store for feature flags,
-// users, and groups. Entity-specific operations are grouped into
-// repositories (Flags/Users/Groups) rather than living directly on Store,
-// so adding a new entity in the future means adding a repository, not
-// growing this type.
+// users, groups, and environments. Entity-specific operations are grouped
+// into repositories (Flags/Users/Groups/Environments) rather than living
+// directly on Store, so adding a new entity in the future means adding a
+// repository, not growing this type.
 type Store struct {
 	raft *raft.Raft
 	fsm  *fsm
@@ -52,6 +52,9 @@ func (s *Store) Groups() GroupRepository { return GroupRepository{store: s} }
 
 // Audits returns a repository for audit-log operations against the store.
 func (s *Store) Audits() AuditRepository { return AuditRepository{store: s} }
+
+// Environments returns a repository for environment operations against the store.
+func (s *Store) Environments() EnvironmentRepository { return EnvironmentRepository{store: s} }
 
 // apply centralizes the boilerplate every mutating repository method needs:
 // confirm this node is the Raft leader, marshal the command, submit it via
