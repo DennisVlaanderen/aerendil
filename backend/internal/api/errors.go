@@ -65,6 +65,8 @@ func storeErrorToAPIError(err error) *apiError {
 		return &apiError{http.StatusForbidden, CodeBusinessLastEnvironment, err.Error()}
 	case errors.Is(err, store.ErrEnvironmentHasFlags):
 		return &apiError{http.StatusForbidden, CodeBusinessEnvironmentHasFlags, err.Error()}
+	case errors.Is(err, store.ErrEnvironmentHasCredentials):
+		return &apiError{http.StatusForbidden, CodeBusinessEnvironmentHasCredentials, err.Error()}
 	case errors.Is(err, store.ErrUnknownEnvironment):
 		return &apiError{http.StatusBadRequest, CodeBadRequestEnvironmentUnknown, err.Error()}
 	default:

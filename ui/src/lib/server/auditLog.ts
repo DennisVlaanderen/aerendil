@@ -4,6 +4,7 @@ export interface AuditEntry {
 	id: number;
 	timestamp: number;
 	actorId: string;
+	actorType?: string;
 	action: string;
 	targetType: string;
 	targetId?: string;

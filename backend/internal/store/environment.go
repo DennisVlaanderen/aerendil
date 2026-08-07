@@ -22,6 +22,13 @@ var ErrLastEnvironment = errors.New("cannot delete the last remaining environmen
 // dangling reference.
 var ErrEnvironmentHasFlags = errors.New("cannot delete an environment that still has flags")
 
+// ErrEnvironmentHasCredentials is returned by EnvironmentRepository.Delete
+// (and, ultimately, fsm.applyEnvironment) when an application credential is
+// still scoped to the target environment -- same referential-integrity tier
+// as ErrEnvironmentHasFlags, since deleting the environment would otherwise
+// leave the credential pointing at nothing.
+var ErrEnvironmentHasCredentials = errors.New("cannot delete an environment that still has application credentials")
+
 // Environment is a named deployment target (e.g. "Production", "Staging")
 // that flags and group permissions will later be scoped to. Order is
 // stamped at creation time from the current environment count and is
@@ -46,6 +53,9 @@ func (f *fsm) applyEnvironment(index uint64, cmd command) any {
 		}
 		if f.hasFlagsInEnvironmentLocked(cmd.Key) {
 			return fmt.Errorf("%w: %q", ErrEnvironmentHasFlags, cmd.Key)
+		}
+		if f.hasCredentialsInEnvironmentLocked(cmd.Key) {
+			return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, cmd.Key)
 		}
 		delete(f.environments, cmd.Key)
 		return nil
@@ -124,6 +134,9 @@ func (r EnvironmentRepository) Delete(id string) error {
 	}
 	if r.store.fsm.hasFlagsInEnvironment(id) {
 		return fmt.Errorf("%w: %q", ErrEnvironmentHasFlags, id)
+	}
+	if r.store.fsm.hasCredentialsInEnvironment(id) {
+		return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, id)
 	}
 
 	resp, err := r.store.apply(command{Op: opDelete, Entity: entityEnvironment, Key: id})

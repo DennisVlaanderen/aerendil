@@ -21,11 +21,12 @@ const (
 type entity string
 
 const (
-	entityFlag        entity = "flag"
-	entityUser        entity = "user"
-	entityGroup       entity = "group"
-	entityAudit       entity = "audit"
-	entityEnvironment entity = "environment"
+	entityFlag                  entity = "flag"
+	entityUser                  entity = "user"
+	entityGroup                 entity = "group"
+	entityAudit                 entity = "audit"
+	entityEnvironment           entity = "environment"
+	entityApplicationCredential entity = "applicationCredential"
 )
 
 // command is the single Raft log entry shape for every entity kind this
@@ -35,18 +36,19 @@ const (
 // does mean an existing on-disk data dir must be wiped before running a
 // build that includes this change.
 type command struct {
-	Op     		string 		`json:"op"`
-	Entity 		entity 		`json:"entity"`
-	Key    		string 		`json:"key,omitempty"`
-	Flag   		*Flag  		`json:"flag,omitempty"`
-	Flags       []Flag      `json:"flags,omitempty"`
-	User   		*User  		`json:"user,omitempty"`
-	Group  		*Group 		`json:"group,omitempty"`
-	AuditEntry  *AuditEntry `json:"audit,omitempty"`
-	Environment *Environment `json:"environment,omitempty"`
+	Op                    string                 `json:"op"`
+	Entity                entity                 `json:"entity"`
+	Key                   string                 `json:"key,omitempty"`
+	Flag                  *Flag                  `json:"flag,omitempty"`
+	Flags                 []Flag                 `json:"flags,omitempty"`
+	User                  *User                  `json:"user,omitempty"`
+	Group                 *Group                 `json:"group,omitempty"`
+	AuditEntry            *AuditEntry            `json:"audit,omitempty"`
+	Environment           *Environment           `json:"environment,omitempty"`
+	ApplicationCredential *ApplicationCredential `json:"applicationCredential,omitempty"`
 }
 
-// fsm is the Raft finite state machine: in-memory maps of stored entitires, 
+// fsm is the Raft finite state machine: in-memory maps of stored entitires,
 // made durable by Raft's own replicated log plus periodic snapshots.
 // There's no need for a separate embedded database -- Raft already gives us a durable,
 // replicated log to reconstruct all three from.
@@ -57,21 +59,23 @@ type command struct {
 // the Apply dispatch switch, and snapshot/restore. Adding a new entity
 // means adding a file and minimal struct definition, not growing this one.
 type fsm struct {
-	mu     			sync.RWMutex
-	flags  			map[string]Flag
-	users  			map[string]User
-	groups 			map[string]Group
-	auditEntries 	map[uint64]AuditEntry
-	environments 	map[string]Environment
+	mu                     sync.RWMutex
+	flags                  map[string]Flag
+	users                  map[string]User
+	groups                 map[string]Group
+	auditEntries           map[uint64]AuditEntry
+	environments           map[string]Environment
+	applicationCredentials map[string]ApplicationCredential
 }
 
 func newFSM() *fsm {
 	return &fsm{
-		flags:  make(map[string]Flag),
-		users:  make(map[string]User),
-		groups: make(map[string]Group),
-		auditEntries: make(map[uint64]AuditEntry),
-		environments: make(map[string]Environment),
+		flags:                  make(map[string]Flag),
+		users:                  make(map[string]User),
+		groups:                 make(map[string]Group),
+		auditEntries:           make(map[uint64]AuditEntry),
+		environments:           make(map[string]Environment),
+		applicationCredentials: make(map[string]ApplicationCredential),
 	}
 }
 
@@ -99,6 +103,8 @@ func (f *fsm) Apply(log *raft.Log) any {
 		return f.applyAuditEntry(log.Index, cmd)
 	case entityEnvironment:
 		return f.applyEnvironment(log.Index, cmd)
+	case entityApplicationCredential:
+		return f.applyApplicationCredential(log.Index, cmd)
 	default:
 		return fmt.Errorf("unknown command entity %q", cmd.Entity)
 	}
@@ -109,11 +115,12 @@ func (f *fsm) Apply(log *raft.Log) any {
 // following the same "snapshot the whole map" approach the original
 // flag-only implementation used.
 type snapshotDoc struct {
-	Flags  map[string]Flag  `json:"flags"`
-	Users  map[string]User  `json:"users"`
-	Groups map[string]Group `json:"groups"`
-	AuditEntries map[uint64]AuditEntry `json:"auditEntries"`
-	Environments map[string]Environment `json:"environments"`
+	Flags                  map[string]Flag                  `json:"flags"`
+	Users                  map[string]User                  `json:"users"`
+	Groups                 map[string]Group                 `json:"groups"`
+	AuditEntries           map[uint64]AuditEntry            `json:"auditEntries"`
+	Environments           map[string]Environment           `json:"environments"`
+	ApplicationCredentials map[string]ApplicationCredential `json:"applicationCredentials"`
 }
 
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
@@ -121,17 +128,19 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	defer f.mu.RUnlock()
 
 	doc := snapshotDoc{
-		Flags:  make(map[string]Flag, len(f.flags)),
-		Users:  make(map[string]User, len(f.users)),
-		Groups: make(map[string]Group, len(f.groups)),
-		AuditEntries: make(map[uint64]AuditEntry, len(f.auditEntries)),
-		Environments: make(map[string]Environment, len(f.environments)),
+		Flags:                  make(map[string]Flag, len(f.flags)),
+		Users:                  make(map[string]User, len(f.users)),
+		Groups:                 make(map[string]Group, len(f.groups)),
+		AuditEntries:           make(map[uint64]AuditEntry, len(f.auditEntries)),
+		Environments:           make(map[string]Environment, len(f.environments)),
+		ApplicationCredentials: make(map[string]ApplicationCredential, len(f.applicationCredentials)),
 	}
 	maps.Copy(doc.Flags, f.flags)
 	maps.Copy(doc.Users, f.users)
 	maps.Copy(doc.Groups, f.groups)
 	maps.Copy(doc.AuditEntries, f.auditEntries)
 	maps.Copy(doc.Environments, f.environments)
+	maps.Copy(doc.ApplicationCredentials, f.applicationCredentials)
 	return &fsmSnapshot{doc: doc}, nil
 }
 
@@ -198,6 +207,11 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		// case -- default to empty rather than failing loudly.
 		doc.Environments = make(map[string]Environment)
 	}
+	if doc.ApplicationCredentials == nil {
+		// Same upgrade case as Environments above: a pre-existing snapshot
+		// legitimately has no applicationCredentials key yet.
+		doc.ApplicationCredentials = make(map[string]ApplicationCredential)
+	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -206,6 +220,7 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.groups = doc.Groups
 	f.auditEntries = doc.AuditEntries
 	f.environments = doc.Environments
+	f.applicationCredentials = doc.ApplicationCredentials
 	return nil
 }
 

@@ -23,6 +23,7 @@ export const ErrorCode = {
 	BusinessEnvironmentHasFlags: 'A03-0004',
 	BusinessAdminGroupChange: 'A03-0005',
 	BusinessAdminOnlyUserDelete: 'A03-0006',
+	BusinessEnvironmentHasCredentials: 'A03-0007',
 
 	// BR01 -- bad request, general (400).
 	BadRequestBody: 'BR01-0001',
@@ -47,10 +48,16 @@ export const ErrorCode = {
 	BadRequestGroupNameRequired: 'BR05-0001',
 	BadRequestUnknownPermission: 'BR05-0002',
 
+	// BR06 -- bad request, application credentials domain (400).
+	BadRequestCredentialNameRequired: 'BR06-0001',
+	BadRequestCredentialEnvironmentRequired: 'BR06-0002',
+	BadRequestUnknownScope: 'BR06-0003',
+
 	// NF -- not found (404), one group per domain.
 	NotFoundUser: 'NF01-0001',
 	NotFoundEnvironment: 'NF03-0001',
 	NotFoundGroup: 'NF04-0001',
+	NotFoundApplicationCredential: 'NF05-0001',
 
 	// CF -- conflict (409), one group per domain.
 	ConflictUsernameTaken: 'CF01-0001',
@@ -63,7 +70,8 @@ export const ErrorCode = {
 	InternalGeneric: 'IE01-0000',
 	InternalTokenGen: 'IE01-0001',
 	InternalPasswordHash: 'IE01-0002',
-	InternalAuditFailed: 'IE01-0003'
+	InternalAuditFailed: 'IE01-0003',
+	InternalClientSecretHash: 'IE01-0004'
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -90,6 +98,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BusinessEnvironmentHasFlags]: m.error_environment_has_flags,
 	[ErrorCode.BusinessAdminGroupChange]: m.error_admin_group_change_forbidden,
 	[ErrorCode.BusinessAdminOnlyUserDelete]: m.error_admin_only_user_delete,
+	[ErrorCode.BusinessEnvironmentHasCredentials]: m.error_environment_has_credentials,
 	[ErrorCode.BadRequestBody]: m.error_invalid_body,
 	[ErrorCode.BadRequestFlagsEnvironmentIDRequired]: m.error_environment_id_required,
 	[ErrorCode.BadRequestFlagsKeyRequired]: m.error_flag_key_required,
@@ -103,9 +112,13 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BadRequestUnknownGroupID]: m.error_unknown_group_id,
 	[ErrorCode.BadRequestGroupNameRequired]: m.error_group_name_required,
 	[ErrorCode.BadRequestUnknownPermission]: m.error_unknown_permission,
+	[ErrorCode.BadRequestCredentialNameRequired]: m.error_credential_name_required,
+	[ErrorCode.BadRequestCredentialEnvironmentRequired]: m.error_credential_environment_required,
+	[ErrorCode.BadRequestUnknownScope]: m.error_unknown_scope,
 	[ErrorCode.NotFoundUser]: m.error_user_not_found,
 	[ErrorCode.NotFoundEnvironment]: m.error_environment_not_found,
 	[ErrorCode.NotFoundGroup]: m.error_group_not_found,
+	[ErrorCode.NotFoundApplicationCredential]: m.error_application_credential_not_found,
 	[ErrorCode.ConflictUsernameTaken]: m.error_username_taken,
 	[ErrorCode.MethodNotAllowed]: m.error_method_not_allowed
 };

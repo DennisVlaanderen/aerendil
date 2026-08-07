@@ -56,6 +56,12 @@ func (s *Store) Audits() AuditRepository { return AuditRepository{store: s} }
 // Environments returns a repository for environment operations against the store.
 func (s *Store) Environments() EnvironmentRepository { return EnvironmentRepository{store: s} }
 
+// ApplicationCredentials returns a repository for application-credential
+// operations against the store.
+func (s *Store) ApplicationCredentials() ApplicationCredentialRepository {
+	return ApplicationCredentialRepository{store: s}
+}
+
 // apply centralizes the boilerplate every mutating repository method needs:
 // confirm this node is the Raft leader, marshal the command, submit it via
 // raft.Apply, and surface any submission-level error. The caller still

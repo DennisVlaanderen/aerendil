@@ -76,6 +76,7 @@ describe('Sidebar user management visibility', () => {
 		await expect.element(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
 		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();
 	});
+
 });
 
 describe('Sidebar application settings visibility', () => {
@@ -123,5 +124,30 @@ describe('Sidebar application settings visibility', () => {
 		await screen.getByRole('button', { name: 'Toggle Application Settings submenu' }).click();
 
 		await expect.element(screen.getByRole('link', { name: 'Environments' })).toBeInTheDocument();
+	});
+
+	test('shows the Application Settings section when the user only has applicationCredentials:read', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: false,
+			permissions: ['applicationCredentials:read']
+		});
+
+		await expect.element(screen.getByText('Application Settings')).toBeInTheDocument();
+	});
+
+	test('only shows the Applications sub-link matching a partial permission grant', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: false,
+			permissions: ['applicationCredentials:read']
+		});
+
+		await screen.getByRole('button', { name: 'Toggle Application Settings submenu' }).click();
+
+		await expect.element(screen.getByRole('link', { name: 'Applications' })).toBeInTheDocument();
+		await expect
+			.element(screen.getByRole('link', { name: 'Environments' }))
+			.not.toBeInTheDocument();
 	});
 });

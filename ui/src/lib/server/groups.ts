@@ -27,7 +27,11 @@ export const ALL_PERMISSIONS = [
 	'environments:read',
 	'environments:create',
 	'environments:update',
-	'environments:delete'
+	'environments:delete',
+	'applicationCredentials:read',
+	'applicationCredentials:create',
+	'applicationCredentials:update',
+	'applicationCredentials:delete'
 ] as const;
 
 // `status` mirrors the backend's own HTTP status verbatim -- see the
@@ -77,7 +81,9 @@ export async function createGroup(
 	}
 
 	const group = await response.json().catch(() => null);
-	return group ? { group } : { error: "Couldn't create that group.", code: 'internal', status: 502 };
+	return group
+		? { group }
+		: { error: "Couldn't create that group.", code: 'internal', status: 502 };
 }
 
 export async function updateGroup(
@@ -100,7 +106,9 @@ export async function updateGroup(
 	}
 
 	const group = await response.json().catch(() => null);
-	return group ? { group } : { error: "Couldn't update that group.", code: 'internal', status: 502 };
+	return group
+		? { group }
+		: { error: "Couldn't update that group.", code: 'internal', status: 502 };
 }
 
 export async function deleteGroup(
