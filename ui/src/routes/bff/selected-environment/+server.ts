@@ -1,11 +1,12 @@
 import { json } from '@sveltejs/kit';
 import { getSession, setSelectedEnvironmentCookie } from '$lib/server/auth';
+import { ErrorCode } from '$lib/errors';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const session = await getSession(cookies);
 	if (!session) {
-		return json({ error: 'Not authenticated.', code: 'A01-0002' }, { status: 401 });
+		return json({ error: 'Not authenticated.', code: ErrorCode.AuthInvalidToken }, { status: 401 });
 	}
 
 	const body = await request.json().catch(() => null);
@@ -18,7 +19,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	// rejected rather than silently scoping their view to it.
 	if (!environmentId || (!session.isAdmin && !session.environmentIds.includes(environmentId))) {
 		return json(
-			{ error: 'You do not have access to that environment.', code: 'A02-0001' },
+			{ error: 'You do not have access to that environment.', code: ErrorCode.AuthForbidden },
 			{ status: 403 }
 		);
 	}

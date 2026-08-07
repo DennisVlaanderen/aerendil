@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cookies } from '@sveltejs/kit';
 import { getSession, login } from './auth';
+import { ErrorCode } from '$lib/errors';
 
 // login()/getSession() call the backend over AERENDIL_API_ORIGIN (default
 // http://127.0.0.1:8080), which only exists in a real deployment. This suite
@@ -46,14 +47,17 @@ describe('login', () => {
 
 	it('returns the backend error and code for rejected credentials', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(401, { error: 'invalid username or password', code: 'A01-0001' })
+			jsonResponse(401, {
+				error: 'invalid username or password',
+				code: ErrorCode.AuthInvalidCredentials
+			})
 		);
 
 		const result = await login('guest', 'wrong');
 
 		expect(result).toEqual({
 			error: 'invalid username or password',
-			code: 'A01-0001',
+			code: ErrorCode.AuthInvalidCredentials,
 			status: 401
 		});
 	});

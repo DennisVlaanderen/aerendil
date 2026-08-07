@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGroup, deleteGroup, listGroups, updateGroup } from './groups';
+import { ErrorCode } from '$lib/errors';
 
 // Same convention as auth.test.ts: fetch is mocked, these are unit tests of
 // the response-handling logic, not integration tests against a live backend.
@@ -58,7 +59,10 @@ describe('createGroup', () => {
 
 	it('returns the backend error message and status on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(400, { error: 'unknown permission', code: 'BR05-0002' })
+			jsonResponse(400, {
+				error: 'unknown permission',
+				code: ErrorCode.BadRequestUnknownPermission
+			})
 		);
 
 		const result = await createGroup('a-token', {
@@ -67,14 +71,21 @@ describe('createGroup', () => {
 			environmentIds: []
 		});
 
-		expect(result).toEqual({ error: 'unknown permission', code: 'BR05-0002', status: 400 });
+		expect(result).toEqual({
+			error: 'unknown permission',
+			code: ErrorCode.BadRequestUnknownPermission,
+			status: 400
+		});
 	});
 });
 
 describe('updateGroup', () => {
 	it('returns the backend error message and status when the Admin group update is rejected', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(403, { error: 'the Admin group cannot be modified', code: 'A03-0002' })
+			jsonResponse(403, {
+				error: 'the Admin group cannot be modified',
+				code: ErrorCode.BusinessProtectedGroup
+			})
 		);
 
 		const result = await updateGroup('a-token', 'admin', {
@@ -85,7 +96,7 @@ describe('updateGroup', () => {
 
 		expect(result).toEqual({
 			error: 'the Admin group cannot be modified',
-			code: 'A03-0002',
+			code: ErrorCode.BusinessProtectedGroup,
 			status: 403
 		});
 		expect(fetch).toHaveBeenCalledWith(
@@ -106,14 +117,17 @@ describe('deleteGroup', () => {
 
 	it('returns the backend error message and status when the Admin group delete is rejected', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(403, { error: 'the Admin group cannot be modified', code: 'A03-0002' })
+			jsonResponse(403, {
+				error: 'the Admin group cannot be modified',
+				code: ErrorCode.BusinessProtectedGroup
+			})
 		);
 
 		const result = await deleteGroup('a-token', 'admin');
 
 		expect(result).toEqual({
 			error: 'the Admin group cannot be modified',
-			code: 'A03-0002',
+			code: ErrorCode.BusinessProtectedGroup,
 			status: 403
 		});
 	});

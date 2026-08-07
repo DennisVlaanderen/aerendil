@@ -1,11 +1,76 @@
 import { m } from '$lib/paraglide/messages.js';
 
-// Maps a backend/bff error `code` (the structured "<Category><Group>-
-// <Sequence>" strings documented in backend/internal/api/error_codes.go,
-// e.g. "A01-0001") to a translated message. bff routes reuse the same
-// backend codes for their own locally-synthesized errors (missing
-// permission, missing token, request validation) wherever the meaning
-// matches, so this single map covers both sources.
+// Mirrors backend/internal/api/error_codes.go verbatim -- one constant per
+// backend `Code*` value, same "<Category><Group>-<Sequence>" strings, same
+// grouping. This is the single place a literal code string should appear
+// anywhere in ui/src; bff routes import these for their own
+// locally-synthesized errors (missing permission, missing token, request
+// validation) instead of re-typing the string, and errorMessages below
+// keys off the same constants.
+export const ErrorCode = {
+	// A01 -- authentication (401).
+	AuthInvalidCredentials: 'A01-0001',
+	AuthInvalidToken: 'A01-0002',
+	AuthMissingHeader: 'A01-0003',
+
+	// A02 -- authorization / access denied (403).
+	AuthForbidden: 'A02-0001',
+
+	// A03 -- protected/business-rule restriction (403).
+	BusinessLastAdmin: 'A03-0001',
+	BusinessProtectedGroup: 'A03-0002',
+	BusinessLastEnvironment: 'A03-0003',
+	BusinessEnvironmentHasFlags: 'A03-0004',
+	BusinessAdminGroupChange: 'A03-0005',
+	BusinessAdminOnlyUserDelete: 'A03-0006',
+
+	// BR01 -- bad request, general (400).
+	BadRequestBody: 'BR01-0001',
+
+	// BR02 -- bad request, flags domain (400).
+	BadRequestFlagsEnvironmentIDRequired: 'BR02-0001',
+	BadRequestFlagsKeyRequired: 'BR02-0002',
+	BadRequestFlagsEnvironmentIDsRequired: 'BR02-0003',
+
+	// BR03 -- bad request, environments domain (400).
+	BadRequestEnvironmentUnknown: 'BR03-0001',
+	BadRequestEnvironmentNameRequired: 'BR03-0002',
+
+	// BR04 -- bad request, users domain (400).
+	BadRequestUsernameRequired: 'BR04-0001',
+	BadRequestPasswordRequired: 'BR04-0002',
+	BadRequestPasswordTooShort: 'BR04-0003',
+	BadRequestPasswordTooLong: 'BR04-0004',
+	BadRequestUnknownGroupID: 'BR04-0005',
+
+	// BR05 -- bad request, groups domain (400).
+	BadRequestGroupNameRequired: 'BR05-0001',
+	BadRequestUnknownPermission: 'BR05-0002',
+
+	// NF -- not found (404), one group per domain.
+	NotFoundUser: 'NF01-0001',
+	NotFoundEnvironment: 'NF03-0001',
+	NotFoundGroup: 'NF04-0001',
+
+	// CF -- conflict (409), one group per domain.
+	ConflictUsernameTaken: 'CF01-0001',
+
+	// MN01 -- method not allowed (405).
+	MethodNotAllowed: 'MN01-0001',
+
+	// IE01 -- internal error (500). Never synthesized locally by bff
+	// routes, but listed for parity with the backend source of truth.
+	InternalGeneric: 'IE01-0000',
+	InternalTokenGen: 'IE01-0001',
+	InternalPasswordHash: 'IE01-0002',
+	InternalAuditFailed: 'IE01-0003'
+} as const;
+
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+// Maps a backend/bff error `code` to a translated message. bff routes reuse
+// the same backend codes for their own locally-synthesized errors wherever
+// the meaning matches, so this single map covers both sources.
 //
 // Internal-error codes (IE01-*) are deliberately absent -- they fall
 // through to the generic fallback below rather than getting their own
@@ -15,34 +80,34 @@ import { m } from '$lib/paraglide/messages.js';
 // mapped code has a real translation key in both locales without
 // duplicating this list.
 export const errorMessages: Record<string, () => string> = {
-	'A01-0001': m.error_invalid_credentials,
-	'A01-0002': m.error_invalid_session,
-	'A01-0003': m.error_missing_auth_header,
-	'A02-0001': m.error_forbidden,
-	'A03-0001': m.error_last_admin,
-	'A03-0002': m.error_protected_group,
-	'A03-0003': m.error_last_environment,
-	'A03-0004': m.error_environment_has_flags,
-	'A03-0005': m.error_admin_group_change_forbidden,
-	'A03-0006': m.error_admin_only_user_delete,
-	'BR01-0001': m.error_invalid_body,
-	'BR02-0001': m.error_environment_id_required,
-	'BR02-0002': m.error_flag_key_required,
-	'BR02-0003': m.error_flag_environments_required,
-	'BR03-0001': m.error_unknown_environment,
-	'BR03-0002': m.error_environment_name_required,
-	'BR04-0001': m.error_username_required,
-	'BR04-0002': m.error_password_required,
-	'BR04-0003': m.error_password_too_short,
-	'BR04-0004': m.error_password_too_long,
-	'BR04-0005': m.error_unknown_group_id,
-	'BR05-0001': m.error_group_name_required,
-	'BR05-0002': m.error_unknown_permission,
-	'NF01-0001': m.error_user_not_found,
-	'NF03-0001': m.error_environment_not_found,
-	'NF04-0001': m.error_group_not_found,
-	'CF01-0001': m.error_username_taken,
-	'MN01-0001': m.error_method_not_allowed
+	[ErrorCode.AuthInvalidCredentials]: m.error_invalid_credentials,
+	[ErrorCode.AuthInvalidToken]: m.error_invalid_session,
+	[ErrorCode.AuthMissingHeader]: m.error_missing_auth_header,
+	[ErrorCode.AuthForbidden]: m.error_forbidden,
+	[ErrorCode.BusinessLastAdmin]: m.error_last_admin,
+	[ErrorCode.BusinessProtectedGroup]: m.error_protected_group,
+	[ErrorCode.BusinessLastEnvironment]: m.error_last_environment,
+	[ErrorCode.BusinessEnvironmentHasFlags]: m.error_environment_has_flags,
+	[ErrorCode.BusinessAdminGroupChange]: m.error_admin_group_change_forbidden,
+	[ErrorCode.BusinessAdminOnlyUserDelete]: m.error_admin_only_user_delete,
+	[ErrorCode.BadRequestBody]: m.error_invalid_body,
+	[ErrorCode.BadRequestFlagsEnvironmentIDRequired]: m.error_environment_id_required,
+	[ErrorCode.BadRequestFlagsKeyRequired]: m.error_flag_key_required,
+	[ErrorCode.BadRequestFlagsEnvironmentIDsRequired]: m.error_flag_environments_required,
+	[ErrorCode.BadRequestEnvironmentUnknown]: m.error_unknown_environment,
+	[ErrorCode.BadRequestEnvironmentNameRequired]: m.error_environment_name_required,
+	[ErrorCode.BadRequestUsernameRequired]: m.error_username_required,
+	[ErrorCode.BadRequestPasswordRequired]: m.error_password_required,
+	[ErrorCode.BadRequestPasswordTooShort]: m.error_password_too_short,
+	[ErrorCode.BadRequestPasswordTooLong]: m.error_password_too_long,
+	[ErrorCode.BadRequestUnknownGroupID]: m.error_unknown_group_id,
+	[ErrorCode.BadRequestGroupNameRequired]: m.error_group_name_required,
+	[ErrorCode.BadRequestUnknownPermission]: m.error_unknown_permission,
+	[ErrorCode.NotFoundUser]: m.error_user_not_found,
+	[ErrorCode.NotFoundEnvironment]: m.error_environment_not_found,
+	[ErrorCode.NotFoundGroup]: m.error_group_not_found,
+	[ErrorCode.ConflictUsernameTaken]: m.error_username_taken,
+	[ErrorCode.MethodNotAllowed]: m.error_method_not_allowed
 };
 
 // resolveErrorMessage translates an API/bff error code into the user's

@@ -2,13 +2,17 @@ import { json } from '@sveltejs/kit';
 import { getAuthToken, getSession } from '$lib/server/auth';
 import { hasPermission } from '$lib/permissions';
 import { createEnvironment } from '$lib/server/environments';
+import { ErrorCode } from '$lib/errors';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const session = await getSession(cookies);
 	if (!session || !hasPermission(session, 'environments:create')) {
 		return json(
-			{ error: 'You do not have permission to manage environments.', code: 'A02-0001' },
+			{
+				error: 'You do not have permission to manage environments.',
+				code: ErrorCode.AuthForbidden
+			},
 			{ status: 403 }
 		);
 	}
@@ -17,13 +21,16 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const name = typeof body?.name === 'string' ? body.name.trim() : '';
 
 	if (!name) {
-		return json({ error: 'Name is required.', code: 'BR03-0002' }, { status: 400 });
+		return json(
+			{ error: 'Name is required.', code: ErrorCode.BadRequestEnvironmentNameRequired },
+			{ status: 400 }
+		);
 	}
 
 	const token = getAuthToken(cookies);
 	const result = token
 		? await createEnvironment(token, { name })
-		: { error: 'Not authenticated.', code: 'A01-0002', status: 401 };
+		: { error: 'Not authenticated.', code: ErrorCode.AuthInvalidToken, status: 401 };
 	if (result.error) {
 		return json({ error: result.error, code: result.code }, { status: result.status });
 	}

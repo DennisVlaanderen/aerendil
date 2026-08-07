@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createUser, deleteUser, listUsers, updateUser } from './users';
+import { ErrorCode } from '$lib/errors';
 
 // Same convention as auth.test.ts: fetch is mocked, these are unit tests of
 // the response-handling logic, not integration tests against a live backend.
@@ -70,7 +71,10 @@ describe('createUser', () => {
 
 	it('returns the backend error message on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(409, { error: 'username is already taken', code: 'CF01-0001' })
+			jsonResponse(409, {
+				error: 'username is already taken',
+				code: ErrorCode.ConflictUsernameTaken
+			})
 		);
 
 		const result = await createUser('a-token', {
@@ -79,7 +83,11 @@ describe('createUser', () => {
 			groupIds: []
 		});
 
-		expect(result).toEqual({ error: 'username is already taken', code: 'CF01-0001', status: 409 });
+		expect(result).toEqual({
+			error: 'username is already taken',
+			code: ErrorCode.ConflictUsernameTaken,
+			status: 409
+		});
 	});
 
 	it('falls back to a generic message when the backend gives none', async () => {
@@ -123,7 +131,10 @@ describe('updateUser', () => {
 
 	it('returns the backend error message when the username is already taken', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(409, { error: 'username is already taken', code: 'CF01-0001' })
+			jsonResponse(409, {
+				error: 'username is already taken',
+				code: ErrorCode.ConflictUsernameTaken
+			})
 		);
 
 		const result = await updateUser('a-token', 'u1', {
@@ -133,7 +144,11 @@ describe('updateUser', () => {
 			active: true
 		});
 
-		expect(result).toEqual({ error: 'username is already taken', code: 'CF01-0001', status: 409 });
+		expect(result).toEqual({
+			error: 'username is already taken',
+			code: ErrorCode.ConflictUsernameTaken,
+			status: 409
+		});
 	});
 });
 
@@ -150,7 +165,7 @@ describe('deleteUser', () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
 			jsonResponse(403, {
 				error: 'cannot remove the last remaining admin account',
-				code: 'A03-0001'
+				code: ErrorCode.BusinessLastAdmin
 			})
 		);
 
@@ -158,7 +173,7 @@ describe('deleteUser', () => {
 
 		expect(result).toEqual({
 			error: 'cannot remove the last remaining admin account',
-			code: 'A03-0001',
+			code: ErrorCode.BusinessLastAdmin,
 			status: 403
 		});
 	});
