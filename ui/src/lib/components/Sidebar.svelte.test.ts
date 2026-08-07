@@ -76,6 +76,33 @@ describe('Sidebar user management visibility', () => {
 		await expect.element(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
 		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();
 	});
+
+	// Application credentials are treated as a user-like principal (see the
+	// identical comment in Sidebar.svelte), so their nav entry lives here
+	// alongside Users/Groups rather than under Application Settings.
+	test('shows the User Management section when the user only has applicationCredentials:read', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: false,
+			permissions: ['applicationCredentials:read']
+		});
+
+		await expect.element(screen.getByText('User Management')).toBeInTheDocument();
+	});
+
+	test('only shows the Applications sub-link matching a partial permission grant', async () => {
+		const screen = render(Sidebar, {
+			...baseProps,
+			isAdmin: false,
+			permissions: ['applicationCredentials:read']
+		});
+
+		await screen.getByRole('button', { name: 'Toggle User Management submenu' }).click();
+
+		await expect.element(screen.getByRole('link', { name: 'Applications' })).toBeInTheDocument();
+		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+		await expect.element(screen.getByRole('link', { name: 'Groups' })).not.toBeInTheDocument();
+	});
 });
 
 describe('Sidebar application settings visibility', () => {

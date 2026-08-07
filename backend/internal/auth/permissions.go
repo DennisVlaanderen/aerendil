@@ -23,6 +23,11 @@ const (
 	PermEnvironmentsCreate = "environments:create"
 	PermEnvironmentsUpdate = "environments:update"
 	PermEnvironmentsDelete = "environments:delete"
+
+	PermApplicationCredentialsRead   = "applicationCredentials:read"
+	PermApplicationCredentialsCreate = "applicationCredentials:create"
+	PermApplicationCredentialsUpdate = "applicationCredentials:update"
+	PermApplicationCredentialsDelete = "applicationCredentials:delete"
 )
 
 // AllPermissions is the catalog of every known permission string --
@@ -43,11 +48,31 @@ var AllPermissions = []string{
 	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
 	PermAuditsRead,
 	PermEnvironmentsRead, PermEnvironmentsCreate, PermEnvironmentsUpdate, PermEnvironmentsDelete,
+	PermApplicationCredentialsRead, PermApplicationCredentialsCreate,
+	PermApplicationCredentialsUpdate, PermApplicationCredentialsDelete,
 }
 
-// IsKnownPermission reports whether perm is one of AllPermissions.
+// IsKnownPermission reports whether perm is one of AllPermissions. This
+// gates what a human Group can be granted (including the
+// applicationCredentials:* permissions themselves, i.e. who may manage
+// application credentials) -- it is deliberately broader than
+// CredentialScopes below, which gates what an application credential's own
+// Scopes may contain.
 func IsKnownPermission(perm string) bool {
 	return slices.Contains(AllPermissions, perm)
+}
+
+// CredentialScopes is the restricted catalog an application credential's
+// own Scopes field is validated against (see
+// api.applicationCredentialsPostHandler/PutHandler) -- deliberately just
+// flags:read/flags:write, not the full AllPermissions catalog, so a
+// compromised or over-granted application credential can never manage
+// users, groups, environments, or other credentials.
+var CredentialScopes = []string{PermFlagsRead, PermFlagsWrite}
+
+// IsKnownCredentialScope reports whether scope is one of CredentialScopes.
+func IsKnownCredentialScope(scope string) bool {
+	return slices.Contains(CredentialScopes, scope)
 }
 
 // PermissionSet is a resolved, deduplicated set of permission strings.

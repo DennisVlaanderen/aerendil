@@ -24,17 +24,22 @@
 
 	const canSeeUsers = $derived(hasPermission({ isAdmin, permissions }, 'users:read'));
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
-	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
+	// Application credentials are treated as a user-like principal (they
+	// resolve to the same *auth.User-shaped principal a human login does --
+	// see backend/internal/auth/service.go's AuthenticateToken), so their
+	// admin UI lives under User Management alongside Users/Groups rather
+	// than under Application Settings.
+	const canSeeApplicationCredentials = $derived(
+		hasPermission({ isAdmin, permissions }, 'applicationCredentials:read')
+	);
+	const canSeeUserManagement = $derived(
+		canSeeUsers || canSeeGroups || canSeeApplicationCredentials
+	);
 	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
 	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
-	const canSeeEnvironmentsSettings = $derived(
+	const canSeeApplicationSettings = $derived(
 		hasPermission({ isAdmin, permissions }, 'environments:read')
 	);
-	// OR chain even though it's a single term today, matching how
-	// canSeeUserManagement is already an OR of its children -- adding a
-	// second settings permission later is a one-line change here, not a nav
-	// restructure.
-	const canSeeApplicationSettings = $derived(canSeeEnvironmentsSettings);
 
 	function isActive(pathname: string) {
 		return page.url.pathname === pathname;
@@ -98,13 +103,22 @@
 			<div bind:this={userManagementContainer}>
 				<div
 					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive('/dashboard/users') ||
-					isActive('/dashboard/groups')
+					isActive('/dashboard/groups') ||
+					isActive('/dashboard/application-credentials')
 						? 'bg-nav-active-bg text-nav-active'
 						: 'text-nav-inactive'}"
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
-						href={resolve(localizeHref('/dashboard/users') as Pathname)}
+						href={resolve(
+							localizeHref(
+								canSeeUsers
+									? '/dashboard/users'
+									: canSeeGroups
+										? '/dashboard/groups'
+										: '/dashboard/application-credentials'
+							) as Pathname
+						)}
 					>
 						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 							<span class="icon-[lucide--users] size-4.5"></span>
@@ -156,6 +170,18 @@
 								{m.nav_groups()}
 							</a>
 						{/if}
+						{#if canSeeApplicationCredentials}
+							<a
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+									'/dashboard/application-credentials'
+								)
+									? 'bg-nav-active-bg text-nav-active'
+									: 'text-nav-inactive'}"
+								href={resolve(localizeHref('/dashboard/application-credentials') as Pathname)}
+							>
+								{m.nav_application_credentials()}
+							</a>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -200,18 +226,16 @@
 
 				{#if applicationSettingsOpen && !collapsed}
 					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-line-3 pl-2.5">
-						{#if canSeeEnvironmentsSettings}
-							<a
-								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
-									'/dashboard/settings/environments'
-								)
-									? 'bg-nav-active-bg text-nav-active'
-									: 'text-nav-inactive'}"
-								href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
-							>
-								{m.nav_environments()}
-							</a>
-						{/if}
+						<a
+							class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+								'/dashboard/settings/environments'
+							)
+								? 'bg-nav-active-bg text-nav-active'
+								: 'text-nav-inactive'}"
+							href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
+						>
+							{m.nav_environments()}
+						</a>
 					</div>
 				{/if}
 			</div>
