@@ -12,8 +12,8 @@ import (
 
 func TestOAuthTokenClientCredentialsGrantSucceedsWithBodyCredentials(t *testing.T) {
 	mux := newTestMux(t)
-	adminToken := tokenFor(t, auth.PermApplicationCredentialsCreate)
 	envID := seedEnvironmentForTest(t, "Production")
+	adminToken := tokenForWithEnvironments(t, []string{envID}, auth.PermApplicationCredentialsCreate)
 	clientID, clientSecret := createApplicationCredentialForTest(t, mux, adminToken, "billing-service", envID, []string{auth.PermFlagsRead})
 
 	body := "grant_type=client_credentials&client_id=" + clientID + "&client_secret=" + clientSecret
@@ -45,8 +45,8 @@ func TestOAuthTokenClientCredentialsGrantSucceedsWithBodyCredentials(t *testing.
 
 func TestOAuthTokenClientCredentialsGrantSucceedsWithBasicAuth(t *testing.T) {
 	mux := newTestMux(t)
-	adminToken := tokenFor(t, auth.PermApplicationCredentialsCreate)
 	envID := seedEnvironmentForTest(t, "Production")
+	adminToken := tokenForWithEnvironments(t, []string{envID}, auth.PermApplicationCredentialsCreate)
 	clientID, clientSecret := createApplicationCredentialForTest(t, mux, adminToken, "billing-service", envID, []string{auth.PermFlagsRead})
 
 	body := "grant_type=client_credentials"
@@ -62,8 +62,8 @@ func TestOAuthTokenClientCredentialsGrantSucceedsWithBasicAuth(t *testing.T) {
 
 func TestOAuthTokenRejectsWrongClientSecret(t *testing.T) {
 	mux := newTestMux(t)
-	adminToken := tokenFor(t, auth.PermApplicationCredentialsCreate)
 	envID := seedEnvironmentForTest(t, "Production")
+	adminToken := tokenForWithEnvironments(t, []string{envID}, auth.PermApplicationCredentialsCreate)
 	clientID, _ := createApplicationCredentialForTest(t, mux, adminToken, "billing-service", envID, []string{auth.PermFlagsRead})
 
 	body := "grant_type=client_credentials&client_id=" + clientID + "&client_secret=wrong"
@@ -111,8 +111,8 @@ func TestOAuthTokenRejectsUnsupportedGrantType(t *testing.T) {
 // (here, flags:read only -- no users:* access at all).
 func TestOAuthTokenIssuedAccessTokenWorksOverHTTPButOnlyWithinScope(t *testing.T) {
 	mux := newTestMux(t)
-	adminToken := tokenFor(t, auth.PermApplicationCredentialsCreate, auth.PermFlagsRead)
 	envID := seedEnvironmentForTest(t, "Production")
+	adminToken := tokenForWithEnvironments(t, []string{envID}, auth.PermApplicationCredentialsCreate, auth.PermFlagsRead)
 	clientID, clientSecret := createApplicationCredentialForTest(t, mux, adminToken, "billing-service", envID, []string{auth.PermFlagsRead})
 
 	tokenBody := "grant_type=client_credentials&client_id=" + clientID + "&client_secret=" + clientSecret

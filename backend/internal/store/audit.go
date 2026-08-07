@@ -17,6 +17,7 @@ type AuditEntry struct {
 	ID         uint64 `json:"id"`
 	Timestamp  int64  `json:"timestamp"`
 	ActorID    string `json:"actorId"`
+	ActorType  string `json:"actorType,omitempty"`
 	Action     string `json:"action"`
 	TargetType string `json:"targetType"`
 	TargetID   string `json:"targetId,omitempty"`

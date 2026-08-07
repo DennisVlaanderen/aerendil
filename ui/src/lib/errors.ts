@@ -70,7 +70,8 @@ export const ErrorCode = {
 	InternalGeneric: 'IE01-0000',
 	InternalTokenGen: 'IE01-0001',
 	InternalPasswordHash: 'IE01-0002',
-	InternalAuditFailed: 'IE01-0003'
+	InternalAuditFailed: 'IE01-0003',
+	InternalClientSecretHash: 'IE01-0004'
 } as const;
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];

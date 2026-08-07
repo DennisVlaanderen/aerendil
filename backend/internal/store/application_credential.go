@@ -27,6 +27,9 @@ type ApplicationCredential struct {
 func (f *fsm) applyApplicationCredential(index uint64, cmd command) any {
 	switch cmd.Op {
 	case opSet:
+		if _, ok := f.environments[cmd.ApplicationCredential.EnvironmentID]; !ok {
+			return fmt.Errorf("%w: %q", ErrUnknownEnvironment, cmd.ApplicationCredential.EnvironmentID)
+		}
 		cmd.ApplicationCredential.Version = index
 		f.applicationCredentials[cmd.ApplicationCredential.ID] = *cmd.ApplicationCredential
 		return *cmd.ApplicationCredential

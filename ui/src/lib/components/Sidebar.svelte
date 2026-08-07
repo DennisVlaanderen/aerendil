@@ -24,21 +24,36 @@
 
 	const canSeeUsers = $derived(hasPermission({ isAdmin, permissions }, 'users:read'));
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
-	// Application credentials are treated as a user-like principal (they
-	// resolve to the same *auth.User-shaped principal a human login does --
-	// see backend/internal/auth/service.go's AuthenticateToken), so their
-	// admin UI lives under User Management alongside Users/Groups rather
-	// than under Application Settings.
+	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
+	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
+	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
+	const canSeeEnvironments = $derived(hasPermission({ isAdmin, permissions }, 'environments:read'));
+	// Application credentials are an "Application Settings" concept (they
+	// configure how an application authenticates to Aerendil, the same way
+	// environments configure how flags are scoped), not a User Management
+	// one -- grouped here alongside Environments rather than next to
+	// Users/Groups.
 	const canSeeApplicationCredentials = $derived(
 		hasPermission({ isAdmin, permissions }, 'applicationCredentials:read')
 	);
-	const canSeeUserManagement = $derived(
-		canSeeUsers || canSeeGroups || canSeeApplicationCredentials
+	const canSeeApplicationSettings = $derived(canSeeEnvironments || canSeeApplicationCredentials);
+
+	// firstVisiblePath picks a dropdown's default link target: the first
+	// entry whose guard is true, falling back to the first entry so the
+	// link always resolves to something even if called before any guard is
+	// known -- adding a new item to a dropdown is "add one more [guard,
+	// path] pair" instead of growing a nested ternary.
+	function firstVisiblePath(...entries: [boolean, string][]): string {
+		return entries.find(([visible]) => visible)?.[1] ?? entries[0][1];
+	}
+	const userManagementDefaultPath = $derived(
+		firstVisiblePath([canSeeUsers, '/dashboard/users'], [canSeeGroups, '/dashboard/groups'])
 	);
-	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
-	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
-	const canSeeApplicationSettings = $derived(
-		hasPermission({ isAdmin, permissions }, 'environments:read')
+	const applicationSettingsDefaultPath = $derived(
+		firstVisiblePath(
+			[canSeeEnvironments, '/dashboard/settings/environments'],
+			[canSeeApplicationCredentials, '/dashboard/application-credentials']
+		)
 	);
 
 	function isActive(pathname: string) {
@@ -103,22 +118,13 @@
 			<div bind:this={userManagementContainer}>
 				<div
 					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive('/dashboard/users') ||
-					isActive('/dashboard/groups') ||
-					isActive('/dashboard/application-credentials')
+					isActive('/dashboard/groups')
 						? 'bg-nav-active-bg text-nav-active'
 						: 'text-nav-inactive'}"
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
-						href={resolve(
-							localizeHref(
-								canSeeUsers
-									? '/dashboard/users'
-									: canSeeGroups
-										? '/dashboard/groups'
-										: '/dashboard/application-credentials'
-							) as Pathname
-						)}
+						href={resolve(localizeHref(userManagementDefaultPath) as Pathname)}
 					>
 						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 							<span class="icon-[lucide--users] size-4.5"></span>
@@ -170,18 +176,6 @@
 								{m.nav_groups()}
 							</a>
 						{/if}
-						{#if canSeeApplicationCredentials}
-							<a
-								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
-									'/dashboard/application-credentials'
-								)
-									? 'bg-nav-active-bg text-nav-active'
-									: 'text-nav-inactive'}"
-								href={resolve(localizeHref('/dashboard/application-credentials') as Pathname)}
-							>
-								{m.nav_application_credentials()}
-							</a>
-						{/if}
 					</div>
 				{/if}
 			</div>
@@ -192,13 +186,13 @@
 				<div
 					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive(
 						'/dashboard/settings/environments'
-					)
+					) || isActive('/dashboard/application-credentials')
 						? 'bg-nav-active-bg text-nav-active'
 						: 'text-nav-inactive'}"
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
-						href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
+						href={resolve(localizeHref(applicationSettingsDefaultPath) as Pathname)}
 					>
 						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 							<span class="icon-[lucide--settings] size-4.5"></span>
@@ -226,16 +220,30 @@
 
 				{#if applicationSettingsOpen && !collapsed}
 					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-line-3 pl-2.5">
-						<a
-							class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
-								'/dashboard/settings/environments'
-							)
-								? 'bg-nav-active-bg text-nav-active'
-								: 'text-nav-inactive'}"
-							href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
-						>
-							{m.nav_environments()}
-						</a>
+						{#if canSeeEnvironments}
+							<a
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+									'/dashboard/settings/environments'
+								)
+									? 'bg-nav-active-bg text-nav-active'
+									: 'text-nav-inactive'}"
+								href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
+							>
+								{m.nav_environments()}
+							</a>
+						{/if}
+						{#if canSeeApplicationCredentials}
+							<a
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+									'/dashboard/application-credentials'
+								)
+									? 'bg-nav-active-bg text-nav-active'
+									: 'text-nav-inactive'}"
+								href={resolve(localizeHref('/dashboard/application-credentials') as Pathname)}
+							>
+								{m.nav_application_credentials()}
+							</a>
+						{/if}
 					</div>
 				{/if}
 			</div>

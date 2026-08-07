@@ -62,9 +62,14 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		if principal.User != nil {
 			actorID = principal.User.ID
 		}
+		actorType := "user"
+		if principal.IsService {
+			actorType = "applicationCredential"
+		}
 
 		entry := store.AuditEntry{
 			ActorID:    actorID,
+			ActorType:  actorType,
 			Action:     cfg.Action,
 			TargetType: cfg.TargetType,
 			TargetID:   targetIDFrom(r, rec.body.Bytes()),
@@ -73,7 +78,7 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 			StatusCode: status,
 		}
 		if success {
-			entry.After = rec.body.String()
+			entry.After = redactSensitiveResponseFields(rec.body.Bytes())
 		} else {
 			entry.Error = extractErrorMessage(rec.body.Bytes())
 		}
@@ -151,6 +156,44 @@ func targetIDFrom(r *http.Request, respBody []byte) string {
 		return probe.Flags[0].Key
 	}
 	return ""
+}
+
+// sensitiveResponseFields lists top-level JSON response fields that must
+// never be persisted into the durable, widely-readable audit trail even
+// though the handler legitimately returns them to the caller once -- today
+// just applicationCredentialSecretResponse.ClientSecret (see
+// application_credentials.go), which is otherwise "revealed exactly twice,
+// never again". Add to this list rather than teaching withAudit about
+// individual response shapes.
+var sensitiveResponseFields = []string{"clientSecret"}
+
+// redactSensitiveResponseFields returns body with any top-level field named
+// in sensitiveResponseFields replaced by a redaction marker, for storage in
+// AuditEntry.After. Falls back to the raw body if it isn't a JSON object, so
+// a non-object success response (there are none today) still gets audited
+// rather than silently dropped.
+func redactSensitiveResponseFields(body []byte) string {
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return string(body)
+	}
+
+	redacted := false
+	for _, field := range sensitiveResponseFields {
+		if _, ok := probe[field]; ok {
+			probe[field] = json.RawMessage(`"[redacted]"`)
+			redacted = true
+		}
+	}
+	if !redacted {
+		return string(body)
+	}
+
+	b, err := json.Marshal(probe)
+	if err != nil {
+		return string(body)
+	}
+	return string(b)
 }
 
 // extractErrorMessage pulls the "error" field every handler's error

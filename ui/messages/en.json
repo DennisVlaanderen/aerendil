@@ -134,6 +134,7 @@
 	"audit_log_empty": "No audit entries yet.",
 	"audit_log_table_timestamp": "Timestamp",
 	"audit_log_table_actor": "Actor",
+	"audit_log_actor_type_application": "Application",
 	"audit_log_table_action": "Action",
 	"audit_log_table_target": "Target",
 	"audit_log_table_status": "Status",

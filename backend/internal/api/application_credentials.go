@@ -63,6 +63,23 @@ func generateClientSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
+// applicationCredentialNotFound is the shared 404 for every route addressed
+// by {id} (PUT/DELETE/rotate), so the message/code can't drift between them.
+func applicationCredentialNotFound() error {
+	return notFound(CodeNotFoundApplicationCredential, "application credential not found")
+}
+
+// validateCredentialName trims and validates a credential's Name field --
+// shared by POST and PUT so the "name is required" rule can't drift between
+// create and update.
+func validateCredentialName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", badRequest(CodeBadRequestCredentialNameRequired, "name is required")
+	}
+	return name, nil
+}
+
 // validateCredentialScopes rejects any scope that isn't in
 // auth.CredentialScopes -- application credentials are deliberately
 // restricted to a subset of the full permission catalog a human Group can
@@ -76,16 +93,43 @@ func validateCredentialScopes(scopes []string) error {
 	return nil
 }
 
+// applicationCredentialsGetHandler requires an environmentId query param and
+// only returns credentials scoped to it, the same contract flagsGetHandler
+// already has -- a credential belongs to exactly one environment (AC-7.3),
+// so there is never a reason to list across all of them at once, and this
+// is what lets hasEnvironmentAccess gate the response the same way it gates
+// flags.
 func applicationCredentialsGetHandler(w http.ResponseWriter, r *http.Request) error {
+	principal, found := principalFromContext(r)
+	if !found {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
+	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
+	if environmentID == "" {
+		return badRequest(CodeBadRequestCredentialEnvironmentRequired, "environmentId is required")
+	}
+	if !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
 	creds := dataStore.ApplicationCredentials().List()
 	resp := make([]applicationCredentialResponse, 0, len(creds))
 	for _, c := range creds {
+		if c.EnvironmentID != environmentID {
+			continue
+		}
 		resp = append(resp, toApplicationCredentialResponse(c))
 	}
 	return ok(w, map[string]any{"applicationCredentials": resp})
 }
 
 func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) error {
+	principal, found := principalFromContext(r)
+	if !found {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
 	var payload struct {
 		Name          string   `json:"name"`
 		EnvironmentID string   `json:"environmentId"`
@@ -95,13 +139,21 @@ func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) e
 		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
-	name := strings.TrimSpace(payload.Name)
-	if name == "" {
-		return badRequest(CodeBadRequestCredentialNameRequired, "name is required")
-	}
+	// Authorization is checked as soon as we know the target environment --
+	// before any other field is validated -- so a caller without access to
+	// that environment learns nothing about the rest of the payload (e.g.
+	// "name is required", "unknown scope") ahead of being authorized for it.
 	environmentID := strings.TrimSpace(payload.EnvironmentID)
 	if environmentID == "" {
 		return badRequest(CodeBadRequestCredentialEnvironmentRequired, "environmentId is required")
+	}
+	if !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
+	name, err := validateCredentialName(payload.Name)
+	if err != nil {
+		return err
 	}
 	if _, exists := dataStore.Environments().Get(environmentID); !exists {
 		return badRequest(CodeBadRequestEnvironmentUnknown, "unknown environment: "+environmentID)
@@ -133,48 +185,68 @@ func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) e
 }
 
 func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) error {
+	principal, found := principalFromContext(r)
+	if !found {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
 	id := r.PathValue("id")
 	existing, found := dataStore.ApplicationCredentials().Get(id)
 	if !found {
-		return notFound(CodeNotFoundApplicationCredential, "application credential not found")
+		return applicationCredentialNotFound()
+	}
+	if !principal.hasEnvironmentAccess(existing.EnvironmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
 	}
 
+	// Scopes/Active are pointers so a client that omits either field leaves
+	// it unchanged, instead of a bare bool/slice silently decoding a missing
+	// field as false/nil and wiping it -- unlike users.go/groups.go's PUTs,
+	// an omitted "active" here would silently revoke a live machine
+	// credential's access on its next OAuth2 token exchange.
 	var payload struct {
-		Name          string   `json:"name"`
-		EnvironmentID string   `json:"environmentId"`
-		Scopes        []string `json:"scopes"`
-		Active        bool     `json:"active"`
+		Name   string    `json:"name"`
+		Scopes *[]string `json:"scopes"`
+		Active *bool     `json:"active"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
 		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
-	name := strings.TrimSpace(payload.Name)
-	if name == "" {
-		return badRequest(CodeBadRequestCredentialNameRequired, "name is required")
-	}
-	environmentID := strings.TrimSpace(payload.EnvironmentID)
-	if environmentID == "" {
-		return badRequest(CodeBadRequestCredentialEnvironmentRequired, "environmentId is required")
-	}
-	if _, exists := dataStore.Environments().Get(environmentID); !exists {
-		return badRequest(CodeBadRequestEnvironmentUnknown, "unknown environment: "+environmentID)
-	}
-	if err := validateCredentialScopes(payload.Scopes); err != nil {
+	name, err := validateCredentialName(payload.Name)
+	if err != nil {
 		return err
 	}
 
-	// PUT never touches the secret -- rotating it is a distinct operation
-	// (applicationCredentialsRotateHandler) with its own "reveal the new
-	// secret exactly once" response shape, the same way users.go's PUT
-	// leaves PasswordHash alone unless a new password is explicitly sent.
+	scopes := existing.Scopes
+	if payload.Scopes != nil {
+		if err := validateCredentialScopes(*payload.Scopes); err != nil {
+			return err
+		}
+		scopes = *payload.Scopes
+	}
+
+	active := existing.Active
+	if payload.Active != nil {
+		active = *payload.Active
+	}
+
+	// PUT never touches the secret or the environment. The secret is a
+	// distinct operation (applicationCredentialsRotateHandler) with its own
+	// "reveal the new secret exactly once" response shape, the same way
+	// users.go's PUT leaves PasswordHash alone unless a new password is
+	// explicitly sent. The environment is fixed for the credential's
+	// lifetime (AC-7.3): a live service token re-resolves EnvironmentID on
+	// every request (auth.Service.authenticateServicePrincipal), so
+	// reassigning it here would silently change what an already-issued
+	// token can access with no re-issuance.
 	cred, err := dataStore.ApplicationCredentials().Set(store.ApplicationCredential{
 		ID:               existing.ID,
 		Name:             name,
 		ClientSecretHash: existing.ClientSecretHash,
-		EnvironmentID:    environmentID,
-		Scopes:           payload.Scopes,
-		Active:           payload.Active,
+		EnvironmentID:    existing.EnvironmentID,
+		Scopes:           scopes,
+		Active:           active,
 	})
 	if err != nil {
 		return err
@@ -183,9 +255,18 @@ func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) er
 }
 
 func applicationCredentialsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
+	principal, found := principalFromContext(r)
+	if !found {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
 	id := r.PathValue("id")
-	if _, found := dataStore.ApplicationCredentials().Get(id); !found {
-		return notFound(CodeNotFoundApplicationCredential, "application credential not found")
+	existing, found := dataStore.ApplicationCredentials().Get(id)
+	if !found {
+		return applicationCredentialNotFound()
+	}
+	if !principal.hasEnvironmentAccess(existing.EnvironmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
 	}
 
 	if err := dataStore.ApplicationCredentials().Delete(id); err != nil {
@@ -199,10 +280,18 @@ func applicationCredentialsDeleteHandler(w http.ResponseWriter, r *http.Request)
 // ClientSecretHash is simply overwritten) without changing the credential's
 // ID/client_id, name, environment, or scopes.
 func applicationCredentialsRotateHandler(w http.ResponseWriter, r *http.Request) error {
+	principal, found := principalFromContext(r)
+	if !found {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
 	id := r.PathValue("id")
 	existing, found := dataStore.ApplicationCredentials().Get(id)
 	if !found {
-		return notFound(CodeNotFoundApplicationCredential, "application credential not found")
+		return applicationCredentialNotFound()
+	}
+	if !principal.hasEnvironmentAccess(existing.EnvironmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
 	}
 
 	secret, hash, err := newHashedClientSecret()
@@ -233,11 +322,11 @@ func applicationCredentialsRotateHandler(w http.ResponseWriter, r *http.Request)
 func newHashedClientSecret() (secret string, hash []byte, err error) {
 	secret, err = generateClientSecret()
 	if err != nil {
-		return "", nil, internalError(CodeInternalPasswordHash, "failed to generate client secret")
+		return "", nil, internalError(CodeInternalClientSecretHash, "failed to generate client secret")
 	}
 	hash, err = bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
 	if err != nil {
-		return "", nil, internalError(CodeInternalPasswordHash, "failed to hash client secret")
+		return "", nil, internalError(CodeInternalClientSecretHash, "failed to hash client secret")
 	}
 	return secret, hash, nil
 }

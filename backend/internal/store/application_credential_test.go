@@ -81,6 +81,22 @@ func TestStoreDeleteApplicationCredential(t *testing.T) {
 	}
 }
 
+// TestStoreSetApplicationCredentialRejectsUnknownEnvironment guards the FSM
+// itself, mirroring applyFlag's identical check (see
+// TestStoreSetFlagRejectsUnknownEnvironment) -- the API layer already
+// pre-checks this, but the FSM is the actual enforcement point for anyone
+// else calling ApplicationCredentialRepository.Set directly.
+func TestStoreSetApplicationCredentialRejectsUnknownEnvironment(t *testing.T) {
+	s := newTestStore(t)
+
+	_, err := s.ApplicationCredentials().Set(ApplicationCredential{
+		ID: NewID(), Name: "billing-service", EnvironmentID: "does-not-exist", Active: true,
+	})
+	if !errors.Is(err, ErrUnknownEnvironment) {
+		t.Fatalf("expected ErrUnknownEnvironment, got %v", err)
+	}
+}
+
 func TestStoreDeleteEnvironmentRejectsWhenCredentialsStillReferenceIt(t *testing.T) {
 	s := newTestStore(t)
 	envID := seedEnvironment(t, s, "Production")

@@ -134,6 +134,7 @@
 	"audit_log_empty": "Nog geen auditvermeldingen.",
 	"audit_log_table_timestamp": "Tijdstip",
 	"audit_log_table_actor": "Uitgevoerd door",
+	"audit_log_actor_type_application": "Applicatie",
 	"audit_log_table_action": "Actie",
 	"audit_log_table_target": "Doel",
 	"audit_log_table_status": "Status",

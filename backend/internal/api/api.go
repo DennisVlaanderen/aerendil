@@ -142,7 +142,11 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 
 	// Unprotected by design, like /api/auth/login -- the request itself
 	// carries the credential (client_id/client_secret) being authenticated.
-	mux.HandleFunc("POST /api/oauth/token", handleErrors(oauthTokenHandler))
+	// Registered without a "POST " method prefix so a wrong-method request
+	// reaches oauthTokenHandler's own RFC 6749 JSON error response instead
+	// of ServeMux's generic plain-text 405 -- see oauthTokenHandler's doc
+	// comment.
+	mux.HandleFunc("/api/oauth/token", handleErrors(oauthTokenHandler))
 
 	mux.HandleFunc("GET /api/application-credentials", requirePermission(auth.PermApplicationCredentialsRead, handleErrors(applicationCredentialsGetHandler)))
 	mux.HandleFunc("POST /api/application-credentials", requirePermission(auth.PermApplicationCredentialsCreate, withAudit(auditConfig{

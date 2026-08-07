@@ -42,11 +42,15 @@ export type ApplicationCredentialSecretResult =
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 export async function listApplicationCredentials(
-	token: string
+	token: string,
+	environmentId: string
 ): Promise<ApplicationCredentialSummary[]> {
-	const response = await fetch(`${API_ORIGIN}/api/application-credentials`, {
-		headers: { Authorization: `Bearer ${token}` }
-	});
+	const response = await fetch(
+		`${API_ORIGIN}/api/application-credentials?environmentId=${encodeURIComponent(environmentId)}`,
+		{
+			headers: { Authorization: `Bearer ${token}` }
+		}
+	);
 	if (!response.ok) {
 		// Same convention as listGroups: a non-OK response is surfaced as an
 		// empty list rather than thrown, logged server-side so the failure

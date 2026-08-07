@@ -27,14 +27,14 @@ func writeOAuthError(w http.ResponseWriter, status int, code, description string
 // is the common case for OAuth2 client libraries.
 func parseOAuthTokenRequest(r *http.Request) (clientID, clientSecret, grantType string) {
 	if id, secret, ok := r.BasicAuth(); ok {
-		clientID, clientSecret = id, secret
+		clientID, clientSecret = strings.TrimSpace(id), strings.TrimSpace(secret)
 	}
 	_ = r.ParseForm()
 	if clientID == "" {
 		clientID = strings.TrimSpace(r.PostFormValue("client_id"))
 	}
 	if clientSecret == "" {
-		clientSecret = r.PostFormValue("client_secret")
+		clientSecret = strings.TrimSpace(r.PostFormValue("client_secret"))
 	}
 	grantType = strings.TrimSpace(r.PostFormValue("grant_type"))
 	return clientID, clientSecret, grantType
@@ -46,6 +46,13 @@ func parseOAuthTokenRequest(r *http.Request) (clientID, clientSecret, grantType 
 // registered without requirePermission/withAudit -- like loginHandler --
 // since the request itself carries the credential being authenticated;
 // there is no prior bearer token to check.
+//
+// Registered on the method-agnostic "/api/oauth/token" pattern (see
+// RegisterRoutes), not "POST /api/oauth/token" -- unlike every other route
+// in this package, the method check happens here instead of being left to
+// Go 1.22+ ServeMux, because a non-POST request must still get this
+// endpoint's RFC 6749 JSON error body rather than ServeMux's generic
+// plain-text 405.
 //
 // Both the request and response shapes deliberately follow RFC 6749
 // verbatim instead of this API's usual JSON conventions (structured

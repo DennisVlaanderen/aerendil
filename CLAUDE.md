@@ -97,21 +97,28 @@ store.
 
 - **`api/`** — `net/http` (stdlib `ServeMux` with Go 1.22+ method patterns,
   e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires routes for
-  flags, auth, users, groups, audits, and environments — check `api.go`
-  directly for the exact list rather than assuming it here, since it grows
-  over time. Every mutating route follows the same `requirePermission(perm,
-  withAudit(cfg, handler))` nesting (order matters — `withAudit` needs the
-  principal `requirePermission` already attached to the request context).
-  `middleware.go`'s `requirePermission` wraps a handler with bearer-token
-  parsing plus a single permission-string check via the `auth` package.
-  Route handlers currently do minimal validation — check the relevant
-  `api/*.go` file directly rather than assuming REST conventions beyond
-  what's there.
+  flags, auth, users, groups, audits, environments, and application
+  credentials (plus the unauthenticated `POST /api/oauth/token` OAuth2
+  client-credentials endpoint those credentials authenticate against) —
+  check `api.go` directly for the exact list rather than assuming it here,
+  since it grows over time. Every mutating route follows the same
+  `requirePermission(perm, withAudit(cfg, handler))` nesting (order matters
+  — `withAudit` needs the principal `requirePermission` already attached to
+  the request context). `middleware.go`'s `requirePermission` wraps a
+  handler with bearer-token parsing plus a single permission-string check
+  via the `auth` package. Route handlers currently do minimal validation —
+  check the relevant `api/*.go` file directly rather than assuming REST
+  conventions beyond what's there.
 
 - **`auth/`** — `Service` in `service.go` issues/parses HS256 JWTs
-  (`golang-jwt/jwt`) and hashes passwords with bcrypt; JWT claims are just
-  `sub`/`exp`/`iat` — nothing else is baked in, since `Service.Resolve`
-  re-fetches the live user and re-resolves permissions on every request.
+  (`golang-jwt/jwt`) and hashes passwords with bcrypt. A human login token's
+  claims are just `sub`/`exp`/`iat`; a service token issued via
+  `GenerateServiceToken` for an application credential's OAuth2
+  client-credentials exchange additionally carries a `typ: "service"` claim,
+  which `AuthenticateToken` uses to resolve the subject against the
+  application-credential store instead of `Users` — either way nothing
+  beyond that is baked in, since `Service.Resolve`/`AuthenticateToken`
+  re-fetch the live record and re-resolve permissions on every request.
   There is one seeded account: `bootstrap.go`'s `SeedAdminGroupAndUser`
   creates a configurable admin user (`AERENDIL_ADMIN_USERNAME` /
   `AERENDIL_ADMIN_PASSWORD`, bcrypt-hashed at startup) and an immutable,
@@ -120,10 +127,15 @@ store.
   group-based: `permissions.go` holds a flat catalog of permission strings
   (`PermFlagsRead/Write`, `PermUsersRead/Create/Update/Delete`,
   `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`,
-  `PermEnvironmentsRead/Create/Update/Delete`) attached to
+  `PermEnvironmentsRead/Create/Update/Delete`,
+  `PermApplicationCredentialsRead/Create/Update/Delete`) attached to
   `store.Group.Permissions` and resolved live — no caching, nothing baked
   into the JWT — via `Service.Resolve`, so group/permission changes and
-  deactivation take effect on a user's very next request. There is no
+  deactivation take effect on a user's very next request. An application
+  credential is never an admin and its permission set is exactly its own
+  `Scopes` (restricted to `auth.CredentialScopes`, currently
+  `flags:read`/`flags:write` only) rather than anything resolved through
+  group membership — see `authenticateServicePrincipal`. There is no
   `RoleAdmin`/`RoleUser` constant anywhere in the codebase; don't assume
   that model (see Epic 7 in `docs/user-stories.md` for where identity is
   headed next).

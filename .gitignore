@@ -57,3 +57,5 @@ package
 # invoked from.
 backend/**/data/
 /data/
+
+/node_modules

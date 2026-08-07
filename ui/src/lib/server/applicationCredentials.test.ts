@@ -43,7 +43,7 @@ describe('listApplicationCredentials', () => {
 			})
 		);
 
-		const result = await listApplicationCredentials('a-token');
+		const result = await listApplicationCredentials('a-token', 'e1');
 
 		expect(result).toEqual([
 			{
@@ -54,12 +54,16 @@ describe('listApplicationCredentials', () => {
 				active: true
 			}
 		]);
+		expect(fetch).toHaveBeenCalledWith(
+			expect.stringContaining('environmentId=e1'),
+			expect.anything()
+		);
 	});
 
 	it('returns an empty array on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(403, { error: 'forbidden' }));
 
-		const result = await listApplicationCredentials('a-token');
+		const result = await listApplicationCredentials('a-token', 'e1');
 
 		expect(result).toEqual([]);
 	});

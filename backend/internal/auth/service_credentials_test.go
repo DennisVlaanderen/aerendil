@@ -103,7 +103,7 @@ func TestGenerateServiceTokenRoundTripsThroughAuthenticateToken(t *testing.T) {
 		t.Fatalf("expected service token generation to succeed: %v", err)
 	}
 
-	user, perms, envs, isAdmin, err := service.AuthenticateToken(token)
+	user, perms, envs, isAdmin, isService, err := service.AuthenticateToken(token)
 	if err != nil {
 		t.Fatalf("expected AuthenticateToken to succeed for a service token: %v", err)
 	}
@@ -112,6 +112,9 @@ func TestGenerateServiceTokenRoundTripsThroughAuthenticateToken(t *testing.T) {
 	}
 	if isAdmin {
 		t.Fatal("expected a service token to never resolve as admin")
+	}
+	if !isService {
+		t.Fatal("expected a service token to resolve with isService=true")
 	}
 	if !perms.Has(PermFlagsRead) || !perms.Has(PermFlagsWrite) {
 		t.Fatalf("expected resolved perms to match the credential's scopes, got %+v", perms)
@@ -137,12 +140,15 @@ func TestAuthenticateTokenStillResolvesHumanTokens(t *testing.T) {
 		t.Fatalf("expected token generation to succeed: %v", err)
 	}
 
-	principal, _, _, isAdmin, err := service.AuthenticateToken(token)
+	principal, _, _, isAdmin, isService, err := service.AuthenticateToken(token)
 	if err != nil {
 		t.Fatalf("expected AuthenticateToken to succeed for a human token: %v", err)
 	}
 	if principal.Username != "admin" || !isAdmin {
 		t.Fatalf("expected the seeded admin to resolve as admin, got %+v isAdmin=%v", principal, isAdmin)
+	}
+	if isService {
+		t.Fatal("expected a human token to resolve with isService=false")
 	}
 }
 
@@ -169,7 +175,7 @@ func TestAuthenticateTokenRejectsServiceTokenAfterCredentialDeactivation(t *test
 		t.Fatalf("deactivate credential: %v", err)
 	}
 
-	if _, _, _, _, err := service.AuthenticateToken(token); err == nil {
+	if _, _, _, _, _, err := service.AuthenticateToken(token); err == nil {
 		t.Fatal("expected an already-issued service token to stop working immediately after the credential is deactivated")
 	}
 }

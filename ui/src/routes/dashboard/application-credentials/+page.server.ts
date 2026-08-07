@@ -21,6 +21,12 @@ import type { PageServerLoad } from './$types';
 // re-fetched here at all -- `data.environments` falls through from the
 // dashboard layout's session-scoped list, which is all a name lookup for
 // the (already access-checked) selected environment needs.
+//
+// listApplicationCredentials is called with selectedEnvironmentId itself
+// (mirroring listFlags) so the backend does the filtering -- the backend
+// route requires and enforces access to that environmentId (see
+// applicationCredentialsGetHandler), rather than this load fetching every
+// credential across every environment and filtering client-side.
 export const load: PageServerLoad = async ({ cookies, parent }) => {
 	const { isAdmin, permissions, selectedEnvironmentId } = await parent();
 	if (!hasPermission({ isAdmin, permissions }, 'applicationCredentials:read')) {
@@ -28,10 +34,10 @@ export const load: PageServerLoad = async ({ cookies, parent }) => {
 	}
 
 	const token = getAuthToken(cookies);
-	const allCredentials = token ? await listApplicationCredentials(token) : [];
-	const applicationCredentials = selectedEnvironmentId
-		? allCredentials.filter((c) => c.environmentId === selectedEnvironmentId)
-		: [];
+	const applicationCredentials =
+		token && selectedEnvironmentId
+			? await listApplicationCredentials(token, selectedEnvironmentId)
+			: [];
 
 	return { applicationCredentials, selectedEnvironmentId };
 };

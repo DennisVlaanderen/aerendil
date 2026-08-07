@@ -12,10 +12,11 @@ import (
 // request by authenticateRequest and threaded through to handlers via the
 // request context so it never needs to be re-parsed/re-resolved.
 type resolvedPrincipal struct {
-	User    *auth.User
-	Perms   auth.PermissionSet
-	Envs    auth.EnvironmentSet
-	IsAdmin bool
+	User      *auth.User
+	Perms     auth.PermissionSet
+	Envs      auth.EnvironmentSet
+	IsAdmin   bool
+	IsService bool
 }
 
 // hasEnvironmentAccess reports whether p may read/write the given
@@ -37,13 +38,13 @@ func authenticateRequest(w http.ResponseWriter, r *http.Request) (resolvedPrinci
 		return resolvedPrincipal{}, false
 	}
 
-	principal, perms, envs, isAdmin, err := authService.AuthenticateToken(authorization)
+	principal, perms, envs, isAdmin, isService, err := authService.AuthenticateToken(authorization)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, CodeAuthInvalidToken, "invalid token")
 		return resolvedPrincipal{}, false
 	}
 
-	return resolvedPrincipal{User: principal, Perms: perms, Envs: envs, IsAdmin: isAdmin}, true
+	return resolvedPrincipal{User: principal, Perms: perms, Envs: envs, IsAdmin: isAdmin, IsService: isService}, true
 }
 
 type principalContextKey struct{}

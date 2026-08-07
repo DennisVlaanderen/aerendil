@@ -118,7 +118,16 @@
 								</button>
 							</td>
 							<td class="px-3 py-3 whitespace-nowrap text-ink">{formatTimestamp(entry.timestamp)}</td>
-							<td class="px-3 py-3 text-ink">{entry.actorId}</td>
+							<td class="px-3 py-3 text-ink">
+								{entry.actorId}
+								{#if entry.actorType === 'applicationCredential'}
+									<span
+										class="ml-1.5 rounded-full bg-control px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-ink-muted uppercase"
+									>
+										{m.audit_log_actor_type_application()}
+									</span>
+								{/if}
+							</td>
 							<td class="px-3 py-3 font-mono text-xs text-ink">{entry.action}</td>
 							<td class="px-3 py-3 text-ink-muted">
 								{entry.targetType}{entry.targetId ? `: ${entry.targetId}` : ''}

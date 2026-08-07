@@ -239,40 +239,43 @@ func (s *Service) parseTokenSubject(tokenString string) (string, error) {
 }
 
 // AuthenticateToken validates a bearer token and resolves its principal,
-// permission set, and environment-access set in a single store fetch -- the
-// combined form api.authenticateRequest uses on every request, replacing
-// what used to be a ParseToken call followed by a separate Resolve call
-// that each independently fetched the same user record.
+// permission set, environment-access set, and admin flag in a single store
+// fetch -- the combined form api.authenticateRequest uses on every request,
+// replacing what used to be a ParseToken call followed by a separate
+// Resolve call that each independently fetched the same user record.
 //
 // A token whose "typ" claim is "service" (see GenerateServiceToken) is
 // resolved against the application-credential store instead of Users, but
 // returns the exact same (*User, PermissionSet, EnvironmentSet, bool)
-// shape a human token does -- this is the entire mechanism by which
-// requirePermission/withAudit/principalFromContext in the api package work
-// unchanged for both principal kinds; they only ever see a *User{ID,
-// Username}, never anything that reveals which kind of token produced it.
-func (s *Service) AuthenticateToken(tokenString string) (*User, PermissionSet, EnvironmentSet, bool, error) {
+// shape a human token does, plus isService -- this is the entire mechanism
+// by which requirePermission/withAudit/principalFromContext in the api
+// package work unchanged for both principal kinds; they only ever see a
+// *User{ID, Username}, never anything that reveals which kind of token
+// produced it, except through the explicit isService flag (used by
+// withAudit to record AuditEntry.ActorType).
+func (s *Service) AuthenticateToken(tokenString string) (user *User, perms PermissionSet, envs EnvironmentSet, isAdmin bool, isService bool, err error) {
 	claims, err := s.parseTokenClaims(tokenString)
 	if err != nil {
-		return nil, nil, nil, false, err
+		return nil, nil, nil, false, false, err
 	}
 
 	subject, _ := claims["sub"].(string)
 	if subject == "" {
-		return nil, nil, nil, false, ErrMissingSubject
+		return nil, nil, nil, false, false, ErrMissingSubject
 	}
 
 	if typ, _ := claims["typ"].(string); typ == serviceTokenClaim {
-		return s.authenticateServicePrincipal(subject)
+		user, perms, envs, isAdmin, err = s.authenticateServicePrincipal(subject)
+		return user, perms, envs, isAdmin, true, err
 	}
 
 	u, ok := s.store.Users().Get(subject)
 	if !ok || !u.Active {
-		return nil, nil, nil, false, ErrUserNotFound
+		return nil, nil, nil, false, false, ErrUserNotFound
 	}
 
-	perms, envs, isAdmin := s.resolvePermissionsForUser(u)
-	return &User{ID: u.ID, Username: u.Username}, perms, envs, isAdmin, nil
+	perms, envs, isAdmin = s.resolvePermissionsForUser(u)
+	return &User{ID: u.ID, Username: u.Username}, perms, envs, isAdmin, false, nil
 }
 
 // authenticateServicePrincipal resolves an already-validated service token's

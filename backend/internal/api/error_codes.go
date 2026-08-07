@@ -76,8 +76,9 @@ const (
 	CodeMethodNotAllowed = "MN01-0001"
 
 	// IE01 -- internal error (500).
-	CodeInternalGeneric      = "IE01-0000" // handleErrors' catch-all fallback for an unmapped error
-	CodeInternalTokenGen     = "IE01-0001" // failed to create a JWT
-	CodeInternalPasswordHash = "IE01-0002" // failed to hash a password
-	CodeInternalAuditFailed  = "IE01-0003" // the mutation applied but recording its audit entry failed
+	CodeInternalGeneric          = "IE01-0000" // handleErrors' catch-all fallback for an unmapped error
+	CodeInternalTokenGen         = "IE01-0001" // failed to create a JWT
+	CodeInternalPasswordHash     = "IE01-0002" // failed to hash a password
+	CodeInternalAuditFailed      = "IE01-0003" // the mutation applied but recording its audit entry failed
+	CodeInternalClientSecretHash = "IE01-0004" // failed to generate/hash an application credential's client secret
 )
