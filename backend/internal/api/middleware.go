@@ -33,13 +33,13 @@ func (p resolvedPrincipal) hasEnvironmentAccess(environmentID string) bool {
 func authenticateRequest(w http.ResponseWriter, r *http.Request) (resolvedPrincipal, bool) {
 	authorization := r.Header.Get("Authorization")
 	if authorization == "" {
-		writeError(w, http.StatusUnauthorized, "missing authorization header")
+		writeError(w, http.StatusUnauthorized, CodeAuthMissingHeader, "missing authorization header")
 		return resolvedPrincipal{}, false
 	}
 
 	principal, perms, envs, isAdmin, err := authService.AuthenticateToken(authorization)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid token")
+		writeError(w, http.StatusUnauthorized, CodeAuthInvalidToken, "invalid token")
 		return resolvedPrincipal{}, false
 	}
 
@@ -75,7 +75,7 @@ func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if !principal.IsAdmin && !principal.Perms.Has(perm) {
-			writeError(w, http.StatusForbidden, "forbidden")
+			writeError(w, http.StatusForbidden, CodeAuthForbidden, "forbidden")
 			return
 		}
 

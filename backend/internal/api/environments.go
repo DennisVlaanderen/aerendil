@@ -57,12 +57,12 @@ func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest("name is required")
+		return badRequest(CodeBadRequestEnvironmentNameRequired, "name is required")
 	}
 
 	env, err := dataStore.Environments().Set(store.Environment{
@@ -81,19 +81,19 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 
 	existing, found := dataStore.Environments().Get(id)
 	if !found {
-		return notFound("environment not found")
+		return notFound(CodeNotFoundEnvironment, "environment not found")
 	}
 
 	var payload struct {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest("name is required")
+		return badRequest(CodeBadRequestEnvironmentNameRequired, "name is required")
 	}
 
 	// Order is intentionally not accepted from the request body -- it's
@@ -114,7 +114,7 @@ func environmentsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
 	if _, found := dataStore.Environments().Get(id); !found {
-		return notFound("environment not found")
+		return notFound(CodeNotFoundEnvironment, "environment not found")
 	}
 
 	if err := dataStore.Environments().Delete(id); err != nil {

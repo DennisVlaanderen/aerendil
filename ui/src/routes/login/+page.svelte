@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { apiRequest } from '$lib/client/api';
+	import { resolveErrorMessage } from '$lib/errors';
 	import LocaleSwitcher from '$lib/components/LocaleSwitcher.svelte';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { m } from '$lib/paraglide/messages.js';
@@ -27,7 +28,7 @@
 		});
 
 		if (result.error) {
-			errorMessage = result.error;
+			errorMessage = resolveErrorMessage(result.code);
 			isSubmitting = false;
 			return;
 		}

@@ -13,8 +13,8 @@ export interface UserSummary {
 // store.ErrLastAdmin, 409 for a taken username, etc.) is what ends up on the
 // wire, not a guess reconstructed from the error text.
 export type UserResult =
-	| { user: UserSummary; error?: undefined; status?: undefined }
-	| { user?: undefined; error: string; status: number };
+	| { user: UserSummary; error?: undefined; status?: undefined; code?: undefined }
+	| { user?: undefined; error: string; status: number; code: string };
 
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
@@ -48,12 +48,13 @@ export async function createUser(
 				typeof payload?.error === 'string'
 					? payload.error
 					: "Couldn't create that user. The username may already be taken.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
 
 	const user = await response.json().catch(() => null);
-	return user ? { user } : { error: "Couldn't create that user.", status: 502 };
+	return user ? { user } : { error: "Couldn't create that user.", code: 'internal', status: 502 };
 }
 
 // An empty password means "leave it unchanged" -- mirrors the backend's own
@@ -80,12 +81,13 @@ export async function updateUser(
 				typeof payload?.error === 'string'
 					? payload.error
 					: "Couldn't update that user. The username may already be taken.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
 
 	const user = await response.json().catch(() => null);
-	return user ? { user } : { error: "Couldn't update that user.", status: 502 };
+	return user ? { user } : { error: "Couldn't update that user.", code: 'internal', status: 502 };
 }
 
 // Returns null on success, or the backend's real status alongside a
@@ -95,7 +97,7 @@ export async function updateUser(
 export async function deleteUser(
 	token: string,
 	id: string
-): Promise<{ error: string; status: number } | null> {
+): Promise<{ error: string; status: number; code: string } | null> {
 	const response = await fetch(`${API_ORIGIN}/api/users/${encodeURIComponent(id)}`, {
 		method: 'DELETE',
 		headers: { Authorization: `Bearer ${token}` }
@@ -107,6 +109,7 @@ export async function deleteUser(
 	const payload = await response.json().catch(() => null);
 	return {
 		error: typeof payload?.error === 'string' ? payload.error : "Couldn't delete that user.",
+		code: typeof payload?.code === 'string' ? payload.code : 'internal',
 		status: response.status
 	};
 }

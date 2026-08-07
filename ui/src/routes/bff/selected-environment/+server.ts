@@ -5,7 +5,7 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const session = await getSession(cookies);
 	if (!session) {
-		return json({ error: 'Not authenticated.' }, { status: 401 });
+		return json({ error: 'Not authenticated.', code: 'A01-0002' }, { status: 401 });
 	}
 
 	const body = await request.json().catch(() => null);
@@ -17,7 +17,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	// but a request forged with an ID the caller can't see should still be
 	// rejected rather than silently scoping their view to it.
 	if (!environmentId || (!session.isAdmin && !session.environmentIds.includes(environmentId))) {
-		return json({ error: 'You do not have access to that environment.' }, { status: 403 });
+		return json(
+			{ error: 'You do not have access to that environment.', code: 'A02-0001' },
+			{ status: 403 }
+		);
 	}
 
 	setSelectedEnvironmentCookie(cookies, environmentId);

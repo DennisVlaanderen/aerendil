@@ -8,26 +8,44 @@ import (
 	"aerendil/backend/internal/store"
 )
 
-// apiError pairs an HTTP status with a client-facing message. Handlers
-// return one (via badRequest/unauthorized/forbidden/notFound/conflict/
-// methodNotAllowed/internalError below) instead of writing an error
-// response directly -- handleErrors is the single place that turns a
-// returned error into the actual {"error": "..."} JSON response, so every
-// handler's error path looks the same regardless of which failure it hit.
+// apiError pairs an HTTP status and a stable machine-readable code (see
+// error_codes.go) with a client-facing message. Handlers return one (via
+// badRequest/unauthorized/forbidden/notFound/conflict/methodNotAllowed/
+// internalError below) instead of writing an error response directly --
+// handleErrors is the single place that turns a returned error into the
+// actual {"error": "...", "code": "..."} JSON response, so every handler's
+// error path looks the same regardless of which failure it hit. message
+// stays English debug text for logs/tools; code is what the frontend uses
+// to pick a translated string, since message itself is never translated.
 type apiError struct {
 	status  int
+	code    string
 	message string
 }
 
 func (e *apiError) Error() string { return e.message }
 
-func badRequest(message string) error       { return &apiError{http.StatusBadRequest, message} }
-func unauthorized(message string) error     { return &apiError{http.StatusUnauthorized, message} }
-func forbidden(message string) error        { return &apiError{http.StatusForbidden, message} }
-func notFound(message string) error         { return &apiError{http.StatusNotFound, message} }
-func conflict(message string) error         { return &apiError{http.StatusConflict, message} }
-func methodNotAllowed(message string) error { return &apiError{http.StatusMethodNotAllowed, message} }
-func internalError(message string) error    { return &apiError{http.StatusInternalServerError, message} }
+func badRequest(code, message string) error {
+	return &apiError{http.StatusBadRequest, code, message}
+}
+func unauthorized(code, message string) error {
+	return &apiError{http.StatusUnauthorized, code, message}
+}
+func forbidden(code, message string) error {
+	return &apiError{http.StatusForbidden, code, message}
+}
+func notFound(code, message string) error {
+	return &apiError{http.StatusNotFound, code, message}
+}
+func conflict(code, message string) error {
+	return &apiError{http.StatusConflict, code, message}
+}
+func methodNotAllowed(code, message string) error {
+	return &apiError{http.StatusMethodNotAllowed, code, message}
+}
+func internalError(code, message string) error {
+	return &apiError{http.StatusInternalServerError, code, message}
+}
 
 // storeErrorToAPIError maps a known, client-facing store-layer sentinel to
 // the apiError handleErrors should write; nil if err doesn't match any of
@@ -38,14 +56,17 @@ func internalError(message string) error    { return &apiError{http.StatusIntern
 func storeErrorToAPIError(err error) *apiError {
 	switch {
 	case errors.Is(err, store.ErrUsernameTaken):
-		return &apiError{http.StatusConflict, "username is already taken"}
-	case errors.Is(err, store.ErrLastAdmin),
-		errors.Is(err, store.ErrProtectedSystemGroup),
-		errors.Is(err, store.ErrLastEnvironment),
-		errors.Is(err, store.ErrEnvironmentHasFlags):
-		return &apiError{http.StatusForbidden, err.Error()}
+		return &apiError{http.StatusConflict, CodeConflictUsernameTaken, "username is already taken"}
+	case errors.Is(err, store.ErrLastAdmin):
+		return &apiError{http.StatusForbidden, CodeBusinessLastAdmin, err.Error()}
+	case errors.Is(err, store.ErrProtectedSystemGroup):
+		return &apiError{http.StatusForbidden, CodeBusinessProtectedGroup, err.Error()}
+	case errors.Is(err, store.ErrLastEnvironment):
+		return &apiError{http.StatusForbidden, CodeBusinessLastEnvironment, err.Error()}
+	case errors.Is(err, store.ErrEnvironmentHasFlags):
+		return &apiError{http.StatusForbidden, CodeBusinessEnvironmentHasFlags, err.Error()}
 	case errors.Is(err, store.ErrUnknownEnvironment):
-		return &apiError{http.StatusBadRequest, err.Error()}
+		return &apiError{http.StatusBadRequest, CodeBadRequestEnvironmentUnknown, err.Error()}
 	default:
 		return nil
 	}
@@ -75,24 +96,24 @@ func handleErrors(h apiHandlerFunc) http.HandlerFunc {
 
 		var apiErr *apiError
 		if errors.As(err, &apiErr) {
-			writeError(w, apiErr.status, apiErr.message)
+			writeError(w, apiErr.status, apiErr.code, apiErr.message)
 			return
 		}
 		if mapped := storeErrorToAPIError(err); mapped != nil {
-			writeError(w, mapped.status, mapped.message)
+			writeError(w, mapped.status, mapped.code, mapped.message)
 			return
 		}
 		log.Printf("api: internal error: %v", err)
-		writeError(w, http.StatusInternalServerError, "internal server error")
+		writeError(w, http.StatusInternalServerError, CodeInternalGeneric, "internal server error")
 	}
 }
 
-// writeError writes the {"error": "..."} JSON shape every handler's error
-// path uses -- shared by handleErrors and the small number of call sites
-// that write an error response outside the apiHandlerFunc chain entirely
-// (requirePermission/authenticateRequest in middleware.go run before a
-// handler is ever reached; withAudit in audit_middleware.go wraps the
-// chain's outermost response write).
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+// writeError writes the {"error": "...", "code": "..."} JSON shape every
+// handler's error path uses -- shared by handleErrors and the small number
+// of call sites that write an error response outside the apiHandlerFunc
+// chain entirely (requirePermission/authenticateRequest in middleware.go
+// run before a handler is ever reached; withAudit in audit_middleware.go
+// wraps the chain's outermost response write).
+func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, map[string]string{"error": message, "code": code})
 }

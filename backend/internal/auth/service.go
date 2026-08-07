@@ -14,6 +14,18 @@ import (
 
 const defaultTokenTTL = 24 * time.Hour
 
+// Sentinel errors so callers (the api package's login/token-auth handlers)
+// can errors.Is against a specific failure instead of matching on message
+// text -- mirrors how store's sentinels (store.ErrUsernameTaken etc.) are
+// consumed via storeErrorToAPIError.
+var (
+	ErrInvalidCredentials = errors.New("invalid username or password")
+	ErrUserNotFound       = errors.New("user not found or inactive")
+	ErrInvalidToken       = errors.New("invalid token")
+	ErrInvalidClaims      = errors.New("invalid token claims")
+	ErrMissingSubject     = errors.New("missing subject claim")
+)
+
 // dummyPasswordHash is compared against on every failed username lookup in
 // Authenticate, so an unknown/inactive username still costs exactly one
 // bcrypt compare -- without this, response latency alone would reveal
@@ -85,7 +97,7 @@ func (s *Service) Authenticate(username, password string) (*User, error) {
 	compareErr := bcrypt.CompareHashAndPassword(hash, []byte(password))
 
 	if !valid || compareErr != nil {
-		return nil, errors.New("invalid username or password")
+		return nil, ErrInvalidCredentials
 	}
 	return &User{ID: u.ID, Username: u.Username}, nil
 }
@@ -113,7 +125,7 @@ func (s *Service) ParseToken(tokenString string) (*User, error) {
 
 	u, ok := s.store.Users().Get(userID)
 	if !ok || !u.Active {
-		return nil, errors.New("user not found or inactive")
+		return nil, ErrUserNotFound
 	}
 
 	return &User{ID: u.ID, Username: u.Username}, nil
@@ -140,17 +152,17 @@ func (s *Service) parseTokenSubject(tokenString string) (string, error) {
 		return "", err
 	}
 	if !token.Valid {
-		return "", errors.New("invalid token")
+		return "", ErrInvalidToken
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return "", errors.New("invalid token claims")
+		return "", ErrInvalidClaims
 	}
 
 	userID, _ := claims["sub"].(string)
 	if userID == "" {
-		return "", errors.New("missing subject claim")
+		return "", ErrMissingSubject
 	}
 	return userID, nil
 }
@@ -168,7 +180,7 @@ func (s *Service) AuthenticateToken(tokenString string) (*User, PermissionSet, E
 
 	u, ok := s.store.Users().Get(userID)
 	if !ok || !u.Active {
-		return nil, nil, nil, false, errors.New("user not found or inactive")
+		return nil, nil, nil, false, ErrUserNotFound
 	}
 
 	perms, envs, isAdmin := s.resolvePermissionsForUser(u)

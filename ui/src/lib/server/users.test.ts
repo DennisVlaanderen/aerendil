@@ -70,7 +70,7 @@ describe('createUser', () => {
 
 	it('returns the backend error message on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(409, { error: 'username is already taken' })
+			jsonResponse(409, { error: 'username is already taken', code: 'CF01-0001' })
 		);
 
 		const result = await createUser('a-token', {
@@ -79,7 +79,7 @@ describe('createUser', () => {
 			groupIds: []
 		});
 
-		expect(result).toEqual({ error: 'username is already taken', status: 409 });
+		expect(result).toEqual({ error: 'username is already taken', code: 'CF01-0001', status: 409 });
 	});
 
 	it('falls back to a generic message when the backend gives none', async () => {
@@ -93,6 +93,7 @@ describe('createUser', () => {
 
 		expect(result).toEqual({
 			error: "Couldn't create that user. The username may already be taken.",
+			code: 'internal',
 			status: 500
 		});
 	});
@@ -122,7 +123,7 @@ describe('updateUser', () => {
 
 	it('returns the backend error message when the username is already taken', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(409, { error: 'username is already taken' })
+			jsonResponse(409, { error: 'username is already taken', code: 'CF01-0001' })
 		);
 
 		const result = await updateUser('a-token', 'u1', {
@@ -132,7 +133,7 @@ describe('updateUser', () => {
 			active: true
 		});
 
-		expect(result).toEqual({ error: 'username is already taken', status: 409 });
+		expect(result).toEqual({ error: 'username is already taken', code: 'CF01-0001', status: 409 });
 	});
 });
 
@@ -147,13 +148,17 @@ describe('deleteUser', () => {
 
 	it('returns the backend error message and status on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(403, { error: 'cannot remove the last remaining admin account' })
+			jsonResponse(403, {
+				error: 'cannot remove the last remaining admin account',
+				code: 'A03-0001'
+			})
 		);
 
 		const result = await deleteUser('a-token', 'u1');
 
 		expect(result).toEqual({
 			error: 'cannot remove the last remaining admin account',
+			code: 'A03-0001',
 			status: 403
 		});
 	});
@@ -163,6 +168,6 @@ describe('deleteUser', () => {
 
 		const result = await deleteUser('a-token', 'u1');
 
-		expect(result).toEqual({ error: "Couldn't delete that user.", status: 500 });
+		expect(result).toEqual({ error: "Couldn't delete that user.", code: 'internal', status: 500 });
 	});
 });

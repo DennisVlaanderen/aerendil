@@ -33,8 +33,8 @@ export const ALL_PERMISSIONS = [
 // `status` mirrors the backend's own HTTP status verbatim -- see the
 // identical convention on UserResult (lib/server/users.ts) for why.
 export type GroupResult =
-	| { group: GroupSummary; error?: undefined; status?: undefined }
-	| { group?: undefined; error: string; status: number };
+	| { group: GroupSummary; error?: undefined; status?: undefined; code?: undefined }
+	| { group?: undefined; error: string; status: number; code: string };
 
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
@@ -71,12 +71,13 @@ export async function createGroup(
 		const payload = await response.json().catch(() => null);
 		return {
 			error: typeof payload?.error === 'string' ? payload.error : "Couldn't create that group.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
 
 	const group = await response.json().catch(() => null);
-	return group ? { group } : { error: "Couldn't create that group.", status: 502 };
+	return group ? { group } : { error: "Couldn't create that group.", code: 'internal', status: 502 };
 }
 
 export async function updateGroup(
@@ -93,18 +94,19 @@ export async function updateGroup(
 		const payload = await response.json().catch(() => null);
 		return {
 			error: typeof payload?.error === 'string' ? payload.error : "Couldn't update that group.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
 
 	const group = await response.json().catch(() => null);
-	return group ? { group } : { error: "Couldn't update that group.", status: 502 };
+	return group ? { group } : { error: "Couldn't update that group.", code: 'internal', status: 502 };
 }
 
 export async function deleteGroup(
 	token: string,
 	id: string
-): Promise<{ error: string; status: number } | null> {
+): Promise<{ error: string; status: number; code: string } | null> {
 	const response = await fetch(`${API_ORIGIN}/api/groups/${encodeURIComponent(id)}`, {
 		method: 'DELETE',
 		headers: { Authorization: `Bearer ${token}` }
@@ -116,6 +118,7 @@ export async function deleteGroup(
 	const payload = await response.json().catch(() => null);
 	return {
 		error: typeof payload?.error === 'string' ? payload.error : "Couldn't delete that group.",
+		code: typeof payload?.code === 'string' ? payload.code : 'internal',
 		status: response.status
 	};
 }

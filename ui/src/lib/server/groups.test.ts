@@ -57,7 +57,9 @@ describe('createGroup', () => {
 	});
 
 	it('returns the backend error message and status on a non-OK response', async () => {
-		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(400, { error: 'unknown permission' }));
+		vi.mocked(fetch).mockResolvedValueOnce(
+			jsonResponse(400, { error: 'unknown permission', code: 'BR05-0002' })
+		);
 
 		const result = await createGroup('a-token', {
 			name: 'Editors',
@@ -65,14 +67,14 @@ describe('createGroup', () => {
 			environmentIds: []
 		});
 
-		expect(result).toEqual({ error: 'unknown permission', status: 400 });
+		expect(result).toEqual({ error: 'unknown permission', code: 'BR05-0002', status: 400 });
 	});
 });
 
 describe('updateGroup', () => {
 	it('returns the backend error message and status when the Admin group update is rejected', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(403, { error: 'the Admin group cannot be modified' })
+			jsonResponse(403, { error: 'the Admin group cannot be modified', code: 'A03-0002' })
 		);
 
 		const result = await updateGroup('a-token', 'admin', {
@@ -81,7 +83,11 @@ describe('updateGroup', () => {
 			environmentIds: []
 		});
 
-		expect(result).toEqual({ error: 'the Admin group cannot be modified', status: 403 });
+		expect(result).toEqual({
+			error: 'the Admin group cannot be modified',
+			code: 'A03-0002',
+			status: 403
+		});
 		expect(fetch).toHaveBeenCalledWith(
 			expect.stringContaining('/api/groups/admin'),
 			expect.objectContaining({ method: 'PUT' })
@@ -100,11 +106,15 @@ describe('deleteGroup', () => {
 
 	it('returns the backend error message and status when the Admin group delete is rejected', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(403, { error: 'the Admin group cannot be modified' })
+			jsonResponse(403, { error: 'the Admin group cannot be modified', code: 'A03-0002' })
 		);
 
 		const result = await deleteGroup('a-token', 'admin');
 
-		expect(result).toEqual({ error: 'the Admin group cannot be modified', status: 403 });
+		expect(result).toEqual({
+			error: 'the Admin group cannot be modified',
+			code: 'A03-0002',
+			status: 403
+		});
 	});
 });

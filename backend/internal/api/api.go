@@ -148,12 +148,12 @@ func healthHandler(w http.ResponseWriter, r *http.Request) error {
 func flagsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
 	if environmentID == "" {
-		return badRequest("environmentId is required")
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, "environmentId is required")
 	}
 
 	principal, found := principalFromContext(r)
 	if !found || !principal.hasEnvironmentAccess(environmentID) {
-		return forbidden("forbidden")
+		return forbidden(CodeAuthForbidden, "forbidden")
 	}
 
 	return ok(w, map[string]any{"flags": dataStore.Flags().List(environmentID)})
@@ -167,13 +167,13 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 	if strings.TrimSpace(payload.Key) == "" {
-		return badRequest("key is required")
+		return badRequest(CodeBadRequestFlagsKeyRequired, "key is required")
 	}
 	if len(payload.EnvironmentIDs) == 0 {
-		return badRequest("environmentIds is required")
+		return badRequest(CodeBadRequestFlagsEnvironmentIDsRequired, "environmentIds is required")
 	}
 
 	// All-or-nothing on the permission check too, matching the atomic
@@ -182,16 +182,16 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	// entirely, not silently narrowed to the ones they can.
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden("forbidden")
+		return forbidden(CodeAuthForbidden, "forbidden")
 	}
 	for _, envID := range payload.EnvironmentIDs {
 		if !principal.hasEnvironmentAccess(envID) {
-			return forbidden("forbidden")
+			return forbidden(CodeAuthForbidden, "forbidden")
 		}
 	}
 	for _, envID := range payload.EnvironmentIDs {
 		if _, exists := dataStore.Environments().Get(envID); !exists {
-			return badRequest(fmt.Sprintf("unknown environment: %q", envID))
+			return badRequest(CodeBadRequestEnvironmentUnknown, fmt.Sprintf("unknown environment: %q", envID))
 		}
 	}
 
@@ -204,7 +204,7 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 
 func loginHandler(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodPost {
-		return methodNotAllowed("method not allowed")
+		return methodNotAllowed(CodeMethodNotAllowed, "method not allowed")
 	}
 
 	var payload struct {
@@ -212,17 +212,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) error {
 		Password string `json:"password"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	user, err := authService.Authenticate(payload.Username, payload.Password)
 	if err != nil {
-		return unauthorized("invalid username or password")
+		return unauthorized(CodeAuthInvalidCredentials, "invalid username or password")
 	}
 
 	token, err := authService.GenerateToken(user)
 	if err != nil {
-		return internalError("failed to create token")
+		return internalError(CodeInternalTokenGen, "failed to create token")
 	}
 
 	return ok(w, map[string]any{
@@ -233,7 +233,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) error {
 
 func meHandler(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodGet {
-		return methodNotAllowed("method not allowed")
+		return methodNotAllowed(CodeMethodNotAllowed, "method not allowed")
 	}
 
 	principal, found := authenticateRequest(w, r)

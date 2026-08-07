@@ -11,8 +11,8 @@ export interface FlagSummary {
 // `status` mirrors the backend's own HTTP status verbatim -- see the
 // identical convention on GroupResult (lib/server/groups.ts) for why.
 export type FlagsResult =
-	| { flags: FlagSummary[]; error?: undefined; status?: undefined }
-	| { flags?: undefined; error: string; status: number };
+	| { flags: FlagSummary[]; error?: undefined; status?: undefined; code?: undefined }
+	| { flags?: undefined; error: string; status: number; code: string };
 
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
@@ -51,6 +51,7 @@ export async function createFlags(
 		const payload = await response.json().catch(() => null);
 		return {
 			error: typeof payload?.error === 'string' ? payload.error : "Couldn't create that flag.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
@@ -58,5 +59,5 @@ export async function createFlags(
 	const payload = await response.json().catch(() => null);
 	return Array.isArray(payload?.flags)
 		? { flags: payload.flags }
-		: { error: "Couldn't create that flag.", status: 502 };
+		: { error: "Couldn't create that flag.", code: 'internal', status: 502 };
 }
