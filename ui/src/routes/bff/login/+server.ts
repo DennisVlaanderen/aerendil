@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import { login, setAuthCookie } from '$lib/server/auth';
+import { ErrorCode } from '$lib/errors';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
@@ -11,13 +12,27 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	// leading/trailing whitespace.
 	const password = typeof body?.password === 'string' ? body.password : '';
 
+	// ErrorCode.AuthInvalidCredentials mirrors
+	// backend/internal/api.CodeAuthInvalidCredentials -- this is a local
+	// pre-check ahead of ever calling the backend, but the user-facing
+	// failure is the same one login() itself would report for bad
+	// credentials.
 	if (!username || !password) {
-		return json({ error: 'Invalid username or password.' }, { status: 400 });
+		return json(
+			{ error: 'Invalid username or password.', code: ErrorCode.AuthInvalidCredentials },
+			{ status: 400 }
+		);
 	}
 
 	const result = await login(username, password);
 	if (!result) {
-		return json({ error: 'Invalid username or password.' }, { status: 401 });
+		return json(
+			{ error: 'Invalid username or password.', code: ErrorCode.AuthInvalidCredentials },
+			{ status: 401 }
+		);
+	}
+	if ('error' in result) {
+		return json({ error: result.error, code: result.code }, { status: result.status });
 	}
 
 	setAuthCookie(cookies, result.token);

@@ -85,7 +85,7 @@ func TestHandleErrorsMapsUsernameTakenTo409(t *testing.T) {
 func TestHandleErrorsWritesAPIErrorStatusVerbatim(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler := handleErrors(func(w http.ResponseWriter, r *http.Request) error {
-		return conflict("a custom conflict message")
+		return conflict("CF99-0001", "a custom conflict message")
 	})
 	handler(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 

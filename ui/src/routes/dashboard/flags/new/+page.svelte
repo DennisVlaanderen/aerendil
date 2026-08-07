@@ -4,6 +4,7 @@
 	import type { Pathname } from '$app/types';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { apiRequest } from '$lib/client/api';
+	import { resolveErrorMessage } from '$lib/errors';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { PageProps } from './$types';
 
@@ -34,7 +35,7 @@
 
 		isCreating = false;
 		if (result.error) {
-			createError = result.error;
+			createError = resolveErrorMessage(result.code);
 			return;
 		}
 

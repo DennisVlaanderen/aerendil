@@ -68,7 +68,14 @@ function parseSession(payload: unknown): Session | null {
 	};
 }
 
-export async function login(username: string, password: string): Promise<{ token: string } | null> {
+// Returns null only when the backend couldn't be reached at all (network
+// failure) -- once it responds, even a failure carries the real status and
+// error code back to the caller (see bff/login/+server.ts) instead of
+// collapsing every failure mode into the same generic null.
+export async function login(
+	username: string,
+	password: string
+): Promise<{ token: string } | { error: string; code: string; status: number } | null> {
 	const response = await fetch(`${API_ORIGIN}/api/auth/login`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
@@ -80,7 +87,11 @@ export async function login(username: string, password: string): Promise<{ token
 
 	const payload = await response.json().catch(() => null);
 	if (!response.ok || typeof payload?.token !== 'string' || !payload.token) {
-		return null;
+		return {
+			error: typeof payload?.error === 'string' ? payload.error : 'Invalid username or password.',
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
+			status: response.status
+		};
 	}
 
 	return { token: payload.token };

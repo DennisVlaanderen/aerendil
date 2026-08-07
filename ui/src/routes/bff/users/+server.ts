@@ -2,12 +2,16 @@ import { json } from '@sveltejs/kit';
 import { getAuthToken, getSession } from '$lib/server/auth';
 import { hasPermission } from '$lib/permissions';
 import { createUser } from '$lib/server/users';
+import { ErrorCode } from '$lib/errors';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	const session = await getSession(cookies);
 	if (!session || !hasPermission(session, 'users:create')) {
-		return json({ error: 'You do not have permission to create users.' }, { status: 403 });
+		return json(
+			{ error: 'You do not have permission to create users.', code: ErrorCode.AuthForbidden },
+			{ status: 403 }
+		);
 	}
 
 	const body = await request.json().catch(() => null);
@@ -16,15 +20,18 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	const groupIds = Array.isArray(body?.groupIds) ? body.groupIds.map(String) : [];
 
 	if (!username || !password) {
-		return json({ error: 'Username and password are required.' }, { status: 400 });
+		return json(
+			{ error: 'Username and password are required.', code: ErrorCode.BadRequestUsernameRequired },
+			{ status: 400 }
+		);
 	}
 
 	const token = getAuthToken(cookies);
 	const result = token
 		? await createUser(token, { username, password, groupIds })
-		: { error: 'Not authenticated.', status: 401 };
+		: { error: 'Not authenticated.', code: ErrorCode.AuthInvalidToken, status: 401 };
 	if (result.error) {
-		return json({ error: result.error }, { status: result.status });
+		return json({ error: result.error, code: result.code }, { status: result.status });
 	}
 
 	return json(result.user, { status: 201 });

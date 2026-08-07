@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { apiRequest } from '$lib/client/api';
+	import { resolveErrorMessage } from '$lib/errors';
 	import { hasPermission } from '$lib/permissions';
 	import { localizeHref } from '$lib/paraglide/runtime';
 	import { m } from '$lib/paraglide/messages.js';
@@ -47,7 +48,7 @@
 
 		isSaving = false;
 		if (result.error) {
-			saveError = result.error;
+			saveError = resolveErrorMessage(result.code);
 			return;
 		}
 		await invalidateAll();
@@ -63,7 +64,7 @@
 
 		isDeleting = false;
 		if (result.error) {
-			deleteError = result.error;
+			deleteError = resolveErrorMessage(result.code);
 			return;
 		}
 		await goto(resolve(localizeHref('/dashboard/users') as Pathname));

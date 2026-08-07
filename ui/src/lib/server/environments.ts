@@ -9,8 +9,8 @@ export interface EnvironmentSummary {
 // `status` mirrors the backend's own HTTP status verbatim -- see the
 // identical convention on GroupResult (lib/server/groups.ts) for why.
 export type EnvironmentResult =
-	| { environment: EnvironmentSummary; error?: undefined; status?: undefined }
-	| { environment?: undefined; error: string; status: number };
+	| { environment: EnvironmentSummary; error?: undefined; status?: undefined; code?: undefined }
+	| { environment?: undefined; error: string; status: number; code: string };
 
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
@@ -44,6 +44,7 @@ export async function createEnvironment(
 		return {
 			error:
 				typeof payload?.error === 'string' ? payload.error : "Couldn't create that environment.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
@@ -51,7 +52,7 @@ export async function createEnvironment(
 	const environment = await response.json().catch(() => null);
 	return environment
 		? { environment }
-		: { error: "Couldn't create that environment.", status: 502 };
+		: { error: "Couldn't create that environment.", code: 'internal', status: 502 };
 }
 
 export async function updateEnvironment(
@@ -69,6 +70,7 @@ export async function updateEnvironment(
 		return {
 			error:
 				typeof payload?.error === 'string' ? payload.error : "Couldn't update that environment.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
 			status: response.status
 		};
 	}
@@ -76,13 +78,13 @@ export async function updateEnvironment(
 	const environment = await response.json().catch(() => null);
 	return environment
 		? { environment }
-		: { error: "Couldn't update that environment.", status: 502 };
+		: { error: "Couldn't update that environment.", code: 'internal', status: 502 };
 }
 
 export async function deleteEnvironment(
 	token: string,
 	id: string
-): Promise<{ error: string; status: number } | null> {
+): Promise<{ error: string; status: number; code: string } | null> {
 	const response = await fetch(`${API_ORIGIN}/api/environments/${encodeURIComponent(id)}`, {
 		method: 'DELETE',
 		headers: { Authorization: `Bearer ${token}` }
@@ -94,6 +96,7 @@ export async function deleteEnvironment(
 	const payload = await response.json().catch(() => null);
 	return {
 		error: typeof payload?.error === 'string' ? payload.error : "Couldn't delete that environment.",
+		code: typeof payload?.code === 'string' ? payload.code : 'internal',
 		status: response.status
 	};
 }

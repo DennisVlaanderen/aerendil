@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"errors"
 	"slices"
 	"sort"
 
@@ -104,7 +103,7 @@ func (e EnvironmentSet) Keys() []string {
 func (s *Service) Resolve(userID string) (perms PermissionSet, envs EnvironmentSet, isAdmin bool, err error) {
 	u, ok := s.store.Users().Get(userID)
 	if !ok || !u.Active {
-		return nil, nil, false, errors.New("user not found or inactive")
+		return nil, nil, false, ErrUserNotFound
 	}
 
 	perms, envs, isAdmin = s.resolvePermissionsForUser(u)

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { apiRequest } from '$lib/client/api';
+	import { resolveErrorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { EnvironmentSummary } from '$lib/server/environments';
@@ -35,7 +36,7 @@
 			body: JSON.stringify({ environmentId })
 		});
 		if (result.error) {
-			toast.show(result.error);
+			toast.show(resolveErrorMessage(result.code));
 			return;
 		}
 		await invalidateAll();

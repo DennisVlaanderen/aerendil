@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cookies } from '@sveltejs/kit';
 import { getSession, login } from './auth';
+import { ErrorCode } from '$lib/errors';
 
 // login()/getSession() call the backend over AERENDIL_API_ORIGIN (default
 // http://127.0.0.1:8080), which only exists in a real deployment. This suite
@@ -44,24 +45,35 @@ describe('login', () => {
 		expect(result).toEqual({ token: 'abc' });
 	});
 
-	it('returns null for rejected credentials', async () => {
+	it('returns the backend error and code for rejected credentials', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(401, { error: 'invalid username or password' })
+			jsonResponse(401, {
+				error: 'invalid username or password',
+				code: ErrorCode.AuthInvalidCredentials
+			})
 		);
 
 		const result = await login('guest', 'wrong');
 
-		expect(result).toBeNull();
+		expect(result).toEqual({
+			error: 'invalid username or password',
+			code: ErrorCode.AuthInvalidCredentials,
+			status: 401
+		});
 	});
 
-	it('returns null when the backend response is missing a token', async () => {
+	it('falls back to a generic error when the backend response is missing a token', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
 			jsonResponse(200, { user: { id: 'u1', username: 'admin' } })
 		);
 
 		const result = await login('admin', 'admin123');
 
-		expect(result).toBeNull();
+		expect(result).toEqual({
+			error: 'Invalid username or password.',
+			code: 'internal',
+			status: 200
+		});
 	});
 });
 

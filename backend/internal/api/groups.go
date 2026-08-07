@@ -58,18 +58,18 @@ func groupsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest("name is required")
+		return badRequest(CodeBadRequestGroupNameRequired, "name is required")
 	}
 	if err := validatePermissions(payload.Permissions); err != nil {
-		return badRequest(err.Error())
+		return badRequest(CodeBadRequestUnknownPermission, err.Error())
 	}
 	if err := validateEnvironmentIDs(payload.EnvironmentIDs); err != nil {
-		return badRequest(err.Error())
+		return badRequest(CodeBadRequestEnvironmentUnknown, err.Error())
 	}
 
 	group, err := dataStore.Groups().Set(store.Group{
@@ -94,7 +94,7 @@ func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	// 403 a duplicated ID check here would have produced.
 	existing, found := dataStore.Groups().Get(id)
 	if !found {
-		return notFound("group not found")
+		return notFound(CodeNotFoundGroup, "group not found")
 	}
 
 	var payload struct {
@@ -103,18 +103,18 @@ func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest("name is required")
+		return badRequest(CodeBadRequestGroupNameRequired, "name is required")
 	}
 	if err := validatePermissions(payload.Permissions); err != nil {
-		return badRequest(err.Error())
+		return badRequest(CodeBadRequestUnknownPermission, err.Error())
 	}
 	if err := validateEnvironmentIDs(payload.EnvironmentIDs); err != nil {
-		return badRequest(err.Error())
+		return badRequest(CodeBadRequestEnvironmentUnknown, err.Error())
 	}
 
 	group, err := dataStore.Groups().Set(store.Group{
@@ -137,7 +137,7 @@ func groupsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	// groupsPutHandler; dataStore.Groups().Delete is the single source of
 	// truth.
 	if _, found := dataStore.Groups().Get(id); !found {
-		return notFound("group not found")
+		return notFound(CodeNotFoundGroup, "group not found")
 	}
 
 	if err := dataStore.Groups().Delete(id); err != nil {

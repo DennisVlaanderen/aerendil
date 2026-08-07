@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
 	import { apiRequest } from '$lib/client/api';
+	import { resolveErrorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 	import { hasPermission } from '$lib/permissions';
 	import { localizeHref } from '$lib/paraglide/runtime';
@@ -46,7 +47,7 @@
 			body: JSON.stringify({ username: user.username, password: '', active: !user.active })
 		});
 		if (result.error) {
-			toast.show(result.error);
+			toast.show(resolveErrorMessage(result.code));
 			return;
 		}
 		await invalidateAll();
@@ -71,7 +72,7 @@
 
 		isCreating = false;
 		if (result.error) {
-			createError = result.error;
+			createError = resolveErrorMessage(result.code);
 			return;
 		}
 		formEl.reset();

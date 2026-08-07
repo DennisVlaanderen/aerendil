@@ -62,21 +62,21 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 		GroupIDs []string `json:"groupIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	username := strings.ToLower(strings.TrimSpace(payload.Username))
 	if username == "" {
-		return badRequest("username is required")
+		return badRequest(CodeBadRequestUsernameRequired, "username is required")
 	}
 	if payload.Password == "" {
-		return badRequest("password is required")
+		return badRequest(CodeBadRequestPasswordRequired, "password is required")
 	}
 	if len(payload.Password) < minPasswordLength {
-		return badRequest("password must be at least 8 characters")
+		return badRequest(CodeBadRequestPasswordTooShort, "password must be at least 8 characters")
 	}
 	if len(payload.Password) > maxPasswordLength {
-		return badRequest("password must be at most 72 characters")
+		return badRequest(CodeBadRequestPasswordTooLong, "password must be at most 72 characters")
 	}
 
 	if err := requireAdminForAdminGroupChange(r, payload.GroupIDs); err != nil {
@@ -86,17 +86,17 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 	// Fast pre-check; fsm.applyUser is the authoritative enforcement point
 	// for username uniqueness (see store.ErrUsernameTaken).
 	if _, exists := dataStore.Users().GetByUsername(username); exists {
-		return conflict("username is already taken")
+		return conflict(CodeConflictUsernameTaken, "username is already taken")
 	}
 	for _, groupID := range payload.GroupIDs {
 		if _, ok := dataStore.Groups().Get(groupID); !ok {
-			return badRequest("unknown group id: " + groupID)
+			return badRequest(CodeBadRequestUnknownGroupID, "unknown group id: "+groupID)
 		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return internalError("failed to hash password")
+		return internalError(CodeInternalPasswordHash, "failed to hash password")
 	}
 
 	user, err := dataStore.Users().Set(store.User{
@@ -134,7 +134,7 @@ func requireAdminForAdminGroupChange(r *http.Request, groupSets ...[]string) err
 	}
 	principal, _ := principalFromContext(r)
 	if !principal.IsAdmin {
-		return forbidden("only an Admin can modify Admin group membership")
+		return forbidden(CodeBusinessAdminGroupChange, "only an Admin can modify Admin group membership")
 	}
 	return nil
 }
@@ -143,7 +143,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 	existing, found := dataStore.Users().Get(id)
 	if !found {
-		return notFound("user not found")
+		return notFound(CodeNotFoundUser, "user not found")
 	}
 
 	var payload struct {
@@ -153,18 +153,18 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		Active   bool      `json:"active"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest("invalid request body")
+		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
 	username := strings.ToLower(strings.TrimSpace(payload.Username))
 	if username == "" {
-		return badRequest("username is required")
+		return badRequest(CodeBadRequestUsernameRequired, "username is required")
 	}
 	if payload.Password != "" && len(payload.Password) < minPasswordLength {
-		return badRequest("password must be at least 8 characters")
+		return badRequest(CodeBadRequestPasswordTooShort, "password must be at least 8 characters")
 	}
 	if payload.Password != "" && len(payload.Password) > maxPasswordLength {
-		return badRequest("password must be at most 72 characters")
+		return badRequest(CodeBadRequestPasswordTooLong, "password must be at most 72 characters")
 	}
 
 	// A missing/nil groupIds field means "leave group membership unchanged"
@@ -186,11 +186,11 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 	// for username uniqueness (see store.ErrUsernameTaken). Excludes this
 	// user's own record so keeping the same username isn't a false conflict.
 	if other, exists := dataStore.Users().GetByUsername(username); exists && other.ID != id {
-		return conflict("username is already taken")
+		return conflict(CodeConflictUsernameTaken, "username is already taken")
 	}
 	for _, groupID := range groupIDs {
 		if _, ok := dataStore.Groups().Get(groupID); !ok {
-			return badRequest("unknown group id: " + groupID)
+			return badRequest(CodeBadRequestUnknownGroupID, "unknown group id: "+groupID)
 		}
 	}
 
@@ -202,7 +202,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 	if payload.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
 		if err != nil {
-			return internalError("failed to hash password")
+			return internalError(CodeInternalPasswordHash, "failed to hash password")
 		}
 		passwordHash = hash
 	}
@@ -223,7 +223,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 func usersDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 	if _, found := dataStore.Users().Get(id); !found {
-		return notFound("user not found")
+		return notFound(CodeNotFoundUser, "user not found")
 	}
 
 	// Deleting a user is hardcoded to admins only for now, on top of the
@@ -233,7 +233,7 @@ func usersDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	// delete users.
 	principal, _ := principalFromContext(r)
 	if !principal.IsAdmin {
-		return forbidden("only an Admin can delete users")
+		return forbidden(CodeBusinessAdminOnlyUserDelete, "only an Admin can delete users")
 	}
 
 	if err := dataStore.Users().Delete(id); err != nil {

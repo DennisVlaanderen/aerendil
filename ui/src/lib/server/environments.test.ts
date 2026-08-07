@@ -5,6 +5,7 @@ import {
 	listEnvironments,
 	updateEnvironment
 } from './environments';
+import { ErrorCode } from '$lib/errors';
 
 // Same convention as groups.test.ts: fetch is mocked, these are unit tests
 // of the response-handling logic, not integration tests against a live
@@ -57,21 +58,36 @@ describe('createEnvironment', () => {
 	});
 
 	it('returns the backend error message and status on a non-OK response', async () => {
-		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(400, { error: 'name is required' }));
+		vi.mocked(fetch).mockResolvedValueOnce(
+			jsonResponse(400, {
+				error: 'name is required',
+				code: ErrorCode.BadRequestEnvironmentNameRequired
+			})
+		);
 
 		const result = await createEnvironment('a-token', { name: '' });
 
-		expect(result).toEqual({ error: 'name is required', status: 400 });
+		expect(result).toEqual({
+			error: 'name is required',
+			code: ErrorCode.BadRequestEnvironmentNameRequired,
+			status: 400
+		});
 	});
 });
 
 describe('updateEnvironment', () => {
 	it('returns the backend error message and status on a non-OK response', async () => {
-		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(404, { error: 'environment not found' }));
+		vi.mocked(fetch).mockResolvedValueOnce(
+			jsonResponse(404, { error: 'environment not found', code: ErrorCode.NotFoundEnvironment })
+		);
 
 		const result = await updateEnvironment('a-token', 'does-not-exist', { name: 'Renamed' });
 
-		expect(result).toEqual({ error: 'environment not found', status: 404 });
+		expect(result).toEqual({
+			error: 'environment not found',
+			code: ErrorCode.NotFoundEnvironment,
+			status: 404
+		});
 		expect(fetch).toHaveBeenCalledWith(
 			expect.stringContaining('/api/environments/does-not-exist'),
 			expect.objectContaining({ method: 'PUT' })
@@ -90,11 +106,18 @@ describe('deleteEnvironment', () => {
 
 	it('returns the backend error message and status when deleting the last environment is rejected', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(403, { error: 'cannot delete the last remaining environment' })
+			jsonResponse(403, {
+				error: 'cannot delete the last remaining environment',
+				code: ErrorCode.BusinessLastEnvironment
+			})
 		);
 
 		const result = await deleteEnvironment('a-token', 'prod');
 
-		expect(result).toEqual({ error: 'cannot delete the last remaining environment', status: 403 });
+		expect(result).toEqual({
+			error: 'cannot delete the last remaining environment',
+			code: ErrorCode.BusinessLastEnvironment,
+			status: 403
+		});
 	});
 });
