@@ -1,0 +1,44 @@
+version: 2
+updates:
+  # Go modules (module root is the repo root)
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "go"]
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
+
+  # UI (pnpm reads npm-ecosystem manifests)
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "ui"]
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  # GitHub Actions used across all workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "ci"]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Dockerfiles (one entry per directory containing a Dockerfile)
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]
+
+  - package-ecosystem: docker
+    directory: /ui
+    schedule:
+      interval: weekly
+    labels: ["dependencies", "docker"]

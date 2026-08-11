@@ -46,10 +46,16 @@ pnpm run test:unit -- path/to/file.spec.ts   # single test file, watch mode
 ```
 
 CI mirrors these exactly and is path-filtered per side —
-[.github/workflows/go.yml](./workflows/go.yml) only triggers on `backend/**`,
-[.github/workflows/node.js.yml](./workflows/node.js.yml) only on `ui/**`.
-**Only run the suite for the side you actually touched** unless the change is
-cross-cutting.
+[.github/workflows/go.yml](./workflows/go.yml) (build/test with `-race`,
+`go vet` + golangci-lint, `govulncheck`) only triggers on `backend/**`,
+[.github/workflows/node.js.yml](./workflows/node.js.yml) (`pnpm run
+check`/`lint`/build/test) only on `ui/**`. **Only run the suite for the side
+you actually touched** unless the change is cross-cutting. Two more
+workflows scan the whole repo instead of being path-filtered:
+[.github/workflows/codeql.yml](./workflows/codeql.yml) (CodeQL, on every PR
+plus weekly) and [.github/workflows/docker.yml](./workflows/docker.yml)
+(build-validates both Dockerfiles + Trivy scan — this is what would have
+caught a `backend/Dockerfile` Go version drifting behind `go.mod`).
 
 Full local stack: `docker-compose.yml` at the repo root (backend + UI + nginx
 proxy). Backend env vars are documented in

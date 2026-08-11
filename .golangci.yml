@@ -1,0 +1,40 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    # correctness
+    - govet # built-in checker: copylocks, printf formats, struct tags, unreachable code
+    - staticcheck # extensive static analysis: deprecated APIs, common mistakes, simplifications
+    - unused # unused variables, functions, types
+    - errcheck # unchecked error returns and type assertions
+    - errorlint # correct use of errors.Is/As and %w wrapping
+    - ineffassign # assignments to variables never read
+    # style
+    - revive # naming conventions, exported types, stuttered package names
+    - misspell # common English misspellings in identifiers and comments
+    # security (complements govulncheck's dependency-CVE scan with SAST on this repo's own code)
+    - gosec # hardcoded credentials, weak crypto, path traversal, etc.
+    - bodyclose # unclosed HTTP response bodies (connection leaks)
+    - noctx # HTTP requests missing context.Context
+
+  exclusions:
+    paths:
+      - third_party$
+      - examples$
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax

@@ -1,0 +1,95 @@
+# Build-validates the images docker-compose.yml depends on. Build-only: no
+# registry push, no secrets required. This is what would have caught the
+# backend Dockerfile pinning an older Go version than go.mod requires.
+# Trivy findings are report-only (exit-code 0) until the base-image CVE
+# baseline has been reviewed -- flip to exit-code 1 to make it blocking.
+
+name: Docker
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
+      - "ui/**"
+      - "go.mod"
+      - "go.sum"
+      - "docker-compose.yml"
+      - "**/Dockerfile"
+      - ".github/workflows/docker.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
+      - "ui/**"
+      - "go.mod"
+      - "go.sum"
+      - "docker-compose.yml"
+      - "**/Dockerfile"
+      - ".github/workflows/docker.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Build backend image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Build image
+      run: docker build -f backend/Dockerfile -t aerendil-backend:ci .
+
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@0.36.0
+      with:
+        image-ref: aerendil-backend:ci
+        format: sarif
+        output: trivy-backend.sarif
+        severity: CRITICAL,HIGH
+        exit-code: '0'
+
+    - name: Upload Trivy results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: trivy-backend.sarif
+        category: trivy-backend
+
+  ui:
+    name: Build UI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Build image
+      run: docker build -f ui/Dockerfile -t aerendil-ui:ci ui
+
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@0.36.0
+      with:
+        image-ref: aerendil-ui:ci
+        format: sarif
+        output: trivy-ui.sarif
+        severity: CRITICAL,HIGH
+        exit-code: '0'
+
+    - name: Upload Trivy results
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: trivy-ui.sarif
+        category: trivy-ui
