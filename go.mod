@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/hashicorp/go-uuid v1.0.0
+	github.com/hashicorp/go-uuid v1.0.3
 	github.com/hashicorp/raft v1.7.3
 	github.com/hashicorp/raft-boltdb/v2 v2.3.1
 	golang.org/x/crypto v0.54.0
