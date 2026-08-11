@@ -23,7 +23,10 @@ export interface AuditLogFilter {
 
 const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
-export async function listAuditLog(token: string, filter: AuditLogFilter = {}): Promise<AuditEntry[]> {
+export async function listAuditLog(
+	token: string,
+	filter: AuditLogFilter = {}
+): Promise<AuditEntry[]> {
 	const params = new URLSearchParams();
 	if (filter.targetType) params.set('targetType', filter.targetType);
 	if (filter.targetId) params.set('targetId', filter.targetId);

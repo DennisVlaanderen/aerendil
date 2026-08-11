@@ -1,4 +1,4 @@
-# This workflow will build a golang project
+# This workflow builds, tests, lints, and vulnerability-scans the Go backend.
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
 name: Go
@@ -10,6 +10,7 @@ on:
       - "backend/**"
       - "go.mod"
       - "go.sum"
+      - ".golangci.yml"
       - ".github/workflows/go.yml"
   pull_request:
     branches: [ "main" ]
@@ -17,12 +18,92 @@ on:
       - "backend/**"
       - "go.mod"
       - "go.sum"
+      - ".golangci.yml"
       - ".github/workflows/go.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
 
-  build:
+  test:
+    name: Test (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        go: [ "1.25", "stable" ]
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: ${{ matrix.go }}
+
+    - name: Verify dependencies
+      run: |
+        go mod verify
+        go mod download
+
+    - name: Check go mod tidy
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v -race -shuffle=on -coverprofile=coverage.out ./...
+
+    - name: Coverage summary
+      run: go tool cover -func=coverage.out | tail -1
+
+    - name: Upload coverage artifact
+      if: matrix.go == 'stable'
+      uses: actions/upload-artifact@v4
+      with:
+        name: go-coverage
+        path: coverage.out
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - name: go vet
+      run: go vet ./...
+
+    # On pull requests, only new issues (vs. the PR base) are reported so
+    # incremental adoption on existing code doesn't block unrelated PRs; on
+    # pushes to main the full-repo scan runs for visibility but is
+    # non-blocking until the existing baseline has been cleaned up.
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v9
+      continue-on-error: ${{ github.event_name == 'push' }}
+      with:
+        version: latest
+        only-new-issues: ${{ github.event_name == 'pull_request' }}
+
+  govulncheck:
+    name: Vulnerability check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
     - uses: actions/checkout@v7
 
@@ -31,8 +112,5 @@ jobs:
       with:
         go-version-file: go.mod
 
-    - name: Build
-      run: go build -v ./...
-
-    - name: Test
-      run: go test -v ./...
+    - name: Run govulncheck
+      uses: golang/govulncheck-action@v1

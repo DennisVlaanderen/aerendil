@@ -117,7 +117,9 @@
 									></span>
 								</button>
 							</td>
-							<td class="px-3 py-3 whitespace-nowrap text-ink">{formatTimestamp(entry.timestamp)}</td>
+							<td class="px-3 py-3 whitespace-nowrap text-ink"
+								>{formatTimestamp(entry.timestamp)}</td
+							>
 							<td class="px-3 py-3 text-ink">
 								{entry.actorId}
 								{#if entry.actorType === 'applicationCredential'}
@@ -150,9 +152,7 @@
 											<div
 												class="col-span-full grid gap-1.5 rounded-lg border border-line-1 bg-page p-4"
 											>
-												<span
-													class="text-xs font-semibold tracking-wider text-ink-muted uppercase"
-												>
+												<span class="text-xs font-semibold tracking-wider text-ink-muted uppercase">
 													{m.audit_log_detail_error()}
 												</span>
 												<strong class="text-error">{entry.error}</strong>
@@ -160,22 +160,22 @@
 										{/if}
 										{#if entry.before}
 											<div class="grid gap-1.5 rounded-lg border border-line-1 bg-page p-4">
-												<span
-													class="text-xs font-semibold tracking-wider text-ink-muted uppercase"
-												>
+												<span class="text-xs font-semibold tracking-wider text-ink-muted uppercase">
 													{m.audit_log_detail_before()}
 												</span>
-												<pre class="overflow-x-auto text-xs text-ink">{prettyPrint(entry.before)}</pre>
+												<pre class="overflow-x-auto text-xs text-ink">{prettyPrint(
+														entry.before
+													)}</pre>
 											</div>
 										{/if}
 										{#if entry.after}
 											<div class="grid gap-1.5 rounded-lg border border-line-1 bg-page p-4">
-												<span
-													class="text-xs font-semibold tracking-wider text-ink-muted uppercase"
-												>
+												<span class="text-xs font-semibold tracking-wider text-ink-muted uppercase">
 													{m.audit_log_detail_after()}
 												</span>
-												<pre class="overflow-x-auto text-xs text-ink">{prettyPrint(entry.after)}</pre>
+												<pre class="overflow-x-auto text-xs text-ink">{prettyPrint(
+														entry.after
+													)}</pre>
 											</div>
 										{/if}
 									</div>

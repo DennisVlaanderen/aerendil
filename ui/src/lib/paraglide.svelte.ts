@@ -21,6 +21,10 @@ export class Locale {
 
 		overwriteSetLocale((locale) => {
 			this.#current = locale;
+			// Target is the current (already-resolved) route re-localized by
+			// paraglide's own localizeUrl(), not a literal route id resolve() could
+			// type-check.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			goto(localizeUrl(page.url.pathname, { locale }).href);
 		});
 	}

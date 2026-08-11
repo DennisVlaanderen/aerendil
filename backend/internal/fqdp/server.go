@@ -24,7 +24,6 @@ func StartTCPServer(ctx context.Context, addr string) error {
 
 	log.Printf("fqdp tcp server listening on %s", addr)
 
-	acceptErr := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
 		listener.Close()
@@ -43,8 +42,6 @@ func StartTCPServer(ctx context.Context, addr string) error {
 		}
 		go serveConnection(conn)
 	}
-
-	return <-acceptErr
 }
 
 func serveConnection(conn net.Conn) {
