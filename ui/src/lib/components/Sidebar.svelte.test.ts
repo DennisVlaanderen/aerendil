@@ -76,7 +76,6 @@ describe('Sidebar user management visibility', () => {
 		await expect.element(screen.getByRole('link', { name: 'Groups' })).toBeInTheDocument();
 		await expect.element(screen.getByRole('link', { name: 'Users' })).not.toBeInTheDocument();
 	});
-
 });
 
 describe('Sidebar application settings visibility', () => {
