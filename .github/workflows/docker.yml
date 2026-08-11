@@ -50,7 +50,7 @@ jobs:
       run: docker build -f backend/Dockerfile -t aerendil-backend:ci .
 
     - name: Trivy scan
-      uses: aquasecurity/trivy-action@0.36.0
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: aerendil-backend:ci
         format: sarif
@@ -79,7 +79,7 @@ jobs:
       run: docker build -f ui/Dockerfile -t aerendil-ui:ci ui
 
     - name: Trivy scan
-      uses: aquasecurity/trivy-action@0.36.0
+      uses: aquasecurity/trivy-action@v0.36.0
       with:
         image-ref: aerendil-ui:ci
         format: sarif
