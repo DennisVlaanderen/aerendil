@@ -6,20 +6,8 @@ name: Go
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - "backend/**"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yml"
-      - ".github/workflows/go.yml"
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "backend/**"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yml"
-      - ".github/workflows/go.yml"
 
 permissions:
   contents: read
@@ -30,8 +18,30 @@ concurrency:
 
 jobs:
 
+  changes:
+    name: Detect Go changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          go:
+            - "backend/**"
+            - "go.mod"
+            - "go.sum"
+            - ".golangci.yml"
+            - ".github/workflows/go.yml"
+
   test:
     name: Test (Go ${{ matrix.go }})
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -74,6 +84,8 @@ jobs:
 
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -102,6 +114,8 @@ jobs:
 
   govulncheck:
     name: Vulnerability check
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
