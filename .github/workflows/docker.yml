@@ -9,24 +9,8 @@ name: Docker
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - "backend/**"
-      - "ui/**"
-      - "go.mod"
-      - "go.sum"
-      - "docker-compose.yml"
-      - "**/Dockerfile"
-      - ".github/workflows/docker.yml"
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "backend/**"
-      - "ui/**"
-      - "go.mod"
-      - "go.sum"
-      - "docker-compose.yml"
-      - "**/Dockerfile"
-      - ".github/workflows/docker.yml"
 
 permissions:
   contents: read
@@ -36,8 +20,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gates `backend`/`ui` below instead of workflow-level `on.*.paths` so the
+  # workflow always triggers (and always posts a status) on every PR --
+  # see the identical comment in go.yml for why this matters for required
+  # status checks. Split into two filter keys (rather than one combined
+  # list like before) so a backend-only PR doesn't wait on a UI image build
+  # and vice versa.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      ui: ${{ steps.filter.outputs.ui }}
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dorny/paths-filter@v4
+      id: filter
+      with:
+        filters: |
+          backend:
+            - 'backend/**'
+            - 'go.mod'
+            - 'go.sum'
+            - 'docker-compose.yml'
+            - '.github/workflows/docker.yml'
+          ui:
+            - 'ui/**'
+            - 'docker-compose.yml'
+            - '.github/workflows/docker.yml'
+
   backend:
     name: Build backend image
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -67,6 +82,8 @@ jobs:
 
   ui:
     name: Build UI image
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

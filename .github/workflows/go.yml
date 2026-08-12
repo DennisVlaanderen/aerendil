@@ -6,20 +6,8 @@ name: Go
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - "backend/**"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yml"
-      - ".github/workflows/go.yml"
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "backend/**"
-      - "go.mod"
-      - "go.sum"
-      - ".golangci.yml"
-      - ".github/workflows/go.yml"
 
 permissions:
   contents: read
@@ -30,8 +18,33 @@ concurrency:
 
 jobs:
 
+  # Every job below is gated on this instead of workflow-level `on.*.paths`
+  # so the workflow always triggers (and always posts a status) even on PRs
+  # that don't touch backend/**. A path-filtered workflow that never
+  # triggers never posts a status, which would leave a required check
+  # permanently "pending" -- a job that's `if:`-skipped instead reports as
+  # "skipped", which GitHub treats as a passing required check.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dorny/paths-filter@v4
+      id: filter
+      with:
+        filters: |
+          backend:
+            - 'backend/**'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.github/workflows/go.yml'
+
   test:
     name: Test (Go ${{ matrix.go }})
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -40,33 +53,40 @@ jobs:
         go: [ "1.25", "stable" ]
     steps:
     - uses: actions/checkout@v7
+      if: needs.changes.outputs.backend == 'true'
 
     - name: Set up Go
+      if: needs.changes.outputs.backend == 'true'
       uses: actions/setup-go@v7
       with:
         go-version: ${{ matrix.go }}
 
     - name: Verify dependencies
+      if: needs.changes.outputs.backend == 'true'
       run: |
         go mod verify
         go mod download
 
     - name: Check go mod tidy
+      if: needs.changes.outputs.backend == 'true'
       run: |
         go mod tidy
         git diff --exit-code go.mod go.sum
 
     - name: Build
+      if: needs.changes.outputs.backend == 'true'
       run: go build -v ./...
 
     - name: Test
+      if: needs.changes.outputs.backend == 'true'
       run: go test -v -race -shuffle=on -coverprofile=coverage.out ./...
 
     - name: Coverage summary
+      if: needs.changes.outputs.backend == 'true'
       run: go tool cover -func=coverage.out | tail -1
 
     - name: Upload coverage artifact
-      if: matrix.go == 'stable'
+      if: needs.changes.outputs.backend == 'true' && matrix.go == 'stable'
       uses: actions/upload-artifact@v7
       with:
         name: go-coverage
@@ -74,6 +94,8 @@ jobs:
 
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -102,6 +124,8 @@ jobs:
 
   govulncheck:
     name: Vulnerability check
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
