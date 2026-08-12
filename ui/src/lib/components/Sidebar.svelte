@@ -92,7 +92,7 @@
 		? 'w-18'
 		: 'w-62.5'}"
 >
-	<div class="flex items-center gap-2.5 border-b border-line-2 px-4.5 py-5 h-16">
+	<div class="flex h-16 items-center gap-2.5 border-b border-line-2 px-4.5 py-5">
 		<img src="/aerendil-logo.svg" width="26" height="26" class="shrink-0" alt="Aerendil Logo" />
 		{#if !collapsed}
 			<span class="truncate text-base font-semibold tracking-[0.3px] text-ink">Aerendil</span>
@@ -343,7 +343,7 @@
 
 	<button
 		type="button"
-		class="flex cursor-pointer items-center gap-2 border-t border-line-2 px-4 py-3 text-ink-muted h-10"
+		class="flex h-10 cursor-pointer items-center gap-2 border-t border-line-2 px-4 py-3 text-ink-muted"
 		onclick={() => (collapsed = !collapsed)}
 		aria-label={collapsed ? m.sidebar_expand() : m.sidebar_collapse()}
 	>
@@ -353,6 +353,6 @@
 				: 'icon-[lucide--panel-left-close]'} size-3.5 shrink-0"
 			aria-hidden="true"
 		></span>
-		{#if !collapsed}<span class="text-xs overflow-hidden h-4">{m.sidebar_collapse()}</span>{/if}
+		{#if !collapsed}<span class="h-4 overflow-hidden text-xs">{m.sidebar_collapse()}</span>{/if}
 	</button>
 </aside>

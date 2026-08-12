@@ -60,7 +60,7 @@
 				<span>{m.login_username_label()}</span>
 				<div class="relative">
 					<span
-						class="icon-[lucide--user] absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-muted"
+						class="absolute top-1/2 left-3.5 icon-[lucide--user] size-4 -translate-y-1/2 text-ink-muted"
 						aria-hidden="true"
 					></span>
 					<input
@@ -77,7 +77,7 @@
 				<span>{m.login_password_label()}</span>
 				<div class="relative">
 					<span
-						class="icon-[lucide--lock] absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-ink-muted"
+						class="absolute top-1/2 left-3.5 icon-[lucide--lock] size-4 -translate-y-1/2 text-ink-muted"
 						aria-hidden="true"
 					></span>
 					<input
