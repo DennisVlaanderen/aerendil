@@ -9,14 +9,8 @@ name: Node.js CI
 on:
   push:
     branches: [ "main" ]
-    paths:
-      - "ui/**"
-      - ".github/workflows/node.js.yml"
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "ui/**"
-      - ".github/workflows/node.js.yml"
 
 permissions:
   contents: read
@@ -26,7 +20,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Gates `build` below instead of workflow-level `on.*.paths` so the
+  # workflow always triggers (and always posts a status) even on PRs that
+  # don't touch ui/** -- see the identical comment in go.yml for why this
+  # matters for required status checks.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+    steps:
+    - uses: actions/checkout@v7
+    - uses: dorny/paths-filter@v4
+      id: filter
+      with:
+        filters: |
+          ui:
+            - 'ui/**'
+            - '.github/workflows/node.js.yml'
+
   build:
+    name: Build & test UI
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
