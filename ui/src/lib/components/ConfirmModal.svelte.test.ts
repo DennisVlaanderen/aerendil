@@ -11,13 +11,13 @@ const baseProps = {
 
 describe('ConfirmModal', () => {
 	test('is not visible until show() is called', async () => {
-		const screen = render(ConfirmModal, { ...baseProps, onconfirm: vi.fn() });
+		const screen = await render(ConfirmModal, { ...baseProps, onconfirm: vi.fn() });
 
 		await expect.element(screen.getByText('Delete item?')).not.toBeVisible();
 	});
 
 	test('shows the dialog when show() is called via the component instance', async () => {
-		const screen = render(ConfirmModal, { ...baseProps, onconfirm: vi.fn() });
+		const screen = await render(ConfirmModal, { ...baseProps, onconfirm: vi.fn() });
 
 		screen.component.show();
 
@@ -27,7 +27,7 @@ describe('ConfirmModal', () => {
 
 	test('calls onconfirm and closes when the confirm button is clicked', async () => {
 		const onconfirm = vi.fn();
-		const screen = render(ConfirmModal, { ...baseProps, onconfirm });
+		const screen = await render(ConfirmModal, { ...baseProps, onconfirm });
 		screen.component.show();
 
 		await screen.getByRole('button', { name: 'Delete' }).click();
@@ -39,7 +39,7 @@ describe('ConfirmModal', () => {
 	test('calls oncancel and closes when the cancel button is clicked, without confirming', async () => {
 		const onconfirm = vi.fn();
 		const oncancel = vi.fn();
-		const screen = render(ConfirmModal, { ...baseProps, onconfirm, oncancel });
+		const screen = await render(ConfirmModal, { ...baseProps, onconfirm, oncancel });
 		screen.component.show();
 
 		await screen.getByRole('button', { name: 'Cancel' }).click();

@@ -9,7 +9,7 @@ const baseProps = {
 
 describe('Sidebar user management visibility', () => {
 	test('hides the User Management section for a user with no relevant permissions', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['flags:read']
@@ -20,7 +20,7 @@ describe('Sidebar user management visibility', () => {
 	});
 
 	test('shows the User Management section when the user has users:read', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['users:read']
@@ -30,7 +30,7 @@ describe('Sidebar user management visibility', () => {
 	});
 
 	test('shows the User Management section when the user has groups:read', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['groups:read']
@@ -40,7 +40,7 @@ describe('Sidebar user management visibility', () => {
 	});
 
 	test('shows the User Management section for an admin with no explicit permissions', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: true,
 			permissions: []
@@ -50,7 +50,7 @@ describe('Sidebar user management visibility', () => {
 	});
 
 	test('expands to show Users and Groups sub-links when clicked', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: true,
 			permissions: []
@@ -65,7 +65,7 @@ describe('Sidebar user management visibility', () => {
 	});
 
 	test('only shows the sub-link matching a partial permission grant', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['groups:read']
@@ -80,7 +80,7 @@ describe('Sidebar user management visibility', () => {
 
 describe('Sidebar application settings visibility', () => {
 	test('hides the Application Settings section for a user with no relevant permissions', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['flags:read']
@@ -90,7 +90,7 @@ describe('Sidebar application settings visibility', () => {
 	});
 
 	test('shows the Application Settings section when the user has environments:read', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['environments:read']
@@ -100,7 +100,7 @@ describe('Sidebar application settings visibility', () => {
 	});
 
 	test('shows the Application Settings section for an admin with no explicit permissions', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: true,
 			permissions: []
@@ -110,7 +110,7 @@ describe('Sidebar application settings visibility', () => {
 	});
 
 	test('expands to show the Environments sub-link when clicked', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: true,
 			permissions: []
@@ -126,7 +126,7 @@ describe('Sidebar application settings visibility', () => {
 	});
 
 	test('shows the Application Settings section when the user only has applicationCredentials:read', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['applicationCredentials:read']
@@ -136,7 +136,7 @@ describe('Sidebar application settings visibility', () => {
 	});
 
 	test('only shows the Applications sub-link matching a partial permission grant', async () => {
-		const screen = render(Sidebar, {
+		const screen = await render(Sidebar, {
 			...baseProps,
 			isAdmin: false,
 			permissions: ['applicationCredentials:read']
