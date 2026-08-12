@@ -45,7 +45,6 @@ jobs:
   test:
     name: Test (Go ${{ matrix.go }})
     needs: changes
-    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -54,33 +53,40 @@ jobs:
         go: [ "1.25", "stable" ]
     steps:
     - uses: actions/checkout@v7
+      if: needs.changes.outputs.backend == 'true'
 
     - name: Set up Go
+      if: needs.changes.outputs.backend == 'true'
       uses: actions/setup-go@v7
       with:
         go-version: ${{ matrix.go }}
 
     - name: Verify dependencies
+      if: needs.changes.outputs.backend == 'true'
       run: |
         go mod verify
         go mod download
 
     - name: Check go mod tidy
+      if: needs.changes.outputs.backend == 'true'
       run: |
         go mod tidy
         git diff --exit-code go.mod go.sum
 
     - name: Build
+      if: needs.changes.outputs.backend == 'true'
       run: go build -v ./...
 
     - name: Test
+      if: needs.changes.outputs.backend == 'true'
       run: go test -v -race -shuffle=on -coverprofile=coverage.out ./...
 
     - name: Coverage summary
+      if: needs.changes.outputs.backend == 'true'
       run: go tool cover -func=coverage.out | tail -1
 
     - name: Upload coverage artifact
-      if: matrix.go == 'stable'
+      if: needs.changes.outputs.backend == 'true' && matrix.go == 'stable'
       uses: actions/upload-artifact@v7
       with:
         name: go-coverage
