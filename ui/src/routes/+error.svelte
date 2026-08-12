@@ -31,7 +31,7 @@
 
 <div class="grid min-h-screen place-items-center bg-page p-8 font-sans">
 	<div class="w-full max-w-md rounded-xl border border-line-1 bg-surface p-8 text-center">
-		<span class="icon-[lucide--circle-alert] mx-auto mb-4 size-10 text-error" aria-hidden="true"
+		<span class="mx-auto mb-4 icon-[lucide--circle-alert] size-10 text-error" aria-hidden="true"
 		></span>
 		<p class="mb-1 text-xs font-semibold tracking-widest text-nav-active uppercase">
 			{m.error_status_label({ status: page.status })}

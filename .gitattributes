@@ -1,0 +1,16 @@
+# Normalize line endings to LF for all text files, regardless of the
+# checking-out OS's core.autocrlf setting. Prettier's default (and this
+# repo's) is LF, so this keeps local Windows checkouts consistent with
+# CI (Linux) and avoids spurious `prettier --check` failures.
+* text=auto eol=lf
+
+# Common binary types — never touch line endings in these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
