@@ -4,10 +4,9 @@ import (
 	uuid "github.com/hashicorp/go-uuid"
 )
 
-// NewID returns a random, unique identifier for a new User or Group record.
-// hashicorp/go-uuid is already resolved in this module's dependency graph
-// (hashicorp/raft depends on it), so this reuses it rather than hand-rolling
-// ID generation.
+// NewID returns a random, unique identifier for a new User or Group
+// record. Uses hashicorp/go-uuid since it's already pulled in via
+// hashicorp/raft.
 func NewID() string {
 	id, err := uuid.GenerateUUID()
 	if err != nil {

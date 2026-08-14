@@ -51,6 +51,10 @@ path-filtered: [.github/workflows/codeql.yml](./.github/workflows/codeql.yml)
 - Backend Go code follows the existing package layout under
   `backend/internal/*` — keep new code inside the appropriate package rather
   than adding new top-level packages unless a new concern truly warrants one.
+- Backend Go comments follow https://go.dev/doc/comment: package and
+  exported-identifier doc comments start with their own name. Keep
+  comments short — explain *why*, not what, and skip anything the code
+  already says.
 - UI code is formatted with Prettier and linted with ESLint (`pnpm run
   format` / `pnpm run lint`); match existing Svelte 5 + TypeScript idioms in
   `ui/src`.

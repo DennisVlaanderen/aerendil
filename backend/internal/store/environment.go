@@ -6,34 +6,24 @@ import (
 	"sort"
 )
 
-// ErrLastEnvironment is returned by EnvironmentRepository.Delete (and,
-// ultimately, fsm.applyEnvironment) when deleting the target environment
-// would leave zero environments. Mirrors ErrLastAdmin's pattern -- the
-// invariant is about the *count*, not any single environment being
-// protected (contrast with ErrProtectedSystemGroup).
+// ErrLastEnvironment is returned when deleting the target environment
+// would leave zero environments -- an invariant on count, not any single
+// environment being protected (contrast ErrProtectedSystemGroup).
 var ErrLastEnvironment = errors.New("cannot delete the last remaining environment")
 
-// ErrEnvironmentHasFlags is returned by EnvironmentRepository.Delete (and,
-// ultimately, fsm.applyEnvironment) when the target environment still has
-// at least one flag scoped to it. This referential integrity check is
-// FSM-enforced, the same tier as ErrLastAdmin/ErrProtectedSystemGroup/
-// ErrLastEnvironment, since a deleted environment would otherwise silently
-// orphan any flags still pointing at it -- real data loss, not a harmless
-// dangling reference.
+// ErrEnvironmentHasFlags is returned when the target environment still has
+// a flag scoped to it -- FSM-enforced since deleting it would otherwise
+// silently orphan those flags.
 var ErrEnvironmentHasFlags = errors.New("cannot delete an environment that still has flags")
 
-// ErrEnvironmentHasCredentials is returned by EnvironmentRepository.Delete
-// (and, ultimately, fsm.applyEnvironment) when an application credential is
-// still scoped to the target environment -- same referential-integrity tier
-// as ErrEnvironmentHasFlags, since deleting the environment would otherwise
-// leave the credential pointing at nothing.
+// ErrEnvironmentHasCredentials is returned when an application credential
+// is still scoped to the target environment -- same referential-integrity
+// tier as ErrEnvironmentHasFlags.
 var ErrEnvironmentHasCredentials = errors.New("cannot delete an environment that still has application credentials")
 
 // Environment is a named deployment target (e.g. "Production", "Staging")
-// that flags and group permissions will later be scoped to. Order is
-// stamped at creation time from the current environment count and is
-// otherwise immutable -- reordering/promotion direction is a follow-up
-// once environment-scoped flags exist to make ordering matter.
+// flags and group permissions are scoped to. Order is stamped at creation
+// from the current count and is otherwise immutable for now.
 type Environment struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -71,10 +61,8 @@ func (f *fsm) getEnvironment(id string) (Environment, bool) {
 	return e, ok
 }
 
-// listEnvironments returns every environment ordered by Order ascending
-// (ID as a tiebreaker for determinism) -- map iteration order is
-// randomized, and callers need a stable, meaningful order back from
-// List() itself rather than having to sort client-side.
+// listEnvironments returns every environment ordered by Order ascending,
+// ID as a tiebreaker -- map iteration order is otherwise randomized.
 func (f *fsm) listEnvironments() []Environment {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -123,11 +111,9 @@ func (r EnvironmentRepository) Set(env Environment) (Environment, error) {
 	}
 }
 
-// Delete removes an environment by ID. Fails with ErrLastEnvironment if it
-// is the only one remaining, or ErrEnvironmentHasFlags if any flag is still
-// scoped to it -- both are fast pre-checks here, with fsm.applyEnvironment
-// as the ultimate source of truth for the same rules (mirrors
-// GroupRepository.Delete's pre-check + FSM-enforcement pattern).
+// Delete removes an environment by ID. Fails with ErrLastEnvironment,
+// ErrEnvironmentHasFlags, or ErrEnvironmentHasCredentials -- fast
+// pre-checks here, fsm.applyEnvironment is the ultimate source of truth.
 func (r EnvironmentRepository) Delete(id string) error {
 	if _, ok := r.store.fsm.getEnvironment(id); ok && len(r.store.fsm.listEnvironments()) <= 1 {
 		return fmt.Errorf("%w: %q", ErrLastEnvironment, id)

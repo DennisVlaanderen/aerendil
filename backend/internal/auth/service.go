@@ -1,3 +1,6 @@
+// Package auth issues and verifies JWTs, hashes passwords, and resolves a
+// principal's permissions live against the store on every request. See
+// Service.
 package auth
 
 import (
@@ -14,22 +17,16 @@ import (
 
 const defaultTokenTTL = 24 * time.Hour
 
-// ServiceTokenTTL is deliberately much shorter than defaultTokenTTL:
-// OAuth2 client-credentials access tokens are conventionally short-lived and
-// re-requested often, unlike a human's 24h browser session.
+// ServiceTokenTTL is shorter than defaultTokenTTL: OAuth2 client-credentials
+// tokens are conventionally short-lived and re-requested often.
 const ServiceTokenTTL = 1 * time.Hour
 
-// serviceTokenClaim is the "typ" JWT claim value that marks a token as
-// issued by GenerateServiceToken (an application credential) rather than
-// GenerateToken (a human login) -- absent entirely on every human token, so
-// this is fully backward compatible with tokens already issued before this
-// claim existed.
+// serviceTokenClaim marks a token as issued by GenerateServiceToken rather
+// than GenerateToken; absent on human tokens, so old tokens stay valid.
 const serviceTokenClaim = "service"
 
-// Sentinel errors so callers (the api package's login/token-auth handlers)
-// can errors.Is against a specific failure instead of matching on message
-// text -- mirrors how store's sentinels (store.ErrUsernameTaken etc.) are
-// consumed via storeErrorToAPIError.
+// Sentinel errors so callers can errors.Is against a specific failure
+// instead of matching on message text.
 var (
 	ErrInvalidCredentials            = errors.New("invalid username or password")
 	ErrUserNotFound                  = errors.New("user not found or inactive")
@@ -40,17 +37,12 @@ var (
 	ErrApplicationCredentialInactive = errors.New("application credential not found or inactive")
 )
 
-// dummyPasswordHash is compared against on every failed username lookup in
-// Authenticate, so an unknown/inactive username still costs exactly one
-// bcrypt compare -- without this, response latency alone would reveal
-// whether a username exists even though the returned error text is
-// identical either way.
+// dummyPasswordHash keeps a failed lookup in Authenticate costing exactly
+// one bcrypt compare, so latency can't reveal whether a username exists.
 var dummyPasswordHash = mustBcryptHash("aerendil-timing-safe-dummy-password")
 
-// dummyClientSecretHash is AuthenticateClientCredentials' equivalent of
-// dummyPasswordHash -- an unknown/inactive client_id still costs exactly one
-// bcrypt compare, so response latency can't reveal whether a client_id
-// exists.
+// dummyClientSecretHash is dummyPasswordHash's equivalent for
+// AuthenticateClientCredentials.
 var dummyClientSecretHash = mustBcryptHash("aerendil-timing-safe-dummy-client-secret")
 
 func mustBcryptHash(password string) []byte {
@@ -61,18 +53,15 @@ func mustBcryptHash(password string) []byte {
 	return hash
 }
 
-// User is the request-scoped resolved principal returned by Authenticate
-// and ParseToken. It's deliberately a different type from store.User,
-// which additionally carries PasswordHash/GroupIDs/Active and never leaves
-// the store/auth layers.
+// User is the resolved principal returned by Authenticate and ParseToken --
+// distinct from store.User, which never leaves the store/auth layers.
 type User struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
 }
 
 // AdminConfig describes the admin account seeded into the store at
-// bootstrap (see SeedAdminGroupAndUser) -- it is no longer held directly by
-// Service, since the admin is just a regular persisted User once seeded.
+// bootstrap; see SeedAdminGroupAndUser.
 type AdminConfig struct {
 	Username string
 	Password string
@@ -93,6 +82,8 @@ type Service struct {
 	store     *store.Store
 }
 
+// NewService returns a Service that signs tokens with secret and resolves
+// users/permissions against s.
 func NewService(secret string, s *store.Store) *Service {
 	return &Service{
 		secretKey: []byte(secret),
@@ -101,12 +92,13 @@ func NewService(secret string, s *store.Store) *Service {
 	}
 }
 
+// Authenticate verifies username/password against the user store, returning
+// ErrInvalidCredentials for both an unknown user and a wrong password (see
+// dummyPasswordHash for why both cost one bcrypt compare).
 func (s *Service) Authenticate(username, password string) (*User, error) {
 	// Usernames are stored lowercase (see api.usersPostHandler/usersPutHandler
-	// and SeedAdminGroupAndUser) precisely so lookups here don't need to
-	// special-case casing -- normalizing on both the write and read side is
-	// what makes "Admin" and "admin" collide instead of silently coexisting
-	// as distinct accounts.
+	// and SeedAdminGroupAndUser), so "Admin" and "admin" collide instead of
+	// coexisting as distinct accounts.
 	u, ok := s.store.Users().GetByUsername(strings.ToLower(strings.TrimSpace(username)))
 	valid := ok && u.Active
 
@@ -122,6 +114,8 @@ func (s *Service) Authenticate(username, password string) (*User, error) {
 	return &User{ID: u.ID, Username: u.Username}, nil
 }
 
+// GenerateToken issues an HS256 JWT for user with a sub/exp/iat claim set
+// and the Service's configured tokenTTL.
 func (s *Service) GenerateToken(user *User) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": user.ID,
@@ -134,9 +128,8 @@ func (s *Service) GenerateToken(user *User) (string, error) {
 }
 
 // AuthenticateClientCredentials validates an OAuth2 client-credentials grant
-// (client_id/client_secret) against the persisted application-credential
-// store. Mirrors Authenticate's shape exactly, including the timing-safe
-// dummy-hash comparison for an unknown or inactive client_id.
+// against the application-credential store, mirroring Authenticate
+// (including the timing-safe dummy-hash comparison).
 func (s *Service) AuthenticateClientCredentials(clientID, clientSecret string) (store.ApplicationCredential, error) {
 	cred, ok := s.store.ApplicationCredentials().Get(strings.TrimSpace(clientID))
 	valid := ok && cred.Active
@@ -154,10 +147,8 @@ func (s *Service) AuthenticateClientCredentials(clientID, clientSecret string) (
 }
 
 // GenerateServiceToken issues a short-lived access token for an application
-// credential, redeemed via the OAuth2 client-credentials grant
-// (api.oauthTokenHandler). The "typ" claim distinguishes it from a human
-// GenerateToken token so AuthenticateToken can resolve either kind into the
-// same principal shape.
+// credential (redeemed via api.oauthTokenHandler). The "typ" claim lets
+// AuthenticateToken tell it apart from a human GenerateToken token.
 func (s *Service) GenerateServiceToken(cred store.ApplicationCredential) (string, error) {
 	claims := jwt.MapClaims{
 		"sub": cred.ID,
@@ -170,10 +161,9 @@ func (s *Service) GenerateServiceToken(cred store.ApplicationCredential) (string
 	return token.SignedString(s.secretKey)
 }
 
-// ParseToken validates the token's signature/expiry and resolves the
-// carried subject against the live user store -- username is never trusted
-// from the token itself, so a renamed or deactivated user is reflected
-// immediately rather than only after the token expires.
+// ParseToken validates the token and resolves its subject against the live
+// user store, so a renamed or deactivated user takes effect immediately
+// rather than only after the token expires.
 func (s *Service) ParseToken(tokenString string) (*User, error) {
 	userID, err := s.parseTokenSubject(tokenString)
 	if err != nil {
@@ -188,12 +178,8 @@ func (s *Service) ParseToken(tokenString string) (*User, error) {
 	return &User{ID: u.ID, Username: u.Username}, nil
 }
 
-// parseTokenClaims validates the token's signature/expiry and returns its
-// raw claims, without interpreting them -- split out so both
-// parseTokenSubject (human-only callers like ParseToken) and
-// AuthenticateToken (which also needs the "typ" claim to distinguish a
-// service token from a human one) share one signature-verification pass
-// instead of each parsing independently.
+// parseTokenClaims validates the token and returns its raw claims, shared by
+// parseTokenSubject and AuthenticateToken so each doesn't re-verify.
 func (s *Service) parseTokenClaims(tokenString string) (jwt.MapClaims, error) {
 	trimmed := strings.TrimSpace(tokenString)
 	if strings.HasPrefix(strings.ToLower(trimmed), "bearer ") {
@@ -220,11 +206,8 @@ func (s *Service) parseTokenClaims(tokenString string) (jwt.MapClaims, error) {
 	return claims, nil
 }
 
-// parseTokenSubject validates the token's signature/expiry and returns its
-// subject (user ID) claim, without touching the store -- split out of
-// ParseToken so AuthenticateToken can validate the token and fetch the user
-// exactly once, instead of ParseToken and Resolve each fetching it
-// independently.
+// parseTokenSubject returns the token's subject (user ID) claim without
+// touching the store, so callers fetch the user exactly once.
 func (s *Service) parseTokenSubject(tokenString string) (string, error) {
 	claims, err := s.parseTokenClaims(tokenString)
 	if err != nil {
@@ -239,20 +222,12 @@ func (s *Service) parseTokenSubject(tokenString string) (string, error) {
 }
 
 // AuthenticateToken validates a bearer token and resolves its principal,
-// permission set, environment-access set, and admin flag in a single store
-// fetch -- the combined form api.authenticateRequest uses on every request,
-// replacing what used to be a ParseToken call followed by a separate
-// Resolve call that each independently fetched the same user record.
+// permissions, environment access, and admin flag in one store fetch -- used
+// by api.authenticateRequest on every request.
 //
-// A token whose "typ" claim is "service" (see GenerateServiceToken) is
-// resolved against the application-credential store instead of Users, but
-// returns the exact same (*User, PermissionSet, EnvironmentSet, bool)
-// shape a human token does, plus isService -- this is the entire mechanism
-// by which requirePermission/withAudit/principalFromContext in the api
-// package work unchanged for both principal kinds; they only ever see a
-// *User{ID, Username}, never anything that reveals which kind of token
-// produced it, except through the explicit isService flag (used by
-// withAudit to record AuditEntry.ActorType).
+// A "typ": "service" token (see GenerateServiceToken) resolves against the
+// application-credential store instead of Users, but returns the same shape
+// plus isService, so callers work unchanged for both principal kinds.
 func (s *Service) AuthenticateToken(tokenString string) (user *User, perms PermissionSet, envs EnvironmentSet, isAdmin bool, isService bool, err error) {
 	claims, err := s.parseTokenClaims(tokenString)
 	if err != nil {
@@ -278,12 +253,10 @@ func (s *Service) AuthenticateToken(tokenString string) (user *User, perms Permi
 	return &User{ID: u.ID, Username: u.Username}, perms, envs, isAdmin, false, nil
 }
 
-// authenticateServicePrincipal resolves an already-validated service token's
-// subject (an application-credential ID) into the same principal shape
-// AuthenticateToken returns for a human user. An application credential is
-// never an admin and its permission set is exactly its own Scopes (already
-// restricted to auth.CredentialScopes at creation/update time) rather than
-// anything resolved through group membership.
+// authenticateServicePrincipal resolves a service token's subject (an
+// application-credential ID) into the same principal shape a human user
+// gets. A credential is never an admin; its permissions are exactly its own
+// Scopes, not anything resolved through group membership.
 func (s *Service) authenticateServicePrincipal(credentialID string) (*User, PermissionSet, EnvironmentSet, bool, error) {
 	cred, ok := s.store.ApplicationCredentials().Get(credentialID)
 	if !ok || !cred.Active {

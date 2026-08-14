@@ -6,13 +6,10 @@ import (
 	"time"
 )
 
-// AuditEntry is a durable, replicated record of a single mutating API
-// request -- successful or rejected -- against a flag/user/group. ID is set
-// from the Raft log index (identical on every node replaying this entry).
-// Timestamp is set once, on the leader, by AuditRepository.Append -- never
-// inside applyAuditEntry -- because Raft replays the same committed log
-// entry on every node; time.Now() there would make Timestamp diverge
-// between replicas and break FSM determinism.
+// AuditEntry is a durable record of a mutating API request, successful or
+// rejected. ID is the Raft log index. Timestamp is set once by
+// AuditRepository.Append, not applyAuditEntry, since Raft replays that
+// entry on every node and time.Now() there would diverge across replicas.
 type AuditEntry struct {
 	ID         uint64 `json:"id"`
 	Timestamp  int64  `json:"timestamp"`
@@ -68,8 +65,7 @@ func (f *fsm) getAuditEntry(id uint64) (AuditEntry, bool) {
 }
 
 // listAuditEntries returns entries matching filter, newest first -- ID is
-// the Raft log index, shared and monotonic across every entity this store
-// replicates, so it doubles as a chronological key with no extra counter.
+// the Raft log index, so it doubles as a chronological key.
 func (f *fsm) listAuditEntries(filter AuditFilter) []AuditEntry {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

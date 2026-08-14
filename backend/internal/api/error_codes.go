@@ -1,22 +1,17 @@
 package api
 
-// Error codes are stable, machine-readable identifiers attached to every
-// apiError (see errors.go) so the UI can translate a failure into the
-// user's locale instead of displaying this package's English message text
-// verbatim. Format is "<Category><Group>-<Sequence>":
+// Error codes are stable, machine-readable identifiers on every apiError
+// (see errors.go) so the UI can translate failures instead of showing raw
+// English text. Format: "<Category><Group>-<Sequence>".
 //
-//   - Category mirrors the apiError constructor that produced it (A =
-//     auth-adjacent, BR = badRequest, NF = notFound, CF = conflict, MN =
-//     methodNotAllowed, IE = internalError), so status and code category
-//     never disagree.
-//   - Group (2 digits) sub-divides a category by domain, giving each domain
-//     its own block of sequence numbers to grow into independently.
-//   - Sequence (4 digits) identifies the specific error within its group.
+//   - Category matches the apiError constructor (A = auth, BR = badRequest,
+//     NF = notFound, CF = conflict, MN = methodNotAllowed, IE = internal).
+//   - Group (2 digits) sub-divides a category by domain.
+//   - Sequence (4 digits) identifies the error within its group.
 //
-// A code is reused verbatim across call sites that already share identical
-// message text today (e.g. every "invalid request body" site) rather than
-// minted per call site -- the code identifies what a user should be told,
-// not which line of Go produced it.
+// A code is reused across call sites sharing the same message (e.g. every
+// "invalid request body" site) -- it identifies what the user is told, not
+// which line produced it.
 const (
 	// A01 -- authentication (401).
 	CodeAuthInvalidCredentials = "A01-0001" // bad username/password

@@ -26,11 +26,10 @@ func (p resolvedPrincipal) hasEnvironmentAccess(environmentID string) bool {
 	return p.IsAdmin || p.Envs.Has(environmentID)
 }
 
-// authenticateRequest parses the bearer token and resolves the caller's
-// permissions. On any failure it writes the appropriate 401 response
-// itself and returns ok=false; callers should return immediately in that
-// case. This is the single place requirePermission and meHandler both go
-// through, so their error responses can never drift apart.
+// authenticateRequest parses the bearer token and resolves permissions. On
+// failure it writes the 401 response itself and returns ok=false; callers
+// should return immediately. Shared by requirePermission and meHandler so
+// their error responses can't drift apart.
 func authenticateRequest(w http.ResponseWriter, r *http.Request) (resolvedPrincipal, bool) {
 	authorization := r.Header.Get("Authorization")
 	if authorization == "" {
@@ -62,12 +61,9 @@ func principalFromContext(r *http.Request) (resolvedPrincipal, bool) {
 	return p, ok
 }
 
-// requirePermission wraps next so it only runs for requests carrying a
-// valid bearer token whose resolved principal either belongs to the Admin
-// group (unconditional bypass) or holds perm via at least one of their
-// groups. This is the single chokepoint every permission-gated route in
-// the API goes through -- gating a new endpoint elsewhere is "reference an
-// existing/new permission constant here", nothing else needs to change.
+// requirePermission wraps next so it only runs for requests whose resolved
+// principal is an Admin (unconditional bypass) or holds perm via a group.
+// The single chokepoint every permission-gated route goes through.
 func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := authenticateRequest(w, r)

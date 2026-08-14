@@ -5,15 +5,10 @@ import (
 	"sort"
 )
 
-// ApplicationCredential is a machine identity an external application
-// authenticates with via the OAuth2 client-credentials grant (see
-// auth.Service.AuthenticateClientCredentials) to obtain a short-lived
-// service access token. ID doubles as the OAuth2 client_id -- there is no
-// separate field for it, the same way Environment.ID is both the internal
-// key and the identifier referenced elsewhere. Scopes is restricted to
-// auth.CredentialScopes (currently flags:read/flags:write only) at the API
-// layer, not enforced here -- the store layer doesn't know about the
-// permission catalog, same separation Group.Permissions already has.
+// ApplicationCredential is a machine identity for the OAuth2
+// client-credentials grant (see auth.Service.AuthenticateClientCredentials).
+// ID doubles as the OAuth2 client_id. Scopes is validated against
+// auth.CredentialScopes at the API layer, not here.
 type ApplicationCredential struct {
 	ID               string   `json:"id"`
 	Name             string   `json:"name"`
@@ -48,9 +43,8 @@ func (f *fsm) getApplicationCredential(id string) (ApplicationCredential, bool) 
 	return c, ok
 }
 
-// listApplicationCredentials returns every credential ordered by ID for
-// deterministic output -- map iteration order is randomized, mirroring the
-// same concern listEnvironments/listUsers already handle.
+// listApplicationCredentials returns every credential ordered by ID --
+// map iteration order is otherwise randomized.
 func (f *fsm) listApplicationCredentials() []ApplicationCredential {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -62,10 +56,8 @@ func (f *fsm) listApplicationCredentials() []ApplicationCredential {
 	return creds
 }
 
-// hasCredentialsInEnvironmentLocked reports whether any application
-// credential is currently scoped to environmentID -- called directly by
-// applyEnvironment's opDelete case, which already holds f.mu. Caller must
-// already hold f.mu.
+// hasCredentialsInEnvironmentLocked reports whether any credential is
+// scoped to environmentID. Caller must already hold f.mu.
 func (f *fsm) hasCredentialsInEnvironmentLocked(environmentID string) bool {
 	for _, c := range f.applicationCredentials {
 		if c.EnvironmentID == environmentID {
@@ -76,9 +68,7 @@ func (f *fsm) hasCredentialsInEnvironmentLocked(environmentID string) bool {
 }
 
 // hasCredentialsInEnvironment is the read-locking counterpart of
-// hasCredentialsInEnvironmentLocked, for use outside of Apply (e.g.
-// EnvironmentRepository.Delete's fast pre-check) -- mirrors
-// hasFlagsInEnvironment/hasFlagsInEnvironmentLocked's split in flag.go.
+// hasCredentialsInEnvironmentLocked, for use outside of Apply.
 func (f *fsm) hasCredentialsInEnvironment(environmentID string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()

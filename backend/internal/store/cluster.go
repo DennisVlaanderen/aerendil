@@ -11,11 +11,9 @@ import (
 	raftboltdb "github.com/hashicorp/raft-boltdb/v2"
 )
 
-// newRaft wires up a Raft node backed by BoltDB (Raft's own replicated log
-// and stable store -- not the application data) and a file-based snapshot
-// store, bootstrapping a single-member cluster the first time it runs when
-// bootstrap is true. On subsequent restarts it rejoins existing state
-// instead of re-bootstrapping.
+// newRaft wires up a Raft node backed by BoltDB (log/stable store) and a
+// file snapshot store, bootstrapping a single-member cluster on first run
+// when bootstrap is true; restarts rejoin existing state instead.
 func newRaft(nodeID, bindAddr, dataDir string, bootstrap bool) (*raft.Raft, *fsm, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("create raft data dir: %w", err)

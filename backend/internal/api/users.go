@@ -29,11 +29,9 @@ type userResponse struct {
 }
 
 func toUserResponse(u store.User) userResponse {
-	// u.GroupIDs is nil for a user with no group memberships (the "omitempty"
-	// on store.User.GroupIDs drops an empty slice entirely when the command
-	// is JSON-encoded for the Raft log, so it comes back nil after Apply,
-	// even if the original request sent an empty array). Normalize to a
-	// non-nil slice here so API clients always see a real array, never null.
+	// GroupIDs comes back nil after Apply (omitempty drops an empty slice in
+	// the Raft-log JSON encoding) -- normalize so clients always see a real
+	// array, never null.
 	groupIDs := u.GroupIDs
 	if groupIDs == nil {
 		groupIDs = []string{}
@@ -112,15 +110,11 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 	return created(w, toUserResponse(user))
 }
 
-// requireAdminForAdminGroupChange returns false (having already written a
-// 403 response) if any of groupSets includes the Admin group and the acting
-// principal isn't already an admin themselves -- otherwise a caller holding
-// only users:create/users:update could create/edit their way into granting
-// or retaining Admin group membership (including another admin's) without
-// ever holding groups:create/groups:update or admin rights. Callers pass
-// whichever of a user's current and/or proposed group lists are relevant:
-// touching the Admin group from either side requires the caller to already
-// be an admin.
+// requireAdminForAdminGroupChange returns a 403 if any of groupSets
+// includes the Admin group and the caller isn't already an admin --
+// otherwise a caller with only users:create/update could grant or retain
+// Admin membership without ever holding groups permissions or admin rights.
+// Pass a user's current and/or proposed group lists as needed.
 func requireAdminForAdminGroupChange(r *http.Request, groupSets ...[]string) error {
 	touchesAdmin := false
 	for _, groupIDs := range groupSets {
@@ -167,12 +161,9 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestPasswordTooLong, "password must be at most 72 characters")
 	}
 
-	// A missing/nil groupIds field means "leave group membership unchanged"
-	// -- distinguishing "omitted" from "explicitly cleared" (via *[]string
-	// rather than []string) matters because a caller who can't see the full
-	// group list (e.g. missing groups:read, so the UI can't render group
-	// checkboxes at all) must still be able to edit a user's other fields
-	// without that inability silently wiping their group memberships.
+	// Nil groupIds means "unchanged" (*[]string distinguishes omitted from
+	// explicitly cleared) -- a caller without groups:read can't render group
+	// checkboxes but must still be able to edit a user's other fields.
 	groupIDs := existing.GroupIDs
 	if payload.GroupIDs != nil {
 		groupIDs = *payload.GroupIDs
@@ -194,10 +185,8 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	// An empty password field means "leave it unchanged" -- the edit form
-	// never round-trips the existing hash, so this is the only way to
-	// distinguish "no change" from "clear the password" (which isn't a
-	// supported operation; a password is always required to exist).
+	// Empty password means "unchanged" -- the edit form never round-trips
+	// the hash, and clearing a password isn't a supported operation.
 	passwordHash := existing.PasswordHash
 	if payload.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
@@ -226,11 +215,8 @@ func usersDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 		return notFound(CodeNotFoundUser, "user not found")
 	}
 
-	// Deleting a user is hardcoded to admins only for now, on top of the
-	// users:delete permission check requirePermission already applied above.
-	// Once that policy is ready to relax, removing this block is the only
-	// change needed to let a non-admin group holding users:delete actually
-	// delete users.
+	// Hardcoded to admins only for now, on top of the users:delete check
+	// above -- removing this block is all that's needed to relax it later.
 	principal, _ := principalFromContext(r)
 	if !principal.IsAdmin {
 		return forbidden(CodeBusinessAdminOnlyUserDelete, "only an Admin can delete users")

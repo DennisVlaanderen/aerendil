@@ -24,11 +24,8 @@ type applicationCredentialResponse struct {
 }
 
 func toApplicationCredentialResponse(c store.ApplicationCredential) applicationCredentialResponse {
-	// c.Scopes is nil for a credential with no scopes (the "omitempty" on
-	// store.ApplicationCredential.Scopes drops an empty slice entirely when
-	// the command is JSON-encoded for the Raft log) -- normalize to a
-	// non-nil slice here, mirroring toUserResponse's identical GroupIDs
-	// normalization.
+	// Scopes comes back nil after Apply (omitempty drops an empty slice in
+	// the Raft-log JSON encoding) -- normalize to non-nil, like toUserResponse.
 	scopes := c.Scopes
 	if scopes == nil {
 		scopes = []string{}
@@ -43,18 +40,16 @@ func toApplicationCredentialResponse(c store.ApplicationCredential) applicationC
 }
 
 // applicationCredentialSecretResponse additionally carries the plaintext
-// client secret -- returned exactly twice in a credential's lifetime (create
-// and rotate) and never again; list/get/update responses are always the
-// plain applicationCredentialResponse.
+// client secret, returned only on create and rotate -- list/get/update
+// responses always use the plain applicationCredentialResponse.
 type applicationCredentialSecretResponse struct {
 	applicationCredentialResponse
 	ClientSecret string `json:"clientSecret"`
 }
 
-// generateClientSecret returns a random, high-entropy secret suitable for
-// an OAuth2 client_secret: 32 bytes of crypto/rand, base64url-encoded
-// (unpadded) so it's safe to embed directly in a Basic-auth header or form
-// value without further escaping.
+// generateClientSecret returns a random OAuth2 client_secret: 32 bytes of
+// crypto/rand, base64url-encoded (unpadded) so it embeds safely in a
+// Basic-auth header or form value.
 func generateClientSecret() (string, error) {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
@@ -80,10 +75,9 @@ func validateCredentialName(name string) (string, error) {
 	return name, nil
 }
 
-// validateCredentialScopes rejects any scope that isn't in
-// auth.CredentialScopes -- application credentials are deliberately
-// restricted to a subset of the full permission catalog a human Group can
-// hold (see CredentialScopes' doc comment in auth/permissions.go).
+// validateCredentialScopes rejects any scope not in auth.CredentialScopes --
+// credentials are deliberately restricted to a subset of the full
+// permission catalog a human Group can hold.
 func validateCredentialScopes(scopes []string) error {
 	for _, scope := range scopes {
 		if !auth.IsKnownCredentialScope(scope) {
@@ -93,12 +87,10 @@ func validateCredentialScopes(scopes []string) error {
 	return nil
 }
 
-// applicationCredentialsGetHandler requires an environmentId query param and
-// only returns credentials scoped to it, the same contract flagsGetHandler
-// already has -- a credential belongs to exactly one environment (AC-7.3),
-// so there is never a reason to list across all of them at once, and this
-// is what lets hasEnvironmentAccess gate the response the same way it gates
-// flags.
+// applicationCredentialsGetHandler requires an environmentId query param
+// and returns only credentials scoped to it, same contract as
+// flagsGetHandler -- a credential belongs to exactly one environment
+// (AC-7.3), so hasEnvironmentAccess can gate it the same way.
 func applicationCredentialsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {
@@ -139,10 +131,9 @@ func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) e
 		return badRequest(CodeBadRequestBody, "invalid request body")
 	}
 
-	// Authorization is checked as soon as we know the target environment --
-	// before any other field is validated -- so a caller without access to
-	// that environment learns nothing about the rest of the payload (e.g.
-	// "name is required", "unknown scope") ahead of being authorized for it.
+	// Checked as soon as the target environment is known, before any other
+	// field validation -- an unauthorized caller learns nothing else about
+	// the payload.
 	environmentID := strings.TrimSpace(payload.EnvironmentID)
 	if environmentID == "" {
 		return badRequest(CodeBadRequestCredentialEnvironmentRequired, "environmentId is required")
@@ -199,11 +190,9 @@ func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) er
 		return forbidden(CodeAuthForbidden, "forbidden")
 	}
 
-	// Scopes/Active are pointers so a client that omits either field leaves
-	// it unchanged, instead of a bare bool/slice silently decoding a missing
-	// field as false/nil and wiping it -- unlike users.go/groups.go's PUTs,
-	// an omitted "active" here would silently revoke a live machine
-	// credential's access on its next OAuth2 token exchange.
+	// Pointers so an omitted field means "unchanged" rather than decoding as
+	// false/nil and wiping it -- an omitted "active" would otherwise revoke
+	// a live credential's access on its next token exchange.
 	var payload struct {
 		Name   string    `json:"name"`
 		Scopes *[]string `json:"scopes"`
@@ -231,15 +220,10 @@ func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) er
 		active = *payload.Active
 	}
 
-	// PUT never touches the secret or the environment. The secret is a
-	// distinct operation (applicationCredentialsRotateHandler) with its own
-	// "reveal the new secret exactly once" response shape, the same way
-	// users.go's PUT leaves PasswordHash alone unless a new password is
-	// explicitly sent. The environment is fixed for the credential's
-	// lifetime (AC-7.3): a live service token re-resolves EnvironmentID on
-	// every request (auth.Service.authenticateServicePrincipal), so
-	// reassigning it here would silently change what an already-issued
-	// token can access with no re-issuance.
+	// PUT never touches the secret (rotate is a separate operation) or the
+	// environment, which is fixed for the credential's lifetime (AC-7.3) --
+	// a live token re-resolves EnvironmentID on every request, so
+	// reassigning it here would silently change access with no re-issuance.
 	cred, err := dataStore.ApplicationCredentials().Set(store.ApplicationCredential{
 		ID:               existing.ID,
 		Name:             name,
@@ -275,10 +259,9 @@ func applicationCredentialsDeleteHandler(w http.ResponseWriter, r *http.Request)
 	return ok(w, map[string]string{"status": "deleted"})
 }
 
-// applicationCredentialsRotateHandler issues a new client secret for an
-// existing credential, invalidating the old one immediately (the old
-// ClientSecretHash is simply overwritten) without changing the credential's
-// ID/client_id, name, environment, or scopes.
+// applicationCredentialsRotateHandler issues a new client secret,
+// overwriting the old ClientSecretHash immediately without changing the
+// credential's ID/client_id, name, environment, or scopes.
 func applicationCredentialsRotateHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {

@@ -1,3 +1,6 @@
+// Package fqdp implements the FQDP binary protocol server described in
+// docs/fqdp.md. Currently a stub: only Handshake is parsed; no session,
+// Query, Subscribe, or Update handling exists yet.
 package fqdp
 
 import (
@@ -11,10 +14,16 @@ import (
 )
 
 const (
-	DefaultFQDPAddr  = ":9001"
+	// DefaultFQDPAddr is the address StartTCPServer listens on when the
+	// caller doesn't override it.
+	DefaultFQDPAddr = ":9001"
+	// MaximumFrameSize caps a frame's payload so a bad length prefix can't
+	// force an unbounded allocation in readFrame.
 	MaximumFrameSize = 10 << 20 // 10 MiB
 )
 
+// StartTCPServer serves FQDP connections on addr, each on its own
+// goroutine, until ctx is canceled.
 func StartTCPServer(ctx context.Context, addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {

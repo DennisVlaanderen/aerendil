@@ -29,12 +29,9 @@ const (
 	entityApplicationCredential entity = "applicationCredential"
 )
 
-// command is the single Raft log entry shape for every entity kind this
-// store replicates; only the field matching Entity is populated. This is a
-// breaking change to the previously flag-only, unversioned command/snapshot
-// format -- acceptable pre-v1 with no real deployments to migrate, but it
-// does mean an existing on-disk data dir must be wiped before running a
-// build that includes this change.
+// command is the single Raft log entry shape for every entity; only the
+// field matching Entity is populated. Schema changes here require wiping
+// the Raft data dir on upgrade (see CLAUDE.md) -- no migration path pre-v1.
 type command struct {
 	Op                    string                 `json:"op"`
 	Entity                entity                 `json:"entity"`
@@ -48,16 +45,12 @@ type command struct {
 	ApplicationCredential *ApplicationCredential `json:"applicationCredential,omitempty"`
 }
 
-// fsm is the Raft finite state machine: in-memory maps of stored entitires,
-// made durable by Raft's own replicated log plus periodic snapshots.
-// There's no need for a separate embedded database -- Raft already gives us a durable,
-// replicated log to reconstruct all three from.
+// fsm is the Raft finite state machine: in-memory maps of stored entities,
+// durable via Raft's replicated log plus periodic snapshots.
 //
-// Each entity's apply logic and read accessors live alongside that
-// entity's struct definition (flag.go/user.go/group.go), not here -- this
-// file only holds the machinery every entity shares: the command envelope,
-// the Apply dispatch switch, and snapshot/restore. Adding a new entity
-// means adding a file and minimal struct definition, not growing this one.
+// Each entity's apply logic and accessors live alongside its struct
+// definition (flag.go/user.go/group.go); this file only holds the shared
+// machinery -- the command envelope, Apply dispatch, and snapshot/restore.
 type fsm struct {
 	mu                     sync.RWMutex
 	flags                  map[string]Flag
@@ -80,9 +73,8 @@ func newFSM() *fsm {
 }
 
 // Apply is called once per committed log entry, in log order, on every
-// node. Invariants that must hold cluster-wide (e.g. the Admin group's
-// immutability) are enforced here rather than only in Store's pre-checks,
-// since Apply is the one place guaranteed to run exactly once per entry.
+// node -- the one place guaranteed to run exactly once per entry, so
+// cluster-wide invariants (e.g. Admin group immutability) are enforced here.
 func (f *fsm) Apply(log *raft.Log) any {
 	var cmd command
 	if err := json.Unmarshal(log.Data, &cmd); err != nil {
@@ -110,10 +102,8 @@ func (f *fsm) Apply(log *raft.Log) any {
 	}
 }
 
-// snapshotDoc is the single composite blob a whole FSM snapshot is encoded
-// as -- one JSON document covering every entity, not per-entity files,
-// following the same "snapshot the whole map" approach the original
-// flag-only implementation used.
+// snapshotDoc is the single JSON document a whole FSM snapshot is encoded
+// as -- one blob covering every entity, not per-entity files.
 type snapshotDoc struct {
 	Flags                  map[string]Flag                  `json:"flags"`
 	Users                  map[string]User                  `json:"users"`
@@ -154,14 +144,11 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 
 	var doc snapshotDoc
 	if len(raw) > 0 {
-		// Detect a pre-user/group snapshot (a flat map[string]Flag, with no
-		// "flags"/"users"/"groups" top-level keys at all) before decoding
-		// into snapshotDoc -- otherwise it decodes "successfully" into three
-		// nil maps, silently discarding every previously stored flag with no
-		// error and no log line. A non-empty raw snapshot that matches
-		// neither shape is exactly the breaking-change case the comment on
-		// the command type above warns about; fail loudly instead of
-		// quietly booting empty.
+		// Detect a pre-user/group snapshot (flat map[string]Flag, no
+		// top-level "flags"/"users"/"groups" keys) before decoding into
+		// snapshotDoc -- otherwise it decodes "successfully" into nil maps,
+		// silently dropping every stored flag. Fail loudly instead of
+		// booting empty.
 		var probe map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &probe); err != nil {
 			return fmt.Errorf("decode snapshot: %w", err)
@@ -177,12 +164,10 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		}
 	}
 	for _, flag := range doc.Flags {
-		// A pre-environment-scoped snapshot decodes "successfully" here
-		// (Flag.EnvironmentID is just a new field, zero-valued to "" on
-		// decode) but every flag would then be silently orphaned under
-		// environment ID "" forever -- fail loudly instead, same "detect
-		// the old shape, don't silently drop data" convention as the
-		// pre-user/group probe above.
+		// A pre-environment-scoped snapshot decodes "successfully"
+		// (EnvironmentID zero-valued to "") but would silently orphan every
+		// flag -- fail loudly instead, same convention as the pre-user/group
+		// probe above.
 		if flag.EnvironmentID == "" {
 			return fmt.Errorf("snapshot has pre-environment-scoped flags; wipe the raft data directory and restart so state rebuilds from a fresh snapshot")
 		}
@@ -200,16 +185,12 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		doc.AuditEntries = make(map[uint64]AuditEntry)
 	}
 	if doc.Environments == nil {
-		// Not part of the pre-user/group legacy-format check above: an
-		// existing snapshot legitimately has flags/users/groups but no
-		// environments key yet, since Environment didn't exist when it was
-		// written. That's a normal upgrade, not the unrecognized-format
-		// case -- default to empty rather than failing loudly.
+		// Not the legacy-format case above: an older snapshot legitimately
+		// has no environments key yet -- default to empty instead of failing.
 		doc.Environments = make(map[string]Environment)
 	}
 	if doc.ApplicationCredentials == nil {
-		// Same upgrade case as Environments above: a pre-existing snapshot
-		// legitimately has no applicationCredentials key yet.
+		// Same upgrade case as Environments above.
 		doc.ApplicationCredentials = make(map[string]ApplicationCredential)
 	}
 

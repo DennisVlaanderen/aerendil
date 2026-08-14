@@ -12,12 +12,9 @@ import (
 )
 
 // auditConfig describes one mutating route's audit metadata. Before is nil
-// for pure-create routes (users/groups POST -- the ID is fresh every time,
-// generated server-side inside the handler, so there is never a prior
-// state); it is set for every route that can genuinely overwrite an
-// existing record: users/groups PUT/DELETE (identified by path {id}) and
-// flags POST, which is an upsert-by-key per environment (identified by the
-// request body's "key" and "environmentIds" fields, not a path param).
+// for pure-create routes (POST -- ID is fresh, no prior state) and set for
+// routes that can overwrite an existing record: PUT/DELETE by path {id},
+// and flags POST, an upsert-by-key identified by the body's key/environmentIds.
 type auditConfig struct {
 	Action     string
 	TargetType string
@@ -25,15 +22,13 @@ type auditConfig struct {
 }
 
 // withAudit wraps next so every invocation -- success or rejection -- is
-// durably recorded via dataStore.Audits().Append before the real response
-// reaches the client. It must be nested INSIDE requirePermission in route
-// registration (requirePermission(perm, withAudit(cfg, handler))) so
-// principalFromContext is already populated when this runs.
+// durably recorded via dataStore.Audits().Append before the response
+// reaches the client. Must nest INSIDE requirePermission so
+// principalFromContext is already populated.
 //
-// If Append itself fails, that is surfaced to the client as an error even
-// if the underlying mutation already committed -- a deliberate tradeoff: an
-// audit trail that can silently go missing is worse than an occasional
-// false-negative response to an already-applied change.
+// If Append fails, that's surfaced as an error even though the mutation
+// already committed -- a missing audit trail is worse than a false-negative
+// response.
 func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
@@ -126,14 +121,11 @@ func (a *auditRecorder) Write(p []byte) (int, error) {
 	return a.body.Write(p)
 }
 
-// targetIDFrom resolves the audited entity's identity: the path {id} param
-// for PUT/DELETE routes, else a best-effort "id" (users/groups POST) or
-// "key" (flags POST) field sniffed from the buffered response body -- for
-// flags POST specifically, the response is now {"flags": [...]} (one
-// multi-environment create can span several Flag records sharing one key),
-// so the key is read from the first element of that array instead of a
-// top-level field. Empty for a rejected create, which never allocated an
-// identity in the first place.
+// targetIDFrom resolves the audited entity's identity: path {id} for
+// PUT/DELETE, else "id" or "key" sniffed from the response body (flags POST
+// reads it from the first element of {"flags": [...]}, since one
+// multi-environment create can span several records). Empty for a rejected
+// create.
 func targetIDFrom(r *http.Request, respBody []byte) string {
 	if id := r.PathValue("id"); id != "" {
 		return id
@@ -158,20 +150,15 @@ func targetIDFrom(r *http.Request, respBody []byte) string {
 	return ""
 }
 
-// sensitiveResponseFields lists top-level JSON response fields that must
-// never be persisted into the durable, widely-readable audit trail even
-// though the handler legitimately returns them to the caller once -- today
-// just applicationCredentialSecretResponse.ClientSecret (see
-// application_credentials.go), which is otherwise "revealed exactly twice,
-// never again". Add to this list rather than teaching withAudit about
-// individual response shapes.
+// sensitiveResponseFields lists top-level response fields that must never
+// be persisted into the audit trail even though a handler legitimately
+// returns them once -- today just ClientSecret. Add here rather than
+// teaching withAudit individual response shapes.
 var sensitiveResponseFields = []string{"clientSecret"}
 
-// redactSensitiveResponseFields returns body with any top-level field named
-// in sensitiveResponseFields replaced by a redaction marker, for storage in
-// AuditEntry.After. Falls back to the raw body if it isn't a JSON object, so
-// a non-object success response (there are none today) still gets audited
-// rather than silently dropped.
+// redactSensitiveResponseFields replaces any field named in
+// sensitiveResponseFields with a redaction marker, for AuditEntry.After.
+// Falls back to the raw body if it isn't a JSON object.
 func redactSensitiveResponseFields(body []byte) string {
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(body, &probe); err != nil {

@@ -8,11 +8,9 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-// NewTestStore opens a real, single-node Store backed by a temporary
-// on-disk data directory and waits for it to become Raft leader before
-// returning. It exists so other internal packages (auth, api) can spin up
-// a live store for their own tests without duplicating Raft bootstrap
-// boilerplate.
+// NewTestStore opens a real, single-node Store on a temp data dir and
+// waits for it to become Raft leader, so other packages' tests can spin
+// up a live store without duplicating Raft bootstrap boilerplate.
 func NewTestStore(t testing.TB) *Store {
 	t.Helper()
 
@@ -20,10 +18,9 @@ func NewTestStore(t testing.TB) *Store {
 	if err != nil {
 		t.Fatalf("create temp data dir: %v", err)
 	}
-	// Store.Close doesn't close the underlying BoltDB file handle, so on
-	// Windows a t.TempDir()-style automatic cleanup can fail the test by
-	// racing an open file lock. Best-effort removal avoids failing tests
-	// over that pre-existing, unrelated cleanup gap.
+	// Store.Close doesn't release the BoltDB file handle, so on Windows
+	// t.TempDir()-style cleanup can race an open lock. Best-effort removal
+	// avoids failing tests over it.
 	t.Cleanup(func() {
 		_ = os.RemoveAll(dataDir)
 	})

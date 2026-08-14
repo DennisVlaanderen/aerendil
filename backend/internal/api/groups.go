@@ -18,13 +18,9 @@ type groupResponse struct {
 }
 
 func toGroupResponse(g store.Group) groupResponse {
-	// g.Permissions/g.EnvironmentIDs are nil for a group with none assigned
-	// (the "omitempty" on both store.Group fields drops an empty slice
-	// entirely when the command is JSON-encoded for the Raft log, so they
-	// come back nil after Apply, even if the original request sent an empty
-	// array). Normalize both to non-nil slices here so API clients always
-	// see a real array, never null -- mirrors toUserResponse's identical
-	// fix for GroupIDs.
+	// Permissions/EnvironmentIDs come back nil after Apply (omitempty drops
+	// an empty slice in the Raft-log JSON encoding) -- normalize to non-nil
+	// so clients always see a real array, never null.
 	permissions := g.Permissions
 	if permissions == nil {
 		permissions = []string{}
@@ -88,10 +84,8 @@ func groupsPostHandler(w http.ResponseWriter, r *http.Request) error {
 func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
-	// No pre-check for the Admin group here -- dataStore.Groups().Set below
-	// is the single source of truth (System-flag protected) and returns
-	// store.ErrProtectedSystemGroup, which handleErrors maps to the same
-	// 403 a duplicated ID check here would have produced.
+	// No pre-check for the Admin group -- Set below is the source of truth
+	// and returns ErrProtectedSystemGroup, which maps to the same 403.
 	existing, found := dataStore.Groups().Get(id)
 	if !found {
 		return notFound(CodeNotFoundGroup, "group not found")
@@ -133,9 +127,8 @@ func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 func groupsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
-	// No pre-check for the Admin group here -- see the identical comment in
-	// groupsPutHandler; dataStore.Groups().Delete is the single source of
-	// truth.
+	// No pre-check for the Admin group -- see groupsPutHandler; Delete is
+	// the source of truth.
 	if _, found := dataStore.Groups().Get(id); !found {
 		return notFound(CodeNotFoundGroup, "group not found")
 	}
