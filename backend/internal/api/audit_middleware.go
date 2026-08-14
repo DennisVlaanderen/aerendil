@@ -84,7 +84,10 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if _, err := dataStore.Audits().Append(entry); err != nil {
-			log.Printf("api: failed to record audit entry for %s %s (mutation status %d): %v", r.Method, r.URL.Path, status, err)
+			// %q (not %s) escapes control characters in r.URL.Path and err
+			// so an attacker cannot smuggle fake log lines / ANSI escapes
+			// into the audit log via a crafted request path (CWE-117).
+			log.Printf("api: failed to record audit entry for %s %q (mutation status %d): %q", r.Method, r.URL.Path, status, err)
 			writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, "the request may have been applied, but recording its audit trail failed; verify before retrying")
 			return
 		}
