@@ -1,7 +1,6 @@
 # Build context is ui/ itself: this app is fully self-contained.
 #   docker build -f ui/Dockerfile ui
-# node:22-alpine
-FROM node@sha256:bde0dae02f2b12d2bce5ee72b2432f0e511767b7b2dc4dd3b064df11ae422fee AS build
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS build
 WORKDIR /app
 RUN npm install -g pnpm@10.4.1
 
@@ -12,8 +11,7 @@ COPY . .
 RUN pnpm run build
 RUN pnpm prune --prod
 
-# node:22-alpine
-FROM node@sha256:bde0dae02f2b12d2bce5ee72b2432f0e511767b7b2dc4dd3b064df11ae422fee
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
 WORKDIR /app
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules

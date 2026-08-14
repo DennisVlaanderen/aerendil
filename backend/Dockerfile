@@ -1,8 +1,7 @@
 # Build context is the repo root: this image needs the shared go.mod/go.sum
 # in addition to backend/ itself.
 #   docker build -f backend/Dockerfile .
-# golang:1.25-alpine
-FROM golang@sha256:56961d79ea8129efddcc0b8643fd8a5416b4e6228cfd477e3fd61deb2672c587 AS build
+FROM golang:1.25-alpine@sha256:56961d79ea8129efddcc0b8643fd8a5416b4e6228cfd477e3fd61deb2672c587 AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
