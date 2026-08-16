@@ -7,6 +7,7 @@ import (
 	"log"
 	"maps"
 	"net/http"
+	"strings"
 
 	"aerendil/backend/internal/store"
 )
@@ -84,7 +85,8 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if _, err := dataStore.Audits().Append(entry); err != nil {
-			log.Printf("api: failed to record audit entry for %s %s (mutation status %d): %v", r.Method, r.URL.Path, status, err)
+			sanitizedPath := strings.ReplaceAll(strings.ReplaceAll(r.URL.Path, "\r", ""), "\n", "")
+			log.Printf("api: failed to record audit entry for %s %q (mutation status %d): %v", r.Method, sanitizedPath, status, err)
 			writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, "the request may have been applied, but recording its audit trail failed; verify before retrying")
 			return
 		}
