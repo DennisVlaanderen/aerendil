@@ -16,17 +16,13 @@ import (
 const seedLeaderWaitTimeout = 10 * time.Second
 
 // SeedAdminGroupAndUser ensures the protected Admin group and a
-// corresponding admin user (from cfg) exist in the store. It's idempotent:
-// on repeat boots it does not recreate the Admin group, and it never
-// resets an existing admin's password -- a password changed later through
-// the UI must survive restarts.
+// corresponding admin user (from cfg) exist. It's idempotent -- it never
+// recreates the group or resets an existing admin's password.
 //
-// A freshly bootstrapped single-node cluster isn't leader the instant
-// store.Open returns -- the first Raft election takes a heartbeat timeout
-// or two -- so this retries on store.ErrNotLeader for a bounded window
-// before giving up. On a genuine multi-node follower that never becomes
-// leader, it logs and returns nil once the window elapses: the leader will
-// have already seeded the state, which then replicates here.
+// A freshly bootstrapped node isn't leader the instant store.Open returns,
+// so this retries on store.ErrNotLeader for a bounded window; a follower
+// that never becomes leader just logs and returns nil, since the leader
+// will have already seeded the state, which then replicates here.
 func SeedAdminGroupAndUser(s *store.Store, cfg AdminConfig) error {
 	deadline := time.Now().Add(seedLeaderWaitTimeout)
 	for {
@@ -50,23 +46,18 @@ func seedAdminGroupAndUserOnce(s *store.Store, cfg AdminConfig) error {
 		log.Println("auth: seeded Admin group")
 	}
 
-	// Usernames are stored lowercase (see auth.Service.Authenticate and
-	// api.usersPostHandler/usersPutHandler) so a configured
-	// AERENDIL_ADMIN_USERNAME of e.g. "Admin" still matches an existing
-	// "admin" account instead of seeding a distinct-cased duplicate.
+	// Usernames are stored lowercase (see Service.Authenticate), so
+	// AERENDIL_ADMIN_USERNAME="Admin" matches an existing "admin" instead of
+	// seeding a duplicate.
 	username := strings.ToLower(strings.TrimSpace(cfg.Username))
 
 	if _, ok := s.Users().GetByUsername(username); ok {
 		return nil
 	}
 
-	// This is a fresh admin account, not a rename of an existing one --
-	// AERENDIL_ADMIN_USERNAME only takes effect on the very first boot for a
-	// given username, mirroring how AERENDIL_ADMIN_PASSWORD is never re-applied
-	// to an existing account (see the doc comment above). If another admin
-	// already exists under a different username, warn loudly: the operator
-	// likely intended to rename the admin account, but this creates a
-	// second, independent one instead, leaving the original fully active.
+	// Changing AERENDIL_ADMIN_USERNAME doesn't rename the existing admin --
+	// it seeds a second one. Warn, since the operator likely intended a
+	// rename and the original account remains active.
 	if hasOtherActiveAdmin(s) {
 		log.Printf("auth: AERENDIL_ADMIN_USERNAME is %q but at least one other Admin-group account already exists; seeding a new admin account rather than renaming the existing one -- the original account remains active and must be deactivated/removed manually if that wasn't intended", username)
 	}
@@ -91,9 +82,7 @@ func seedAdminGroupAndUserOnce(s *store.Store, cfg AdminConfig) error {
 }
 
 // hasOtherActiveAdmin reports whether any active user already belongs to
-// the Admin group -- used only to decide whether seeding a not-yet-existing
-// configured admin username is a fresh bootstrap or a likely-unintended
-// second admin account alongside an existing one.
+// the Admin group, to detect a likely-unintended second admin account.
 func hasOtherActiveAdmin(s *store.Store) bool {
 	for _, u := range s.Users().List() {
 		if u.Active && slices.Contains(u.GroupIDs, store.AdminGroupID) {

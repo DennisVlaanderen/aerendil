@@ -1,3 +1,5 @@
+// Command server is Aerendil's entry point: it opens the Raft-backed flag
+// store, then starts the FQDP TCP listener and the HTTP API against it.
 package main
 
 import (
@@ -70,9 +72,8 @@ func storeConfigFromEnvironment() store.Config {
 
 	bindAddr := strings.TrimSpace(os.Getenv("AERENDIL_RAFT_BIND_ADDR"))
 	if bindAddr == "" {
-		// A wildcard address (":9100") isn't advertisable to raft peers on
-		// some hosts (observed on Windows outside Docker); loopback is a
-		// safe default for a single-node local run.
+		// A wildcard address isn't advertisable to raft peers on some hosts
+		// (observed on Windows outside Docker); loopback is a safe default.
 		bindAddr = "127.0.0.1:9100"
 	}
 
@@ -118,10 +119,9 @@ func adminConfigFromEnvironment() auth.AdminConfig {
 	return auth.AdminConfig{Username: username, Password: password}
 }
 
-// isProductionEnvironment reports whether AERENDIL_ENV is set to
-// "production" -- the switch that turns insecure-default fallbacks (JWT
-// secret, admin password) into hard startup failures instead of warnings.
-// Left unset, behavior is unchanged from before this flag existed.
+// isProductionEnvironment reports whether AERENDIL_ENV=production, which
+// turns insecure-default fallbacks (JWT secret, admin password) into hard
+// startup failures instead of warnings.
 func isProductionEnvironment() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("AERENDIL_ENV")), "production")
 }

@@ -6,26 +6,18 @@ import (
 	"slices"
 )
 
-// ErrUsernameTaken is returned by UserRepository.Set (and, ultimately,
-// fsm.applyUser) when the username on the given record already belongs to
-// a different user. errors.Is-comparable so callers can map it to a
-// specific response.
+// ErrUsernameTaken is returned when the username on a record already
+// belongs to a different user.
 var ErrUsernameTaken = errors.New("username is already taken")
 
-// ErrLastAdmin is returned by UserRepository.Set/Delete (and, ultimately,
-// fsm.applyUser) when an operation would leave the cluster with zero active
-// admins -- deleting, deactivating, or stripping Admin group membership
-// from the sole remaining one. Mirrors the protection fsm.applyGroup gives
-// the Admin group itself (see group.go): without it, the Admin group being
-// undeletable is no guarantee at all, since the last account that can
-// actually use it could still be removed. errors.Is-comparable so callers
-// can map it to a specific response.
+// ErrLastAdmin is returned when an operation (delete, deactivate, or
+// stripping Admin group membership) would leave zero active admins --
+// otherwise the Admin group's own undeletability would be no guarantee.
 var ErrLastAdmin = errors.New("cannot remove the last remaining admin account")
 
-// User is a persisted account record. Hashing and validating passwords is
-// the auth package's job -- store itself performs no business rules beyond
-// what fsm.Apply enforces (e.g. username uniqueness), the same split
-// already used for Flag.
+// User is a persisted account record. Password hashing/validation is the
+// auth package's job; store only enforces what fsm.Apply does (e.g.
+// username uniqueness), same split as Flag.
 type User struct {
 	ID           string   `json:"id"`
 	Username     string   `json:"username"`
@@ -141,9 +133,8 @@ func (r UserRepository) List() []User {
 }
 
 // Set applies a user create/update through Raft consensus. A duplicate
-// username, and any edit that would deactivate or de-admin the sole
-// remaining admin, are rejected before they're even proposed to Raft as a
-// fast path; fsm.Apply enforces both rules as the ultimate source of truth.
+// username or an edit that would strip the last admin is rejected as a
+// fast pre-check; fsm.Apply enforces both as the ultimate source of truth.
 func (r UserRepository) Set(user User) (User, error) {
 	if existing, ok := r.store.fsm.getUserByUsername(user.Username); ok && existing.ID != user.ID {
 		return User{}, ErrUsernameTaken

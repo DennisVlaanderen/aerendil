@@ -9,14 +9,10 @@ import (
 )
 
 // apiError pairs an HTTP status and a stable machine-readable code (see
-// error_codes.go) with a client-facing message. Handlers return one (via
-// badRequest/unauthorized/forbidden/notFound/conflict/methodNotAllowed/
-// internalError below) instead of writing an error response directly --
-// handleErrors is the single place that turns a returned error into the
-// actual {"error": "...", "code": "..."} JSON response, so every handler's
-// error path looks the same regardless of which failure it hit. message
-// stays English debug text for logs/tools; code is what the frontend uses
-// to pick a translated string, since message itself is never translated.
+// error_codes.go) with a client-facing message. Handlers return one instead
+// of writing a response directly, so handleErrors is the single place that
+// turns it into JSON. message is English debug text; code is what the
+// frontend translates.
 type apiError struct {
 	status  int
 	code    string
@@ -47,12 +43,10 @@ func internalError(code, message string) error {
 	return &apiError{http.StatusInternalServerError, code, message}
 }
 
-// storeErrorToAPIError maps a known, client-facing store-layer sentinel to
-// the apiError handleErrors should write; nil if err doesn't match any of
-// them, meaning handleErrors should treat it as an unexpected internal
-// error instead. This is the mapping every handler used to apply inline via
-// writeStoreError; centralizing it here means a handler that fails a store
-// call can just `return err` and let handleErrors sort out the status.
+// storeErrorToAPIError maps a known store-layer sentinel to the apiError
+// handleErrors should write; nil means handleErrors should treat it as an
+// unexpected internal error. Centralizes what every handler used to do
+// inline, so a handler can just `return err`.
 func storeErrorToAPIError(err error) *apiError {
 	switch {
 	case errors.Is(err, store.ErrUsernameTaken):
@@ -75,20 +69,15 @@ func storeErrorToAPIError(err error) *apiError {
 }
 
 // apiHandlerFunc is like http.HandlerFunc but returns an error instead of
-// writing a failure response itself -- handleErrors adapts one into a real
-// http.HandlerFunc, so it composes into the existing middleware chain the
-// same way requirePermission/withAudit already do:
-// requirePermission(perm, withAudit(cfg, handleErrors(handler))).
+// writing a failure response itself; handleErrors adapts it so it composes
+// into the same chain as requirePermission/withAudit.
 type apiHandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
-// handleErrors adapts h into an http.HandlerFunc. On a nil return, h is
-// assumed to have already written its own success response (via writeJSON)
-// and nothing more happens. On a non-nil return: an *apiError writes its
-// status/message verbatim; a recognized store-layer sentinel (see
-// storeErrorToAPIError) is mapped to its client-facing status/message;
-// anything else is logged server-side and returned as an opaque 500 so
-// internal error text (paths, raft/bolt internals, etc.) never reaches the
-// client.
+// handleErrors adapts h into an http.HandlerFunc. A nil return means h
+// already wrote its own response. A non-nil return: *apiError writes
+// verbatim, a recognized store sentinel maps via storeErrorToAPIError,
+// anything else logs server-side and returns an opaque 500 so internal
+// details never reach the client.
 func handleErrors(h apiHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := h(w, r)
@@ -110,12 +99,9 @@ func handleErrors(h apiHandlerFunc) http.HandlerFunc {
 	}
 }
 
-// writeError writes the {"error": "...", "code": "..."} JSON shape every
-// handler's error path uses -- shared by handleErrors and the small number
-// of call sites that write an error response outside the apiHandlerFunc
-// chain entirely (requirePermission/authenticateRequest in middleware.go
-// run before a handler is ever reached; withAudit in audit_middleware.go
-// wraps the chain's outermost response write).
+// writeError writes the {"error", "code"} JSON shape every handler uses --
+// shared by handleErrors and the few call sites outside the apiHandlerFunc
+// chain (requirePermission/authenticateRequest, withAudit).
 func writeError(w http.ResponseWriter, status int, code, message string) {
 	writeJSON(w, status, map[string]string{"error": message, "code": code})
 }

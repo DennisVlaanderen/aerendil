@@ -1,3 +1,6 @@
+// Package store is Aerendil's Raft-replicated data layer: an in-memory FSM
+// for flags, users, groups, audits, and environments, kept consistent via
+// hashicorp/raft. See Store.
 package store
 
 import (
@@ -22,11 +25,9 @@ type Config struct {
 	Bootstrap bool
 }
 
-// Store is an embedded, Raft-replicated key/value store for feature flags,
-// users, groups, and environments. Entity-specific operations are grouped
-// into repositories (Flags/Users/Groups/Environments) rather than living
-// directly on Store, so adding a new entity in the future means adding a
-// repository, not growing this type.
+// Store is an embedded, Raft-replicated key/value store for flags, users,
+// groups, and environments. Operations are grouped into per-entity
+// repositories (Flags/Users/...) rather than living on Store directly.
 type Store struct {
 	raft *raft.Raft
 	fsm  *fsm
@@ -62,13 +63,10 @@ func (s *Store) ApplicationCredentials() ApplicationCredentialRepository {
 	return ApplicationCredentialRepository{store: s}
 }
 
-// apply centralizes the boilerplate every mutating repository method needs:
-// confirm this node is the Raft leader, marshal the command, submit it via
-// raft.Apply, and surface any submission-level error. The caller still
-// type-asserts/switches on the returned response, since each entity command
-// can succeed with a different concrete type (Flag/User/Group) or fail with
-// an fsm-level business-rule error (e.g. ErrUsernameTaken) instead of a
-// submission error.
+// apply centralizes the boilerplate every mutating repository method
+// needs: confirm leadership, marshal the command, submit via raft.Apply.
+// Callers still type-switch the response, since each entity command
+// returns a different concrete type or an fsm-level business error.
 func (s *Store) apply(cmd command) (any, error) {
 	if s.raft.State() != raft.Leader {
 		return nil, fmt.Errorf("%w (leader is %q)", ErrNotLeader, s.raft.Leader())

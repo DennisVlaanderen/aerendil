@@ -210,6 +210,10 @@ never directly from the browser.
 - Backend Go code stays inside the existing `backend/internal/*` package
   layout; don't add new top-level packages unless a new concern truly
   warrants one.
+- Backend Go comments follow https://go.dev/doc/comment: package and
+  exported-identifier doc comments start with their own name. Keep
+  comments short — explain *why*, not what, and skip anything the code
+  already says.
 - UI code is Prettier-formatted and ESLint-linted; match existing Svelte 5 +
   TypeScript idioms already in `ui/src`.
 - `docker-compose.yml` is the reference way to run the full stack locally.

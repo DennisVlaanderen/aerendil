@@ -20,11 +20,8 @@ func writeOAuthError(w http.ResponseWriter, status int, code, description string
 }
 
 // parseOAuthTokenRequest extracts client_id/client_secret/grant_type per
-// RFC 6749 §2.3.1: HTTP Basic auth is checked first (the RFC-preferred form
-// for confidential clients), falling back to
-// application/x-www-form-urlencoded body parameters -- r.ParseForm also
-// covers a JSON-unaware client that just POSTs form-encoded fields, which
-// is the common case for OAuth2 client libraries.
+// RFC 6749 §2.3.1: HTTP Basic auth first (RFC-preferred), falling back to
+// form-urlencoded body params, the common case for OAuth2 client libraries.
 func parseOAuthTokenRequest(r *http.Request) (clientID, clientSecret, grantType string) {
 	if id, secret, ok := r.BasicAuth(); ok {
 		clientID, clientSecret = strings.TrimSpace(id), strings.TrimSpace(secret)
@@ -41,24 +38,17 @@ func parseOAuthTokenRequest(r *http.Request) (clientID, clientSecret, grantType 
 }
 
 // oauthTokenHandler implements the OAuth2 client-credentials grant (RFC
-// 6749 §4.4) applications use to exchange a client_id/client_secret for a
-// short-lived access token (see auth.Service.GenerateServiceToken). It is
-// registered without requirePermission/withAudit -- like loginHandler --
-// since the request itself carries the credential being authenticated;
-// there is no prior bearer token to check.
+// 6749 §4.4): exchanges client_id/client_secret for a short-lived access
+// token. Unprotected like loginHandler -- the request carries its own
+// credential.
 //
-// Registered on the method-agnostic "/api/oauth/token" pattern (see
-// RegisterRoutes), not "POST /api/oauth/token" -- unlike every other route
-// in this package, the method check happens here instead of being left to
-// Go 1.22+ ServeMux, because a non-POST request must still get this
-// endpoint's RFC 6749 JSON error body rather than ServeMux's generic
-// plain-text 405.
+// Registered on the method-agnostic "/api/oauth/token" pattern, not "POST
+// /api/oauth/token", so a non-POST request gets this endpoint's RFC 6749
+// JSON error body instead of ServeMux's plain-text 405.
 //
-// Both the request and response shapes deliberately follow RFC 6749
-// verbatim instead of this API's usual JSON conventions (structured
-// {"error","code"} responses, camelCase bodies elsewhere) -- that is the
-// explicit point of this endpoint: a standard, unmodified OAuth2
-// client-credentials client should be able to call it successfully.
+// Request and response shapes follow RFC 6749 verbatim, not this API's
+// usual {"error","code"}/camelCase conventions -- an unmodified OAuth2
+// client should just work against it.
 func oauthTokenHandler(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodPost {
 		writeOAuthError(w, http.StatusMethodNotAllowed, "invalid_request", "method not allowed")

@@ -1,3 +1,5 @@
+// Package api implements Aerendil's HTTP API: flags, auth, users, groups,
+// audits, environments, and application credentials. See RegisterRoutes.
 package api
 
 import (
@@ -18,10 +20,9 @@ type apiResponse struct {
 
 const devJWTSecret = "aerendil-dev-secret"
 
-// authService and dataStore are package-level so every handler file in
-// this package can reach them without threading a receiver through every
-// function -- authService needs the store, so it can only be constructed
-// once RegisterRoutes receives it, not at package-init time.
+// authService and dataStore are package-level so every handler file can
+// reach them without a receiver; authService is built in RegisterRoutes
+// since it needs the store.
 var authService *auth.Service
 var dataStore *store.Store
 
@@ -37,6 +38,9 @@ func jwtSecretFromEnvironment() string {
 	return secret
 }
 
+// RegisterRoutes wires every API route onto mux, backed by s. Call it
+// exactly once per process — it also initializes the package-level
+// authService and dataStore every handler reads.
 func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 	dataStore = s
 	authService = auth.NewService(jwtSecretFromEnvironment(), dataStore)
@@ -54,9 +58,8 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 			if err := json.Unmarshal(body, &probe); err != nil || probe.Key == "" || len(probe.EnvironmentIDs) == 0 {
 				return nil, false
 			}
-			// One Get per requested environment, not just probe.Key alone --
-			// a multi-environment create/overwrite needs real before-state
-			// for every environment it touches, not just the first.
+			// One Get per environment: a multi-environment create needs
+			// before-state for each one, not just the first.
 			before := make([]store.Flag, 0, len(probe.EnvironmentIDs))
 			for _, envID := range probe.EnvironmentIDs {
 				if flag, ok := dataStore.Flags().Get(envID, probe.Key); ok {
@@ -140,12 +143,9 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 		},
 	}, handleErrors(environmentsDeleteHandler))))
 
-	// Unprotected by design, like /api/auth/login -- the request itself
-	// carries the credential (client_id/client_secret) being authenticated.
-	// Registered without a "POST " method prefix so a wrong-method request
-	// reaches oauthTokenHandler's own RFC 6749 JSON error response instead
-	// of ServeMux's generic plain-text 405 -- see oauthTokenHandler's doc
-	// comment.
+	// Unprotected by design, like /api/auth/login. No "POST " prefix so a
+	// wrong-method request gets oauthTokenHandler's RFC 6749 error body
+	// instead of ServeMux's plain-text 405.
 	mux.HandleFunc("/api/oauth/token", handleErrors(oauthTokenHandler))
 
 	mux.HandleFunc("GET /api/application-credentials", requirePermission(auth.PermApplicationCredentialsRead, handleErrors(applicationCredentialsGetHandler)))
@@ -214,10 +214,8 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestFlagsEnvironmentIDsRequired, "environmentIds is required")
 	}
 
-	// All-or-nothing on the permission check too, matching the atomic
-	// "consistent across environments" intent of SetMany itself below --
-	// a request naming one environment the caller can't touch is rejected
-	// entirely, not silently narrowed to the ones they can.
+	// All-or-nothing: one environment the caller can't touch rejects the
+	// whole request, matching SetMany's atomic-across-environments intent.
 	principal, found := principalFromContext(r)
 	if !found {
 		return forbidden(CodeAuthForbidden, "forbidden")
@@ -293,13 +291,9 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-// respond writes payload as the JSON body with the given 2xx status and
-// returns nil, so an apiHandlerFunc's success path can end with a single
-// `return respond(w, status, payload)`. ok/created below are the two
-// constructors every handler currently needs; if a future route needs a
-// different success status (e.g. http.StatusAccepted for an async
-// operation), add another one-liner here the same way rather than calling
-// respond directly from a handler.
+// respond writes payload as the JSON body with status and returns nil, so a
+// handler's success path can end with `return respond(w, status, payload)`.
+// ok/created below cover the statuses handlers need today.
 func respond(w http.ResponseWriter, status int, payload any) error {
 	writeJSON(w, status, payload)
 	return nil
@@ -325,10 +319,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
-// isProductionEnvironment reports whether AERENDIL_ENV is set to
-// "production" -- the switch that turns insecure-default fallbacks (JWT
-// secret, admin password) into hard startup failures instead of warnings.
-// Left unset, behavior is unchanged from before this flag existed.
+// isProductionEnvironment reports whether AERENDIL_ENV=production, which
+// turns insecure-default fallbacks (JWT secret, admin password) into hard
+// startup failures instead of warnings.
 func isProductionEnvironment() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("AERENDIL_ENV")), "production")
 }
