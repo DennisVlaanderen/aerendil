@@ -15,6 +15,8 @@ export interface GroupSummary {
 export const ALL_PERMISSIONS = [
 	'flags:read',
 	'flags:write',
+	'flags:update',
+	'flags:delete',
 	'users:read',
 	'users:create',
 	'users:update',

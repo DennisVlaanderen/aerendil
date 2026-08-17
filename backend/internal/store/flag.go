@@ -50,6 +50,9 @@ func (f *fsm) applyFlag(index uint64, cmd command) any {
 			applied[i] = flag
 		}
 		return applied
+	case opDelete:
+		delete(f.flags, cmd.Key)
+		return nil
 	default:
 		return fmt.Errorf("unknown command op %q", cmd.Op)
 	}
@@ -151,4 +154,16 @@ func (r FlagRepository) SetMany(key string, enabled bool, value string, environm
 	default:
 		return nil, fmt.Errorf("unexpected apply response type %T", resp)
 	}
+}
+
+// Delete removes a flag from a specific environment through Raft consensus.
+func (r FlagRepository) Delete(environmentID, key string) error {
+	resp, err := r.store.apply(command{Op: opDelete, Entity: entityFlag, Key: flagMapKey(environmentID, key)})
+	if err != nil {
+		return err
+	}
+	if respErr, ok := resp.(error); ok {
+		return respErr
+	}
+	return nil
 }

@@ -12,7 +12,9 @@
 
 	const scopeOptions = [
 		{ value: 'flags:read', label: m.application_credentials_scope_flags_read },
-		{ value: 'flags:write', label: m.application_credentials_scope_flags_write }
+		{ value: 'flags:write', label: m.application_credentials_scope_flags_write },
+		{ value: 'flags:update', label: m.application_credentials_scope_flags_update },
+		{ value: 'flags:delete', label: m.application_credentials_scope_flags_delete }
 	];
 
 	// This whole page (list, create, edit) is scoped to the environment

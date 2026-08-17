@@ -12,6 +12,8 @@ import (
 const (
 	PermFlagsRead          = "flags:read"
 	PermFlagsWrite         = "flags:write"
+	PermFlagsUpdate        = "flags:update"
+	PermFlagsDelete        = "flags:delete"
 	PermUsersRead          = "users:read"
 	PermUsersCreate        = "users:create"
 	PermUsersUpdate        = "users:update"
@@ -37,10 +39,12 @@ const (
 // unknown/typo'd strings in incoming group.Permissions.
 //
 // Users and Groups are split into per-action read/create/update/delete
-// permissions (unlike Flags' single "write") so a group can be granted
-// users:create without also getting users:delete.
+// permissions; Flags follow the same split except create still uses the
+// original "write" name rather than "create" (flags:write, flags:update,
+// flags:delete) so a group can be granted flags:write (create) without
+// also getting flags:update or flags:delete.
 var AllPermissions = []string{
-	PermFlagsRead, PermFlagsWrite,
+	PermFlagsRead, PermFlagsWrite, PermFlagsUpdate, PermFlagsDelete,
 	PermUsersRead, PermUsersCreate, PermUsersUpdate, PermUsersDelete,
 	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
 	PermAuditsRead,
@@ -57,9 +61,10 @@ func IsKnownPermission(perm string) bool {
 }
 
 // CredentialScopes is the restricted catalog an application credential's own
-// Scopes are validated against -- just flags:read/write, so a compromised
-// credential can never manage users, groups, or other credentials.
-var CredentialScopes = []string{PermFlagsRead, PermFlagsWrite}
+// Scopes are validated against -- just the flags permissions, so a
+// compromised credential can never manage users, groups, or other
+// credentials.
+var CredentialScopes = []string{PermFlagsRead, PermFlagsWrite, PermFlagsUpdate, PermFlagsDelete}
 
 // IsKnownCredentialScope reports whether scope is one of CredentialScopes.
 func IsKnownCredentialScope(scope string) bool {

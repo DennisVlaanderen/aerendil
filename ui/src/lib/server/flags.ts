@@ -61,3 +61,59 @@ export async function createFlags(
 		? { flags: payload.flags }
 		: { error: "Couldn't create that flag.", code: 'internal', status: 502 };
 }
+
+// `status` mirrors the backend's own HTTP status verbatim -- see FlagsResult.
+export type FlagResult =
+	| { flag: FlagSummary; error?: undefined; status?: undefined; code?: undefined }
+	| { flag?: undefined; error: string; status: number; code: string };
+
+export async function updateFlag(
+	token: string,
+	environmentId: string,
+	key: string,
+	input: { enabled: boolean; value: string }
+): Promise<FlagResult> {
+	const response = await fetch(
+		`${API_ORIGIN}/api/flags/${encodeURIComponent(key)}?environmentId=${encodeURIComponent(environmentId)}`,
+		{
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+			body: JSON.stringify(input)
+		}
+	);
+	if (!response.ok) {
+		const payload = await response.json().catch(() => null);
+		return {
+			error: typeof payload?.error === 'string' ? payload.error : "Couldn't update that flag.",
+			code: typeof payload?.code === 'string' ? payload.code : 'internal',
+			status: response.status
+		};
+	}
+
+	const flag = await response.json().catch(() => null);
+	return flag ? { flag } : { error: "Couldn't update that flag.", code: 'internal', status: 502 };
+}
+
+export async function deleteFlag(
+	token: string,
+	environmentId: string,
+	key: string
+): Promise<{ error: string; status: number; code: string } | null> {
+	const response = await fetch(
+		`${API_ORIGIN}/api/flags/${encodeURIComponent(key)}?environmentId=${encodeURIComponent(environmentId)}`,
+		{
+			method: 'DELETE',
+			headers: { Authorization: `Bearer ${token}` }
+		}
+	);
+	if (response.ok) {
+		return null;
+	}
+
+	const payload = await response.json().catch(() => null);
+	return {
+		error: typeof payload?.error === 'string' ? payload.error : "Couldn't delete that flag.",
+		code: typeof payload?.code === 'string' ? payload.code : 'internal',
+		status: response.status
+	};
+}

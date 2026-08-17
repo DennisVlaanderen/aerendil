@@ -55,6 +55,7 @@ export const ErrorCode = {
 
 	// NF -- not found (404), one group per domain.
 	NotFoundUser: 'NF01-0001',
+	NotFoundFlag: 'NF02-0001',
 	NotFoundEnvironment: 'NF03-0001',
 	NotFoundGroup: 'NF04-0001',
 	NotFoundApplicationCredential: 'NF05-0001',
@@ -116,6 +117,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BadRequestCredentialEnvironmentRequired]: m.error_credential_environment_required,
 	[ErrorCode.BadRequestUnknownScope]: m.error_unknown_scope,
 	[ErrorCode.NotFoundUser]: m.error_user_not_found,
+	[ErrorCode.NotFoundFlag]: m.error_flag_not_found,
 	[ErrorCode.NotFoundEnvironment]: m.error_environment_not_found,
 	[ErrorCode.NotFoundGroup]: m.error_group_not_found,
 	[ErrorCode.NotFoundApplicationCredential]: m.error_application_credential_not_found,

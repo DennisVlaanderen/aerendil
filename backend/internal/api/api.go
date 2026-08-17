@@ -72,6 +72,22 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 			return before, true
 		},
 	}, handleErrors(flagsPostHandler))))
+	mux.HandleFunc("PUT /api/flags/{key}", requirePermission(auth.PermFlagsUpdate, withAudit(auditConfig{
+		Action:     "flag.update",
+		TargetType: "flag",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			f, ok := dataStore.Flags().Get(r.URL.Query().Get("environmentId"), r.PathValue("key"))
+			return f, ok
+		},
+	}, handleErrors(flagsPutHandler))))
+	mux.HandleFunc("DELETE /api/flags/{key}", requirePermission(auth.PermFlagsDelete, withAudit(auditConfig{
+		Action:     "flag.delete",
+		TargetType: "flag",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			f, ok := dataStore.Flags().Get(r.URL.Query().Get("environmentId"), r.PathValue("key"))
+			return f, ok
+		},
+	}, handleErrors(flagsDeleteHandler))))
 	mux.HandleFunc("/api/auth/login", handleErrors(loginHandler))
 	mux.HandleFunc("/api/auth/me", handleErrors(meHandler))
 
@@ -236,6 +252,64 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return ok(w, map[string]any{"flags": flags})
+}
+
+func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
+	key := r.PathValue("key")
+	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
+	if environmentID == "" {
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, "environmentId is required")
+	}
+
+	principal, found := principalFromContext(r)
+	if !found || !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
+	if _, exists := dataStore.Flags().Get(environmentID, key); !exists {
+		return notFound(CodeNotFoundFlag, "flag not found")
+	}
+
+	var payload struct {
+		Enabled bool   `json:"enabled"`
+		Value   string `json:"value"`
+	}
+	if err := decodeJSON(w, r, &payload); err != nil {
+		return badRequest(CodeBadRequestBody, "invalid request body")
+	}
+
+	flag, err := dataStore.Flags().Set(store.Flag{
+		EnvironmentID: environmentID,
+		Key:           key,
+		Enabled:       payload.Enabled,
+		Value:         payload.Value,
+	})
+	if err != nil {
+		return err
+	}
+	return ok(w, flag)
+}
+
+func flagsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
+	key := r.PathValue("key")
+	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
+	if environmentID == "" {
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, "environmentId is required")
+	}
+
+	principal, found := principalFromContext(r)
+	if !found || !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, "forbidden")
+	}
+
+	if _, exists := dataStore.Flags().Get(environmentID, key); !exists {
+		return notFound(CodeNotFoundFlag, "flag not found")
+	}
+
+	if err := dataStore.Flags().Delete(environmentID, key); err != nil {
+		return err
+	}
+	return ok(w, map[string]string{"status": "deleted"})
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) error {
