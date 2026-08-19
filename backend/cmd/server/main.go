@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,12 +21,18 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("server error: %v", err)
+	}
+}
+
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	flagStore, err := store.Open(storeConfigFromEnvironment())
 	if err != nil {
-		log.Fatalf("failed to open flag store: %v", err)
+		return fmt.Errorf("failed to open flag store: %w", err)
 	}
 	defer flagStore.Close()
 
@@ -43,25 +50,32 @@ func main() {
 		Handler: mux,
 	}
 
+	serverErr := make(chan error, 1)
 	go func() {
 		log.Println("http api listening on :8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("http server failed: %v", err)
+			serverErr <- err
 		}
 	}()
 
 	if err := auth.SeedAdminGroupAndUser(flagStore, adminConfigFromEnvironment()); err != nil {
-		log.Fatalf("failed to seed admin account: %v", err)
+		return fmt.Errorf("failed to seed admin account: %w", err)
 	}
 
-	<-ctx.Done()
-	log.Println("shutdown requested")
+	select {
+	case err := <-serverErr:
+		return fmt.Errorf("http server error: %w", err)
+	case <-ctx.Done():
+		log.Println("shutdown requested")
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("http shutdown error: %v", err)
 	}
+
+	return nil
 }
 
 func storeConfigFromEnvironment() store.Config {
