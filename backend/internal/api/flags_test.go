@@ -17,7 +17,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
 	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -25,7 +25,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil)
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+envID, nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
@@ -44,7 +44,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 
 	// Overwrite via a second POST (upsert-by-key).
 	updateBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": false, "value": "off", "environmentIds": []string{envID}})
-	updateReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(updateBody))
+	updateReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(updateBody))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
 	updateRec := httptest.NewRecorder()
 	mux.ServeHTTP(updateRec, updateReq)
@@ -52,7 +52,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 		t.Fatalf("expected update to succeed, got %d: %s", updateRec.Code, updateRec.Body.String())
 	}
 
-	verifyReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil)
+	verifyReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+envID, nil)
 	verifyReq.Header.Set("Authorization", "Bearer "+token)
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
@@ -74,7 +74,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{prodID, stagingID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
 	prodBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{prodID}})
-	prodReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(prodBody))
+	prodReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(prodBody))
 	prodReq.Header.Set("Authorization", "Bearer "+token)
 	prodRec := httptest.NewRecorder()
 	mux.ServeHTTP(prodRec, prodReq)
@@ -83,7 +83,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	}
 
 	stagingBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": false, "environmentIds": []string{stagingID}})
-	stagingReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(stagingBody))
+	stagingReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(stagingBody))
 	stagingReq.Header.Set("Authorization", "Bearer "+token)
 	stagingRec := httptest.NewRecorder()
 	mux.ServeHTTP(stagingRec, stagingReq)
@@ -91,7 +91,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 		t.Fatalf("expected staging create to succeed, got %d: %s", stagingRec.Code, stagingRec.Body.String())
 	}
 
-	prodListReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+prodID, nil)
+	prodListReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+prodID, nil)
 	prodListReq.Header.Set("Authorization", "Bearer "+token)
 	prodListRec := httptest.NewRecorder()
 	mux.ServeHTTP(prodListRec, prodListReq)
@@ -103,7 +103,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 		t.Fatalf("expected prod's checkout to be enabled independently, got %+v", prodListed.Flags)
 	}
 
-	stagingListReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+stagingID, nil)
+	stagingListReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+stagingID, nil)
 	stagingListReq.Header.Set("Authorization", "Bearer "+token)
 	stagingListRec := httptest.NewRecorder()
 	mux.ServeHTTP(stagingListRec, stagingListReq)
@@ -123,7 +123,7 @@ func TestFlagsPostMultiEnvironmentCreateIsAtomic(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envA, envB}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
 	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envA, envB}})
-	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -156,7 +156,7 @@ func TestFlagsPostRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envA, "does-not-exist"}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
 	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envA, "does-not-exist"}})
-	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -164,7 +164,7 @@ func TestFlagsPostRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) {
 		t.Fatalf("expected 400 for an unknown environment ID, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	verifyReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envA, nil)
+	verifyReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+envA, nil)
 	verifyReq.Header.Set("Authorization", "Bearer "+token)
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
@@ -184,7 +184,7 @@ func TestEnvironmentsDeleteRejectsWhenFlagsStillReferenceItThroughAPI(t *testing
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
 
 	flagBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
-	flagReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(flagBody))
+	flagReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(flagBody))
 	flagReq.Header.Set("Authorization", "Bearer "+token)
 	flagRec := httptest.NewRecorder()
 	mux.ServeHTTP(flagRec, flagReq)
@@ -193,7 +193,7 @@ func TestEnvironmentsDeleteRejectsWhenFlagsStillReferenceItThroughAPI(t *testing
 	}
 
 	deleteToken := tokenFor(t, auth.PermEnvironmentsDelete)
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/environments/"+envID, nil)
+	deleteReq := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/environments/"+envID, nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+deleteToken)
 	deleteRec := httptest.NewRecorder()
 	mux.ServeHTTP(deleteRec, deleteReq)
@@ -208,7 +208,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate)
 
 	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -217,7 +217,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	}
 
 	putBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
-	putReq := httptest.NewRequest(http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
+	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
 	mux.ServeHTTP(putRec, putReq)
@@ -232,7 +232,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 		t.Fatalf("expected the PUT to win, got %+v", updated)
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil)
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+envID, nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
@@ -251,7 +251,7 @@ func TestFlagsPutReturnsNotFoundForUnknownFlag(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsUpdate)
 
 	putBody, _ := json.Marshal(map[string]any{"enabled": true, "value": "on"})
-	putReq := httptest.NewRequest(http.MethodPut, "/api/flags/does-not-exist?environmentId="+envID, bytes.NewReader(putBody))
+	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/does-not-exist?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
 	mux.ServeHTTP(putRec, putReq)
@@ -266,7 +266,7 @@ func TestFlagsPutRequiresPermFlagsUpdate(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead)
 
 	putBody, _ := json.Marshal(map[string]any{"enabled": true, "value": "on"})
-	putReq := httptest.NewRequest(http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
+	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
 	mux.ServeHTTP(putRec, putReq)
@@ -281,7 +281,7 @@ func TestFlagsPutRequiresUpdateNotJustWrite(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
 	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -290,7 +290,7 @@ func TestFlagsPutRequiresUpdateNotJustWrite(t *testing.T) {
 	}
 
 	putBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
-	putReq := httptest.NewRequest(http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
+	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
 	mux.ServeHTTP(putRec, putReq)
@@ -305,7 +305,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsDelete)
 
 	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -313,7 +313,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
 	}
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/flags/checkout?environmentId="+envID, nil)
+	deleteReq := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/flags/checkout?environmentId="+envID, nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
 	deleteRec := httptest.NewRecorder()
 	mux.ServeHTTP(deleteRec, deleteReq)
@@ -321,7 +321,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 		t.Fatalf("expected delete to succeed, got %d: %s", deleteRec.Code, deleteRec.Body.String())
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/flags?environmentId="+envID, nil)
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags?environmentId="+envID, nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
@@ -333,7 +333,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 		t.Fatalf("expected the flag to be gone after delete, got %+v", listed.Flags)
 	}
 
-	deleteAgainReq := httptest.NewRequest(http.MethodDelete, "/api/flags/checkout?environmentId="+envID, nil)
+	deleteAgainReq := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/flags/checkout?environmentId="+envID, nil)
 	deleteAgainReq.Header.Set("Authorization", "Bearer "+token)
 	deleteAgainRec := httptest.NewRecorder()
 	mux.ServeHTTP(deleteAgainRec, deleteAgainReq)
@@ -347,7 +347,7 @@ func TestFlagsDeleteReturnsNotFoundForUnknownFlag(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsDelete)
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/flags/does-not-exist?environmentId="+envID, nil)
+	deleteReq := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/flags/does-not-exist?environmentId="+envID, nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
 	deleteRec := httptest.NewRecorder()
 	mux.ServeHTTP(deleteRec, deleteReq)
@@ -362,7 +362,7 @@ func TestFlagsDeleteRequiresPermFlagsDeleteNotJustWrite(t *testing.T) {
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
 	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -370,7 +370,7 @@ func TestFlagsDeleteRequiresPermFlagsDeleteNotJustWrite(t *testing.T) {
 		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
 	}
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/flags/checkout?environmentId="+envID, nil)
+	deleteReq := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/flags/checkout?environmentId="+envID, nil)
 	deleteReq.Header.Set("Authorization", "Bearer "+token)
 	deleteRec := httptest.NewRecorder()
 	mux.ServeHTTP(deleteRec, deleteReq)
