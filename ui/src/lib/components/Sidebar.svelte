@@ -1,8 +1,6 @@
 <script lang="ts">
-	import type { Pathname } from '$app/types';
-	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
 	import LocaleSwitcher from './LocaleSwitcher.svelte';
 	import type { FlagSummary } from '$lib/server/flags';
@@ -106,7 +104,7 @@
 			)
 				? 'bg-nav-active-bg text-nav-active'
 				: 'text-nav-inactive'}"
-			href={resolve(localizeHref('/dashboard') as Pathname)}
+			href={localizedResolve('/dashboard')}
 		>
 			<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 				<span class="icon-[lucide--layout-dashboard] size-4.5"></span>
@@ -124,7 +122,7 @@
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
-						href={resolve(localizeHref(userManagementDefaultPath) as Pathname)}
+						href={localizedResolve(userManagementDefaultPath)}
 					>
 						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 							<span class="icon-[lucide--users] size-4.5"></span>
@@ -159,7 +157,7 @@
 								)
 									? 'bg-nav-active-bg text-nav-active'
 									: 'text-nav-inactive'}"
-								href={resolve(localizeHref('/dashboard/users') as Pathname)}
+								href={localizedResolve('/dashboard/users')}
 							>
 								{m.nav_users()}
 							</a>
@@ -171,7 +169,7 @@
 								)
 									? 'bg-nav-active-bg text-nav-active'
 									: 'text-nav-inactive'}"
-								href={resolve(localizeHref('/dashboard/groups') as Pathname)}
+								href={localizedResolve('/dashboard/groups')}
 							>
 								{m.nav_groups()}
 							</a>
@@ -192,7 +190,7 @@
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
-						href={resolve(localizeHref(applicationSettingsDefaultPath) as Pathname)}
+						href={localizedResolve(applicationSettingsDefaultPath)}
 					>
 						<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 							<span class="icon-[lucide--settings] size-4.5"></span>
@@ -227,7 +225,7 @@
 								)
 									? 'bg-nav-active-bg text-nav-active'
 									: 'text-nav-inactive'}"
-								href={resolve(localizeHref('/dashboard/settings/environments') as Pathname)}
+								href={localizedResolve('/dashboard/settings/environments')}
 							>
 								{m.nav_environments()}
 							</a>
@@ -239,7 +237,7 @@
 								)
 									? 'bg-nav-active-bg text-nav-active'
 									: 'text-nav-inactive'}"
-								href={resolve(localizeHref('/dashboard/application-credentials') as Pathname)}
+								href={localizedResolve('/dashboard/application-credentials')}
 							>
 								{m.nav_application_credentials()}
 							</a>
@@ -256,7 +254,7 @@
 				)
 					? 'bg-nav-active-bg text-nav-active'
 					: 'text-nav-inactive'}"
-				href={resolve(localizeHref('/dashboard/audit-log') as Pathname)}
+				href={localizedResolve('/dashboard/audit-log')}
 			>
 				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 					<span class="icon-[lucide--history] size-4.5"></span>
@@ -276,7 +274,7 @@
 				{#if canCreateFlags}
 					<a
 						class="flex size-4.5 shrink-0 items-center justify-center rounded text-nav-inactive no-underline hover:bg-line-3 hover:text-nav-active"
-						href={resolve(localizeHref('/dashboard/flags/new') as Pathname)}
+						href={localizedResolve('/dashboard/flags/new')}
 						aria-label={m.nav_new_flag()}
 					>
 						<span class="icon-[lucide--plus] size-3.5" aria-hidden="true"></span>
@@ -295,7 +293,7 @@
 					)
 						? 'bg-nav-active-bg text-nav-active'
 						: 'text-nav-inactive'}"
-					href={resolve(localizeHref(`/dashboard/flags/${flag.key}`) as Pathname)}
+					href={localizedResolve(`/dashboard/flags/${flag.key}`)}
 				>
 					<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 						{#if flag.enabled}

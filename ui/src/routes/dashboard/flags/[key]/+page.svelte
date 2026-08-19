@@ -1,11 +1,9 @@
 <script lang="ts">
-	import type { Pathname } from '$app/types';
-	import { resolve } from '$app/paths';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { apiRequest } from '$lib/client/api';
 	import { resolveErrorMessage } from '$lib/errors';
 	import { hasPermission } from '$lib/permissions';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { PageProps } from './$types';
@@ -68,7 +66,7 @@
 			deleteError = resolveErrorMessage(result.code);
 			return;
 		}
-		await goto(resolve(localizeHref('/dashboard') as Pathname));
+		await goto(localizedResolve('/dashboard'));
 	}
 </script>
 

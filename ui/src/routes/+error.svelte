@@ -1,16 +1,14 @@
 <script lang="ts">
-	import type { Pathname } from '$app/types';
 	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
 
 	const REDIRECT_SECONDS = 20;
 	let secondsLeft = $state(REDIRECT_SECONDS);
 
 	function goToLogin() {
-		goto(resolve(localizeHref('/login') as Pathname));
+		goto(localizedResolve('/login'));
 	}
 
 	$effect(() => {

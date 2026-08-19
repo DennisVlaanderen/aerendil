@@ -1,11 +1,9 @@
 <script lang="ts">
-	import type { Pathname } from '$app/types';
-	import { resolve } from '$app/paths';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { apiRequest } from '$lib/client/api';
 	import { resolveErrorMessage } from '$lib/errors';
 	import { hasPermission } from '$lib/permissions';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { PageProps } from './$types';
@@ -67,7 +65,7 @@
 			deleteError = resolveErrorMessage(result.code);
 			return;
 		}
-		await goto(resolve(localizeHref('/dashboard/users') as Pathname));
+		await goto(localizedResolve('/dashboard/users'));
 	}
 </script>
 
@@ -79,7 +77,7 @@
 	<div class="w-full max-w-2xl rounded-xl border border-line-1 bg-surface p-6">
 		<a
 			class="mb-1 inline-block text-xs font-semibold tracking-widest text-nav-active uppercase no-underline"
-			href={resolve(localizeHref('/dashboard/users') as Pathname)}
+			href={localizedResolve('/dashboard/users')}
 		>
 			{m.nav_users()}
 		</a>

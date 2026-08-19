@@ -1,8 +1,6 @@
 <script lang="ts">
-	import type { Pathname } from '$app/types';
-	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
 </script>
 
@@ -21,7 +19,7 @@
 		<p class="mt-2 text-ink-muted">{page.error?.message}</p>
 
 		<a
-			href={resolve(localizeHref('/dashboard') as Pathname)}
+			href={localizedResolve('/dashboard')}
 			class="mt-6 inline-block rounded-lg bg-gold px-6 py-3 font-semibold text-navy no-underline hover:opacity-90"
 		>
 			{m.error_back_dashboard()}
