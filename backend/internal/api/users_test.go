@@ -25,6 +25,63 @@ func TestUsersGetRequiresPermission(t *testing.T) {
 	}
 }
 
+func TestUsersGetByIDRequiresPermission(t *testing.T) {
+	mux := newTestMux(t)
+	createToken := tokenFor(t, auth.PermUsersCreate)
+	id := createUser(t, mux, createToken, "getbyid-noperm", "s3cret!!", nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without users:read, got %d", rec.Code)
+	}
+}
+
+func TestUsersGetByIDReturnsNotFoundForUnknownUser(t *testing.T) {
+	mux := newTestMux(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/does-not-exist", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown user, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUsersGetByIDReturnsUserWithoutExposingPasswordHash(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersRead)
+	id := createUser(t, mux, token, "getbyid-found", "s3cret!!", nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if raw["id"] != id {
+		t.Fatalf("expected id %q in response, got %+v", id, raw)
+	}
+	if raw["username"] != "getbyid-found" {
+		t.Fatalf("expected username %q in response, got %+v", "getbyid-found", raw)
+	}
+	if _, present := raw["passwordHash"]; present {
+		t.Fatal("expected password hash to never be present in the API response")
+	}
+}
+
 func TestUsersPostCreatesUserWithoutExposingPasswordHash(t *testing.T) {
 	mux := newTestMux(t)
 

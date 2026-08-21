@@ -96,6 +96,7 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 		Action:     "user.create",
 		TargetType: "user",
 	}, handleErrors(usersPostHandler))))
+	mux.HandleFunc("GET /api/users/{id}", requirePermission(auth.PermUsersRead, handleErrors(usersGetByIDHandler)))
 	mux.HandleFunc("PUT /api/users/{id}", requirePermission(auth.PermUsersUpdate, withAudit(auditConfig{
 		Action:     "user.update",
 		TargetType: "user",
