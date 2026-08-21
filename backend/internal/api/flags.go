@@ -15,7 +15,7 @@ func registerFlagRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/flags", requirePermission(auth.PermFlagsWrite, withAudit(auditConfig{
 		Action:     "flag.set",
 		TargetType: "flag",
-		Before: func(r *http.Request, body []byte) (any, bool) {
+		Before: func(_ *http.Request, body []byte) (any, bool) {
 			var probe struct {
 				Key            string   `json:"key"`
 				EnvironmentIDs []string `json:"environmentIds"`
