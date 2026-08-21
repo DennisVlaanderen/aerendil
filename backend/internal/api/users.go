@@ -53,6 +53,15 @@ func usersGetHandler(w http.ResponseWriter, r *http.Request) error {
 	return ok(w, map[string]any{"users": resp})
 }
 
+func usersGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
+	id := r.PathValue("id")
+	user, found := dataStore.Users().Get(id)
+	if !found {
+		return notFound(CodeNotFoundUser, "user not found")
+	}
+	return ok(w, toUserResponse(user))
+}
+
 func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 	var payload struct {
 		Username string   `json:"username"`
