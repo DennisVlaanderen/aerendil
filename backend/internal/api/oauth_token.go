@@ -7,6 +7,13 @@ import (
 	"aerendil/backend/internal/auth"
 )
 
+// registerOAuthRoutes is unprotected by design, like /api/auth/login. No
+// "POST " prefix so a wrong-method request gets oauthTokenHandler's RFC
+// 6749 error body instead of ServeMux's plain-text 405.
+func registerOAuthRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/api/oauth/token", handleErrors(oauthTokenHandler))
+}
+
 // oauthErrorResponse follows RFC 6749 §5.2 verbatim ({"error",
 // "error_description"}), not this API's usual {"error","code"} shape -- see
 // oauthTokenHandler's doc comment for why.

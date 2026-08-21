@@ -3,8 +3,13 @@ package api
 import (
 	"net/http"
 
+	"aerendil/backend/internal/auth"
 	"aerendil/backend/internal/store"
 )
+
+func registerAuditRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/audits", requirePermission(auth.PermAuditsRead, handleErrors(auditsGetHandler)))
+}
 
 func auditsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	filter := store.AuditFilter{

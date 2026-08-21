@@ -4,8 +4,33 @@ import (
 	"net/http"
 	"strings"
 
+	"aerendil/backend/internal/auth"
 	"aerendil/backend/internal/store"
 )
+
+func registerEnvironmentRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/environments", requirePermission(auth.PermEnvironmentsRead, handleErrors(environmentsGetHandler)))
+	mux.HandleFunc("POST /api/environments", requirePermission(auth.PermEnvironmentsCreate, withAudit(auditConfig{
+		Action:     "environment.create",
+		TargetType: "environment",
+	}, handleErrors(environmentsPostHandler))))
+	mux.HandleFunc("PUT /api/environments/{id}", requirePermission(auth.PermEnvironmentsUpdate, withAudit(auditConfig{
+		Action:     "environment.update",
+		TargetType: "environment",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			e, ok := dataStore.Environments().Get(r.PathValue("id"))
+			return toEnvironmentResponse(e), ok
+		},
+	}, handleErrors(environmentsPutHandler))))
+	mux.HandleFunc("DELETE /api/environments/{id}", requirePermission(auth.PermEnvironmentsDelete, withAudit(auditConfig{
+		Action:     "environment.delete",
+		TargetType: "environment",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			e, ok := dataStore.Environments().Get(r.PathValue("id"))
+			return toEnvironmentResponse(e), ok
+		},
+	}, handleErrors(environmentsDeleteHandler))))
+}
 
 type environmentResponse struct {
 	ID    string `json:"id"`
