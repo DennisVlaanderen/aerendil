@@ -1,12 +1,10 @@
 <script lang="ts">
-	import type { Pathname } from '$app/types';
-	import { resolve } from '$app/paths';
 	import { invalidateAll } from '$app/navigation';
 	import { apiRequest } from '$lib/client/api';
 	import { resolveErrorMessage } from '$lib/errors';
 	import { toast } from '$lib/toast.svelte';
 	import { hasPermission } from '$lib/permissions';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { UserSummary } from '$lib/server/users';
@@ -127,7 +125,7 @@
 							</button>
 						{/if}
 						<a
-							href={resolve(localizeHref(`/dashboard/users/${user.id}`) as Pathname)}
+							href={localizedResolve(`/dashboard/users/${user.id}`)}
 							class="flex size-8 items-center justify-center rounded-lg text-ink-muted no-underline hover:bg-line-3"
 							aria-label={m.users_view_details()}
 						>

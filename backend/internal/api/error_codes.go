@@ -60,6 +60,7 @@ const (
 
 	// NF -- not found (404), one group per domain.
 	CodeNotFoundUser                  = "NF01-0001"
+	CodeNotFoundFlag                  = "NF02-0001"
 	CodeNotFoundEnvironment           = "NF03-0001"
 	CodeNotFoundGroup                 = "NF04-0001"
 	CodeNotFoundApplicationCredential = "NF05-0001"

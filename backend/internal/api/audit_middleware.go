@@ -123,13 +123,16 @@ func (a *auditRecorder) Write(p []byte) (int, error) {
 }
 
 // targetIDFrom resolves the audited entity's identity: path {id} for
-// PUT/DELETE, else "id" or "key" sniffed from the response body (flags POST
-// reads it from the first element of {"flags": [...]}, since one
-// multi-environment create can span several records). Empty for a rejected
-// create.
+// PUT/DELETE, path {key} for flags PUT/DELETE (flags have no single {id}),
+// else "id" or "key" sniffed from the response body (flags POST reads it
+// from the first element of {"flags": [...]}, since one multi-environment
+// create can span several records). Empty for a rejected create.
 func targetIDFrom(r *http.Request, respBody []byte) string {
 	if id := r.PathValue("id"); id != "" {
 		return id
+	}
+	if key := r.PathValue("key"); key != "" {
+		return key
 	}
 	var probe struct {
 		ID    string `json:"id"`

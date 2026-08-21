@@ -1,8 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { resolve } from '$app/paths';
-	import type { Pathname } from '$app/types';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { apiRequest } from '$lib/client/api';
 	import { resolveErrorMessage } from '$lib/errors';
 	import { m } from '$lib/paraglide/messages.js';
@@ -45,9 +43,9 @@
 		// there if that's actually one of the environments this flag just
 		// landed in, otherwise the detail page would 404.
 		if (environmentIds.includes(data.selectedEnvironmentId ?? '')) {
-			await goto(resolve(localizeHref(`/dashboard/flags/${encodeURIComponent(key)}`) as Pathname));
+			await goto(localizedResolve(`/dashboard/flags/${encodeURIComponent(key)}`));
 		} else {
-			await goto(resolve(localizeHref('/dashboard') as Pathname));
+			await goto(localizedResolve('/dashboard'));
 		}
 	}
 </script>

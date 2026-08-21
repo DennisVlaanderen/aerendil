@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import { apiRequest } from '$lib/client/api';
 	import { resolveErrorMessage } from '$lib/errors';
 	import LocaleSwitcher from '$lib/components/LocaleSwitcher.svelte';
-	import { localizeHref } from '$lib/paraglide/runtime';
+	import { localizedResolve } from '$lib/localizedResolve';
 	import { m } from '$lib/paraglide/messages.js';
-	import type { Pathname } from '$app/types';
 
 	let isSubmitting = $state(false);
 	let errorMessage = $state('');
@@ -33,7 +31,7 @@
 			return;
 		}
 
-		await goto(resolve(localizeHref('/dashboard') as Pathname));
+		await goto(localizedResolve('/dashboard'));
 	}
 </script>
 
