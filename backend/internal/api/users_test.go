@@ -30,7 +30,7 @@ func TestUsersGetByIDRequiresPermission(t *testing.T) {
 	createToken := tokenFor(t, auth.PermUsersCreate)
 	id := createUser(t, mux, createToken, "getbyid-noperm", "s3cret!!", nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/users/"+id, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/users/"+id, nil)
 	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -43,7 +43,7 @@ func TestUsersGetByIDRequiresPermission(t *testing.T) {
 func TestUsersGetByIDReturnsNotFoundForUnknownUser(t *testing.T) {
 	mux := newTestMux(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/users/does-not-exist", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/users/does-not-exist", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermUsersRead))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -58,7 +58,7 @@ func TestUsersGetByIDReturnsUserWithoutExposingPasswordHash(t *testing.T) {
 	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersRead)
 	id := createUser(t, mux, token, "getbyid-found", "s3cret!!", nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/users/"+id, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/users/"+id, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
