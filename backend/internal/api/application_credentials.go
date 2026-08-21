@@ -12,6 +12,38 @@ import (
 	"aerendil/backend/internal/store"
 )
 
+func registerApplicationCredentialRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/application-credentials", requirePermission(auth.PermApplicationCredentialsRead, handleErrors(applicationCredentialsGetHandler)))
+	mux.HandleFunc("POST /api/application-credentials", requirePermission(auth.PermApplicationCredentialsCreate, withAudit(auditConfig{
+		Action:     "applicationCredential.create",
+		TargetType: "applicationCredential",
+	}, handleErrors(applicationCredentialsPostHandler))))
+	mux.HandleFunc("PUT /api/application-credentials/{id}", requirePermission(auth.PermApplicationCredentialsUpdate, withAudit(auditConfig{
+		Action:     "applicationCredential.update",
+		TargetType: "applicationCredential",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			c, ok := dataStore.ApplicationCredentials().Get(r.PathValue("id"))
+			return toApplicationCredentialResponse(c), ok
+		},
+	}, handleErrors(applicationCredentialsPutHandler))))
+	mux.HandleFunc("DELETE /api/application-credentials/{id}", requirePermission(auth.PermApplicationCredentialsDelete, withAudit(auditConfig{
+		Action:     "applicationCredential.delete",
+		TargetType: "applicationCredential",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			c, ok := dataStore.ApplicationCredentials().Get(r.PathValue("id"))
+			return toApplicationCredentialResponse(c), ok
+		},
+	}, handleErrors(applicationCredentialsDeleteHandler))))
+	mux.HandleFunc("POST /api/application-credentials/{id}/rotate", requirePermission(auth.PermApplicationCredentialsUpdate, withAudit(auditConfig{
+		Action:     "applicationCredential.rotate",
+		TargetType: "applicationCredential",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			c, ok := dataStore.ApplicationCredentials().Get(r.PathValue("id"))
+			return toApplicationCredentialResponse(c), ok
+		},
+	}, handleErrors(applicationCredentialsRotateHandler))))
+}
+
 // applicationCredentialResponse never includes ClientSecretHash -- secret
 // hashes never leave the store/auth layers, same discipline as
 // userResponse never including PasswordHash.

@@ -7,8 +7,34 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"aerendil/backend/internal/auth"
 	"aerendil/backend/internal/store"
 )
+
+func registerUserRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/users", requirePermission(auth.PermUsersRead, handleErrors(usersGetHandler)))
+	mux.HandleFunc("POST /api/users", requirePermission(auth.PermUsersCreate, withAudit(auditConfig{
+		Action:     "user.create",
+		TargetType: "user",
+	}, handleErrors(usersPostHandler))))
+	mux.HandleFunc("GET /api/users/{id}", requirePermission(auth.PermUsersRead, handleErrors(usersGetByIDHandler)))
+	mux.HandleFunc("PUT /api/users/{id}", requirePermission(auth.PermUsersUpdate, withAudit(auditConfig{
+		Action:     "user.update",
+		TargetType: "user",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			u, ok := dataStore.Users().Get(r.PathValue("id"))
+			return toUserResponse(u), ok
+		},
+	}, handleErrors(usersPutHandler))))
+	mux.HandleFunc("DELETE /api/users/{id}", requirePermission(auth.PermUsersDelete, withAudit(auditConfig{
+		Action:     "user.delete",
+		TargetType: "user",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			u, ok := dataStore.Users().Get(r.PathValue("id"))
+			return toUserResponse(u), ok
+		},
+	}, handleErrors(usersDeleteHandler))))
+}
 
 // minPasswordLength is deliberately simple (length only, no complexity
 // rules) -- this is an internal admin tool, not a public consumer app.

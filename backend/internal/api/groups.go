@@ -9,6 +9,30 @@ import (
 	"aerendil/backend/internal/store"
 )
 
+func registerGroupRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/groups", requirePermission(auth.PermGroupsRead, handleErrors(groupsGetHandler)))
+	mux.HandleFunc("POST /api/groups", requirePermission(auth.PermGroupsCreate, withAudit(auditConfig{
+		Action:     "group.create",
+		TargetType: "group",
+	}, handleErrors(groupsPostHandler))))
+	mux.HandleFunc("PUT /api/groups/{id}", requirePermission(auth.PermGroupsUpdate, withAudit(auditConfig{
+		Action:     "group.update",
+		TargetType: "group",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			g, ok := dataStore.Groups().Get(r.PathValue("id"))
+			return toGroupResponse(g), ok
+		},
+	}, handleErrors(groupsPutHandler))))
+	mux.HandleFunc("DELETE /api/groups/{id}", requirePermission(auth.PermGroupsDelete, withAudit(auditConfig{
+		Action:     "group.delete",
+		TargetType: "group",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			g, ok := dataStore.Groups().Get(r.PathValue("id"))
+			return toGroupResponse(g), ok
+		},
+	}, handleErrors(groupsDeleteHandler))))
+}
+
 type groupResponse struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
