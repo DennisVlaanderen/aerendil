@@ -51,16 +51,18 @@ func run() error {
 	}
 
 	serverErr := make(chan error, 1)
-	go func() {
+	if err := auth.SeedAdminGroupAndUser(flagStore, adminConfigFromEnvironment()); err != nil {
+		return fmt.Errorf("failed to seed admin account: %w", err)
+	}
+
+go func() {
 		log.Println("http api listening on :8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 	}()
 
-	if err := auth.SeedAdminGroupAndUser(flagStore, adminConfigFromEnvironment()); err != nil {
-		return fmt.Errorf("failed to seed admin account: %w", err)
-	}
+	
 
 	select {
 	case err := <-serverErr:
