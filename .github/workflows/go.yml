@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: [ "1.25", "stable" ]
+        go: [ "1.27", "stable" ]
     steps:
     - uses: actions/checkout@v7
       if: needs.changes.outputs.backend == 'true'
