@@ -76,7 +76,7 @@ func groupsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 	group, found := dataStore.Groups().Get(id)
 	if !found {
-		return notFound(CodeNotFoundGroup, "group not found")
+		return notFound(CodeNotFoundGroup, MsgNotFoundGroup)
 	}
 	return ok(w, toGroupResponse(group))
 }
@@ -88,12 +88,12 @@ func groupsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest(CodeBadRequestGroupNameRequired, "name is required")
+		return badRequest(CodeBadRequestGroupNameRequired, MsgBadRequestGroupNameRequired)
 	}
 	if err := validatePermissions(payload.Permissions); err != nil {
 		return badRequest(CodeBadRequestUnknownPermission, err.Error())
@@ -122,7 +122,7 @@ func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	// and returns ErrProtectedSystemGroup, which maps to the same 403.
 	existing, found := dataStore.Groups().Get(id)
 	if !found {
-		return notFound(CodeNotFoundGroup, "group not found")
+		return notFound(CodeNotFoundGroup, MsgNotFoundGroup)
 	}
 
 	var payload struct {
@@ -131,12 +131,12 @@ func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest(CodeBadRequestGroupNameRequired, "name is required")
+		return badRequest(CodeBadRequestGroupNameRequired, MsgBadRequestGroupNameRequired)
 	}
 	if err := validatePermissions(payload.Permissions); err != nil {
 		return badRequest(CodeBadRequestUnknownPermission, err.Error())
@@ -164,7 +164,7 @@ func groupsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	// No pre-check for the Admin group -- see groupsPutHandler; Delete is
 	// the source of truth.
 	if _, found := dataStore.Groups().Get(id); !found {
-		return notFound(CodeNotFoundGroup, "group not found")
+		return notFound(CodeNotFoundGroup, MsgNotFoundGroup)
 	}
 
 	if err := dataStore.Groups().Delete(id); err != nil {

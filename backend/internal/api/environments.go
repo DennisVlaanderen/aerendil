@@ -77,12 +77,12 @@ func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest(CodeBadRequestEnvironmentNameRequired, "name is required")
+		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
 	env, err := dataStore.Environments().Set(store.Environment{
@@ -101,19 +101,19 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 
 	existing, found := dataStore.Environments().Get(id)
 	if !found {
-		return notFound(CodeNotFoundEnvironment, "environment not found")
+		return notFound(CodeNotFoundEnvironment, MsgNotFoundEnvironment)
 	}
 
 	var payload struct {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	name := strings.TrimSpace(payload.Name)
 	if name == "" {
-		return badRequest(CodeBadRequestEnvironmentNameRequired, "name is required")
+		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
 	// Order is fixed at creation (see environmentsPostHandler) and not
@@ -133,7 +133,7 @@ func environmentsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
 	if _, found := dataStore.Environments().Get(id); !found {
-		return notFound(CodeNotFoundEnvironment, "environment not found")
+		return notFound(CodeNotFoundEnvironment, MsgNotFoundEnvironment)
 	}
 
 	if err := dataStore.Environments().Delete(id); err != nil {

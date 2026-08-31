@@ -192,25 +192,24 @@ func TestAdminGroupProtectionAppliesEvenWithoutAPILayerPreCheck(t *testing.T) {
 	_ = mux
 }
 
+// seedGroupForTest creates a non-system group directly through the store,
+// mirroring seedEnvironmentForTest, so GET-by-ID tests don't need to round-
+// trip through the create endpoint.
+func seedGroupForTest(t *testing.T, name string, perms []string) string {
+	t.Helper()
+
+	g, err := dataStore.Groups().Set(store.Group{ID: store.NewID(), Name: name, Permissions: perms})
+	if err != nil {
+		t.Fatalf("seed group %q: %v", name, err)
+	}
+	return g.ID
+}
+
 func TestGroupsGetByIDRequiresPermission(t *testing.T) {
 	mux := newTestMux(t)
-	createToken := tokenFor(t, auth.PermGroupsCreate)
+	id := seedGroupForTest(t, "GetByIDNoPerm", nil)
 
-	body, _ := json.Marshal(map[string]any{"name": "GetByIDNoPerm"})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
-	createReq.Header.Set("Authorization", "Bearer "+createToken)
-	createRec := httptest.NewRecorder()
-	mux.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
-		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
-	}
-	var created map[string]any
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
-	id := created["id"].(string)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/groups/"+id, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/groups/"+id, nil)
 	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -223,7 +222,7 @@ func TestGroupsGetByIDRequiresPermission(t *testing.T) {
 func TestGroupsGetByIDReturnsNotFoundForUnknownGroup(t *testing.T) {
 	mux := newTestMux(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/groups/does-not-exist", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/groups/does-not-exist", nil)
 	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsRead))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -235,23 +234,10 @@ func TestGroupsGetByIDReturnsNotFoundForUnknownGroup(t *testing.T) {
 
 func TestGroupsGetByIDReturnsGroup(t *testing.T) {
 	mux := newTestMux(t)
-	token := tokenFor(t, auth.PermGroupsCreate, auth.PermGroupsRead)
+	token := tokenFor(t, auth.PermGroupsRead)
+	id := seedGroupForTest(t, "GetByIDFound", []string{auth.PermFlagsRead})
 
-	body, _ := json.Marshal(map[string]any{"name": "GetByIDFound", "permissions": []string{auth.PermFlagsRead}})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
-	createReq.Header.Set("Authorization", "Bearer "+token)
-	createRec := httptest.NewRecorder()
-	mux.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
-		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
-	}
-	var created map[string]any
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
-	id := created["id"].(string)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/groups/"+id, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/groups/"+id, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)

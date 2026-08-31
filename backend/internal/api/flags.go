@@ -58,12 +58,12 @@ func registerFlagRoutes(mux *http.ServeMux) {
 func flagsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
 	if environmentID == "" {
-		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, "environmentId is required")
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, MsgBadRequestFlagsEnvironmentIDRequired)
 	}
 
 	principal, found := principalFromContext(r)
 	if !found || !principal.hasEnvironmentAccess(environmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	return ok(w, map[string]any{"flags": dataStore.Flags().List(environmentID)})
@@ -77,7 +77,7 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 	if strings.TrimSpace(payload.Key) == "" {
 		return badRequest(CodeBadRequestFlagsKeyRequired, "key is required")
@@ -90,11 +90,11 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	// whole request, matching SetMany's atomic-across-environments intent.
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 	for _, envID := range payload.EnvironmentIDs {
 		if !principal.hasEnvironmentAccess(envID) {
-			return forbidden(CodeAuthForbidden, "forbidden")
+			return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 		}
 	}
 	for _, envID := range payload.EnvironmentIDs {
@@ -114,16 +114,16 @@ func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	key := r.PathValue("key")
 	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
 	if environmentID == "" {
-		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, "environmentId is required")
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, MsgBadRequestFlagsEnvironmentIDRequired)
 	}
 
 	principal, found := principalFromContext(r)
 	if !found || !principal.hasEnvironmentAccess(environmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	if _, exists := dataStore.Flags().Get(environmentID, key); !exists {
-		return notFound(CodeNotFoundFlag, "flag not found")
+		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
 
 	var payload struct {
@@ -131,7 +131,7 @@ func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		Value   string `json:"value"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	flag, err := dataStore.Flags().Set(store.Flag{
@@ -150,16 +150,16 @@ func flagsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	key := r.PathValue("key")
 	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
 	if environmentID == "" {
-		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, "environmentId is required")
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, MsgBadRequestFlagsEnvironmentIDRequired)
 	}
 
 	principal, found := principalFromContext(r)
 	if !found || !principal.hasEnvironmentAccess(environmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	if _, exists := dataStore.Flags().Get(environmentID, key); !exists {
-		return notFound(CodeNotFoundFlag, "flag not found")
+		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
 
 	if err := dataStore.Flags().Delete(environmentID, key); err != nil {

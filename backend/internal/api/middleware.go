@@ -72,7 +72,7 @@ func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if !principal.IsAdmin && !principal.Perms.Has(perm) {
-			writeError(w, http.StatusForbidden, CodeAuthForbidden, "forbidden")
+			writeError(w, http.StatusForbidden, CodeAuthForbidden, MsgAuthForbidden)
 			return
 		}
 
