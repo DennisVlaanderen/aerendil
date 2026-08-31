@@ -44,6 +44,7 @@ const (
 	MsgMethodNotAllowed = "method not allowed"
 
 	// IE01 -- internal error.
+	//nolint:gosec // G101: false positive -- this is client-facing error text, not a credential
 	MsgInternalPasswordHash = "failed to hash password"
 )
 
