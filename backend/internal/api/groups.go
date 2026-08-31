@@ -15,6 +15,7 @@ func registerGroupRoutes(mux *http.ServeMux) {
 		Action:     "group.create",
 		TargetType: "group",
 	}, handleErrors(groupsPostHandler))))
+	mux.HandleFunc("GET /api/groups/{id}", requirePermission(auth.PermGroupsRead, handleErrors(groupsGetByIDHandler)))
 	mux.HandleFunc("PUT /api/groups/{id}", requirePermission(auth.PermGroupsUpdate, withAudit(auditConfig{
 		Action:     "group.update",
 		TargetType: "group",
@@ -69,6 +70,15 @@ func groupsGetHandler(w http.ResponseWriter, r *http.Request) error {
 		resp = append(resp, toGroupResponse(g))
 	}
 	return ok(w, map[string]any{"groups": resp})
+}
+
+func groupsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
+	id := r.PathValue("id")
+	group, found := dataStore.Groups().Get(id)
+	if !found {
+		return notFound(CodeNotFoundGroup, "group not found")
+	}
+	return ok(w, toGroupResponse(group))
 }
 
 func groupsPostHandler(w http.ResponseWriter, r *http.Request) error {

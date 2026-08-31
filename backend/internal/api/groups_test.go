@@ -192,6 +192,86 @@ func TestAdminGroupProtectionAppliesEvenWithoutAPILayerPreCheck(t *testing.T) {
 	_ = mux
 }
 
+func TestGroupsGetByIDRequiresPermission(t *testing.T) {
+	mux := newTestMux(t)
+	createToken := tokenFor(t, auth.PermGroupsCreate)
+
+	body, _ := json.Marshal(map[string]any{"name": "GetByIDNoPerm"})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
+	createReq.Header.Set("Authorization", "Bearer "+createToken)
+	createRec := httptest.NewRecorder()
+	mux.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	id := created["id"].(string)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/groups/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without groups:read, got %d", rec.Code)
+	}
+}
+
+func TestGroupsGetByIDReturnsNotFoundForUnknownGroup(t *testing.T) {
+	mux := newTestMux(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/groups/does-not-exist", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown group, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGroupsGetByIDReturnsGroup(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermGroupsCreate, auth.PermGroupsRead)
+
+	body, _ := json.Marshal(map[string]any{"name": "GetByIDFound", "permissions": []string{auth.PermFlagsRead}})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/groups", bytes.NewReader(body))
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRec := httptest.NewRecorder()
+	mux.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	id := created["id"].(string)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/groups/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if raw["id"] != id {
+		t.Fatalf("expected id %q in response, got %+v", id, raw)
+	}
+	if raw["name"] != "GetByIDFound" {
+		t.Fatalf("expected name %q in response, got %+v", "GetByIDFound", raw)
+	}
+}
+
 func TestGroupsDeleteReturnsNotFoundForUnknownGroup(t *testing.T) {
 	mux := newTestMux(t)
 
