@@ -76,6 +76,59 @@ func TestEnvironmentsFullCRUD(t *testing.T) {
 	}
 }
 
+func TestEnvironmentsGetByIDRequiresPermission(t *testing.T) {
+	mux := newTestMux(t)
+	id := seedEnvironmentForTest(t, "GetByIDNoPerm")
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/environments/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without environments:read, got %d", rec.Code)
+	}
+}
+
+func TestEnvironmentsGetByIDReturnsNotFoundForUnknownID(t *testing.T) {
+	mux := newTestMux(t)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/environments/does-not-exist", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermEnvironmentsRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown environment, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestEnvironmentsGetByIDReturnsEnvironment(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermEnvironmentsRead)
+	id := seedEnvironmentForTest(t, "GetByIDFound")
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/environments/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if raw["id"] != id {
+		t.Fatalf("expected id %q in response, got %+v", id, raw)
+	}
+	if raw["name"] != "GetByIDFound" {
+		t.Fatalf("expected name %q in response, got %+v", "GetByIDFound", raw)
+	}
+}
+
 func TestEnvironmentsPutIgnoresClientSuppliedOrder(t *testing.T) {
 	mux := newTestMux(t)
 	token := tokenFor(t, auth.PermEnvironmentsCreate, auth.PermEnvironmentsUpdate)

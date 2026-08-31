@@ -14,6 +14,7 @@ func registerEnvironmentRoutes(mux *http.ServeMux) {
 		Action:     "environment.create",
 		TargetType: "environment",
 	}, handleErrors(environmentsPostHandler))))
+	mux.HandleFunc("GET /api/environments/{id}", requirePermission(auth.PermEnvironmentsRead, handleErrors(environmentsGetByIDHandler)))
 	mux.HandleFunc("PUT /api/environments/{id}", requirePermission(auth.PermEnvironmentsUpdate, withAudit(auditConfig{
 		Action:     "environment.update",
 		TargetType: "environment",
@@ -70,6 +71,15 @@ func environmentsGetHandler(w http.ResponseWriter, r *http.Request) error {
 		resp = append(resp, toEnvironmentResponse(e))
 	}
 	return ok(w, map[string]any{"environments": resp})
+}
+
+func environmentsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
+	id := r.PathValue("id")
+	env, found := dataStore.Environments().Get(id)
+	if !found {
+		return notFound(CodeNotFoundEnvironment, MsgNotFoundEnvironment)
+	}
+	return ok(w, toEnvironmentResponse(env))
 }
 
 func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
