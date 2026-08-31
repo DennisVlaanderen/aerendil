@@ -9,7 +9,7 @@ func registerAuthRoutes(mux *http.ServeMux) {
 
 func loginHandler(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodPost {
-		return methodNotAllowed(CodeMethodNotAllowed, "method not allowed")
+		return methodNotAllowed(CodeMethodNotAllowed, MsgMethodNotAllowed)
 	}
 
 	var payload struct {
@@ -17,7 +17,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) error {
 		Password string `json:"password"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	user, err := authService.Authenticate(payload.Username, payload.Password)
@@ -38,7 +38,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) error {
 
 func meHandler(w http.ResponseWriter, r *http.Request) error {
 	if r.Method != http.MethodGet {
-		return methodNotAllowed(CodeMethodNotAllowed, "method not allowed")
+		return methodNotAllowed(CodeMethodNotAllowed, MsgMethodNotAllowed)
 	}
 
 	principal, found := authenticateRequest(w, r)

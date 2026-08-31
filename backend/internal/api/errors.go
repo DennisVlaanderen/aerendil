@@ -50,7 +50,7 @@ func internalError(code, message string) error {
 func storeErrorToAPIError(err error) *apiError {
 	switch {
 	case errors.Is(err, store.ErrUsernameTaken):
-		return &apiError{http.StatusConflict, CodeConflictUsernameTaken, "username is already taken"}
+		return &apiError{http.StatusConflict, CodeConflictUsernameTaken, MsgConflictUsernameTaken}
 	case errors.Is(err, store.ErrLastAdmin):
 		return &apiError{http.StatusForbidden, CodeBusinessLastAdmin, err.Error()}
 	case errors.Is(err, store.ErrProtectedSystemGroup):

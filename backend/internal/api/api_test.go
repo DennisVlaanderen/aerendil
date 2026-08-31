@@ -77,7 +77,7 @@ func TestHandleErrorsMapsUsernameTakenTo409(t *testing.T) {
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "username is already taken") {
+	if !strings.Contains(rec.Body.String(), MsgConflictUsernameTaken) {
 		t.Fatalf("expected a clear username-taken message, got %s", rec.Body.String())
 	}
 }

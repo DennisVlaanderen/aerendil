@@ -192,6 +192,72 @@ func TestAdminGroupProtectionAppliesEvenWithoutAPILayerPreCheck(t *testing.T) {
 	_ = mux
 }
 
+// seedGroupForTest creates a non-system group directly through the store,
+// mirroring seedEnvironmentForTest, so GET-by-ID tests don't need to round-
+// trip through the create endpoint.
+func seedGroupForTest(t *testing.T, name string, perms []string) string {
+	t.Helper()
+
+	g, err := dataStore.Groups().Set(store.Group{ID: store.NewID(), Name: name, Permissions: perms})
+	if err != nil {
+		t.Fatalf("seed group %q: %v", name, err)
+	}
+	return g.ID
+}
+
+func TestGroupsGetByIDRequiresPermission(t *testing.T) {
+	mux := newTestMux(t)
+	id := seedGroupForTest(t, "GetByIDNoPerm", nil)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/groups/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without groups:read, got %d", rec.Code)
+	}
+}
+
+func TestGroupsGetByIDReturnsNotFoundForUnknownGroup(t *testing.T) {
+	mux := newTestMux(t)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/groups/does-not-exist", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermGroupsRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown group, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGroupsGetByIDReturnsGroup(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermGroupsRead)
+	id := seedGroupForTest(t, "GetByIDFound", []string{auth.PermFlagsRead})
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/groups/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if raw["id"] != id {
+		t.Fatalf("expected id %q in response, got %+v", id, raw)
+	}
+	if raw["name"] != "GetByIDFound" {
+		t.Fatalf("expected name %q in response, got %+v", "GetByIDFound", raw)
+	}
+}
+
 func TestGroupsDeleteReturnsNotFoundForUnknownGroup(t *testing.T) {
 	mux := newTestMux(t)
 

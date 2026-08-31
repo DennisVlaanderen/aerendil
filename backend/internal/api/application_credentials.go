@@ -93,7 +93,7 @@ func generateClientSecret() (string, error) {
 // applicationCredentialNotFound is the shared 404 for every route addressed
 // by {id} (PUT/DELETE/rotate), so the message/code can't drift between them.
 func applicationCredentialNotFound() error {
-	return notFound(CodeNotFoundApplicationCredential, "application credential not found")
+	return notFound(CodeNotFoundApplicationCredential, MsgNotFoundApplicationCredential)
 }
 
 // validateCredentialName trims and validates a credential's Name field --
@@ -126,15 +126,15 @@ func validateCredentialScopes(scopes []string) error {
 func applicationCredentialsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
 	if environmentID == "" {
-		return badRequest(CodeBadRequestCredentialEnvironmentRequired, "environmentId is required")
+		return badRequest(CodeBadRequestCredentialEnvironmentRequired, MsgBadRequestCredentialEnvironmentRequired)
 	}
 	if !principal.hasEnvironmentAccess(environmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	creds := dataStore.ApplicationCredentials().List()
@@ -151,7 +151,7 @@ func applicationCredentialsGetHandler(w http.ResponseWriter, r *http.Request) er
 func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	var payload struct {
@@ -160,7 +160,7 @@ func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) e
 		Scopes        []string `json:"scopes"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	// Checked as soon as the target environment is known, before any other
@@ -168,10 +168,10 @@ func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) e
 	// the payload.
 	environmentID := strings.TrimSpace(payload.EnvironmentID)
 	if environmentID == "" {
-		return badRequest(CodeBadRequestCredentialEnvironmentRequired, "environmentId is required")
+		return badRequest(CodeBadRequestCredentialEnvironmentRequired, MsgBadRequestCredentialEnvironmentRequired)
 	}
 	if !principal.hasEnvironmentAccess(environmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	name, err := validateCredentialName(payload.Name)
@@ -210,7 +210,7 @@ func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) e
 func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	id := r.PathValue("id")
@@ -219,7 +219,7 @@ func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) er
 		return applicationCredentialNotFound()
 	}
 	if !principal.hasEnvironmentAccess(existing.EnvironmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	// Pointers so an omitted field means "unchanged" rather than decoding as
@@ -231,7 +231,7 @@ func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) er
 		Active *bool     `json:"active"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
-		return badRequest(CodeBadRequestBody, "invalid request body")
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
 	name, err := validateCredentialName(payload.Name)
@@ -273,7 +273,7 @@ func applicationCredentialsPutHandler(w http.ResponseWriter, r *http.Request) er
 func applicationCredentialsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	id := r.PathValue("id")
@@ -282,7 +282,7 @@ func applicationCredentialsDeleteHandler(w http.ResponseWriter, r *http.Request)
 		return applicationCredentialNotFound()
 	}
 	if !principal.hasEnvironmentAccess(existing.EnvironmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	if err := dataStore.ApplicationCredentials().Delete(id); err != nil {
@@ -297,7 +297,7 @@ func applicationCredentialsDeleteHandler(w http.ResponseWriter, r *http.Request)
 func applicationCredentialsRotateHandler(w http.ResponseWriter, r *http.Request) error {
 	principal, found := principalFromContext(r)
 	if !found {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	id := r.PathValue("id")
@@ -306,7 +306,7 @@ func applicationCredentialsRotateHandler(w http.ResponseWriter, r *http.Request)
 		return applicationCredentialNotFound()
 	}
 	if !principal.hasEnvironmentAccess(existing.EnvironmentID) {
-		return forbidden(CodeAuthForbidden, "forbidden")
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
 	secret, hash, err := newHashedClientSecret()
