@@ -55,14 +55,12 @@ func run() error {
 		return fmt.Errorf("failed to seed admin account: %w", err)
 	}
 
-go func() {
+	go func() {
 		log.Println("http api listening on :8080")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 	}()
-
-	
 
 	select {
 	case err := <-serverErr:
