@@ -45,10 +45,7 @@ func run() error {
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux, flagStore)
 
-	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: mux,
-	}
+	srv := newAPIServer(mux)
 
 	serverErr := make(chan error, 1)
 	if err := auth.SeedAdminGroupAndUser(flagStore, adminConfigFromEnvironment()); err != nil {
@@ -76,6 +73,21 @@ func run() error {
 	}
 
 	return nil
+}
+
+
+// newAPIServer builds the HTTP API server with explicit timeouts so slow or
+// incomplete clients (e.g. Slowloris) cannot hold connections open forever.
+// Values match common Go net/http guidance and can be tuned with traffic.
+func newAPIServer(handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              ":8080",
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
 }
 
 func storeConfigFromEnvironment() store.Config {

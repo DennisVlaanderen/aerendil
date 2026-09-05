@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+	"time"
+)
 
 func TestIsProductionEnvironment(t *testing.T) {
 	cases := []struct {
@@ -42,5 +46,21 @@ func TestAdminConfigFromEnvironmentFallsBackInDevelopment(t *testing.T) {
 	cfg := adminConfigFromEnvironment()
 	if cfg.Username != "admin" || cfg.Password != "admin123" {
 		t.Fatalf("expected default insecure admin credentials, got %+v", cfg)
+	}
+}
+
+func TestNewAPIServerTimeouts(t *testing.T) {
+	srv := newAPIServer(http.NewServeMux())
+	if srv.ReadHeaderTimeout != 5*time.Second {
+		t.Fatalf("ReadHeaderTimeout = %v, want 5s", srv.ReadHeaderTimeout)
+	}
+	if srv.ReadTimeout != 10*time.Second {
+		t.Fatalf("ReadTimeout = %v, want 10s", srv.ReadTimeout)
+	}
+	if srv.WriteTimeout != 10*time.Second {
+		t.Fatalf("WriteTimeout = %v, want 10s", srv.WriteTimeout)
+	}
+	if srv.IdleTimeout != 120*time.Second {
+		t.Fatalf("IdleTimeout = %v, want 120s", srv.IdleTimeout)
 	}
 }
