@@ -98,6 +98,85 @@ func TestApplicationCredentialsFullCRUD(t *testing.T) {
 	}
 }
 
+func TestApplicationCredentialsGetByID(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermApplicationCredentialsCreate, auth.PermApplicationCredentialsRead)
+
+	id, secret := createApplicationCredentialForTest(t, mux, token, "billing-service", envID, []string{auth.PermFlagsRead})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/application-credentials/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected get-by-id to succeed, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+	if got["id"] != id {
+		t.Fatalf("expected credential id %q, got %+v", id, got)
+	}
+	if got["name"] != "billing-service" {
+		t.Fatalf("expected name %q, got %+v", "billing-service", got)
+	}
+	if _, hasSecret := got["clientSecret"]; hasSecret {
+		t.Fatal("expected get-by-id response to never include clientSecret")
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte(secret)) {
+		t.Fatal("expected get-by-id response to never leak the plaintext client secret")
+	}
+}
+
+func TestApplicationCredentialsGetByIDReturnsNotFoundForUnknownID(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermApplicationCredentialsRead)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/application-credentials/does-not-exist", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 getting an unknown credential, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestApplicationCredentialsGetByIDRejectsMissingPermission(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	adminToken := tokenForWithEnvironments(t, []string{envID}, auth.PermApplicationCredentialsCreate)
+	id, _ := createApplicationCredentialForTest(t, mux, adminToken, "billing-service", envID, nil)
+
+	token := tokenFor(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/application-credentials/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without applicationCredentials:read, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestApplicationCredentialsGetByIDRejectsInaccessibleEnvironment(t *testing.T) {
+	mux := newTestMux(t)
+	staging := seedEnvironmentForTest(t, "Staging")
+	production := seedEnvironmentForTest(t, "Production")
+	adminToken := tokenForWithEnvironments(t, []string{production}, auth.PermApplicationCredentialsCreate)
+	id, _ := createApplicationCredentialForTest(t, mux, adminToken, "billing-service", production, nil)
+
+	restrictedToken := tokenForWithEnvironments(t, []string{staging}, auth.PermApplicationCredentialsRead)
+	req := httptest.NewRequest(http.MethodGet, "/api/application-credentials/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+restrictedToken)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 getting a credential in an inaccessible environment, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestApplicationCredentialsPutLeavesOmittedFieldsUnchanged(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")

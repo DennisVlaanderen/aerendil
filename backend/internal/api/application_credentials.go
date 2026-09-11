@@ -14,6 +14,7 @@ import (
 
 func registerApplicationCredentialRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/application-credentials", requirePermission(auth.PermApplicationCredentialsRead, handleErrors(applicationCredentialsGetHandler)))
+	mux.HandleFunc("GET /api/application-credentials/{id}", requirePermission(auth.PermApplicationCredentialsRead, handleErrors(applicationCredentialsGetByIDHandler)))
 	mux.HandleFunc("POST /api/application-credentials", requirePermission(auth.PermApplicationCredentialsCreate, withAudit(auditConfig{
 		Action:     "applicationCredential.create",
 		TargetType: "applicationCredential",
@@ -146,6 +147,22 @@ func applicationCredentialsGetHandler(w http.ResponseWriter, r *http.Request) er
 		resp = append(resp, toApplicationCredentialResponse(c))
 	}
 	return ok(w, map[string]any{"applicationCredentials": resp})
+}
+
+func applicationCredentialsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
+	principal, found := principalFromContext(r)
+	if !found {
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
+	}
+
+	cred, found := dataStore.ApplicationCredentials().Get(r.PathValue("id"))
+	if !found {
+		return applicationCredentialNotFound()
+	}
+	if !principal.hasEnvironmentAccess(cred.EnvironmentID) {
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
+	}
+	return ok(w, toApplicationCredentialResponse(cred))
 }
 
 func applicationCredentialsPostHandler(w http.ResponseWriter, r *http.Request) error {
