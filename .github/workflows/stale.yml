@@ -1,0 +1,53 @@
+# Marks pull requests stale after a period of inactivity and closes them if
+# still inactive after a grace period, using GitHub's official stale action:
+# https://github.com/actions/stale
+#
+# Aimed at PRs that get opened with a single commit and then never get
+# pushed to again after review feedback. Note that any activity (a new
+# commit, a comment, a label change) resets the stale timer, so a PR under
+# active discussion won't be swept up even if the author hasn't pushed a
+# fix yet -- this only catches PRs that have gone fully quiet.
+#
+# Issues are left untouched entirely; this only processes pull requests.
+
+name: Stale PRs
+
+on:
+  schedule:
+    - cron: "30 2 * * *" # daily, 02:30 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: stale-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/stale@v11
+        with:
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+          exempt-draft-pr: true
+          exempt-pr-labels: pinned,do-not-close
+          stale-pr-label: stale
+          remove-stale-when-updated: true
+          stale-pr-message: >
+            This pull request has been automatically marked as stale because
+            it has had no activity for 30 days. If no further activity
+            occurs, it will be closed in 7 days. Push a commit or leave a
+            comment to keep it open, or add the `pinned` label if it should
+            never be auto-closed.
+          close-pr-message: >
+            This pull request was closed because it has been stale for 7
+            days with no further activity. Feel free to reopen it if you
+            pick the work back up.
