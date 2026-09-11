@@ -75,10 +75,6 @@ func run() error {
 	return nil
 }
 
-
-// newAPIServer builds the HTTP API server with explicit timeouts so slow or
-// incomplete clients (e.g. Slowloris) cannot hold connections open forever.
-// Values match common Go net/http guidance and can be tuned with traffic.
 func newAPIServer(handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              ":8080",
