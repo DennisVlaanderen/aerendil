@@ -5,7 +5,7 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       AERENDIL_RAFT_NODE_ID: node1
-      AERENDIL_RAFT_BIND_ADDR: ":9100"
+      AERENDIL_RAFT_BIND_ADDR: "127.0.0.1:9100"
       AERENDIL_RAFT_DATA_DIR: /data
       AERENDIL_RAFT_BOOTSTRAP: "true"
       AERENDIL_JWT_SECRET: ${AERENDIL_JWT_SECRET:-aerendil-dev-secret}
