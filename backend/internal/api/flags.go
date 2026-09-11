@@ -12,6 +12,7 @@ import (
 
 func registerFlagRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flags", requirePermission(auth.PermFlagsRead, handleErrors(flagsGetHandler)))
+	mux.HandleFunc("GET /api/flags/{key}", requirePermission(auth.PermFlagsRead, handleErrors(flagsGetByKeyHandler)))
 	mux.HandleFunc("POST /api/flags", requirePermission(auth.PermFlagsWrite, withAudit(auditConfig{
 		Action:     "flag.set",
 		TargetType: "flag",
@@ -67,6 +68,25 @@ func flagsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return ok(w, map[string]any{"flags": dataStore.Flags().List(environmentID)})
+}
+
+func flagsGetByKeyHandler(w http.ResponseWriter, r *http.Request) error {
+	key := r.PathValue("key")
+	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
+	if environmentID == "" {
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, MsgBadRequestFlagsEnvironmentIDRequired)
+	}
+
+	principal, found := principalFromContext(r)
+	if !found || !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
+	}
+
+	flag, exists := dataStore.Flags().Get(environmentID, key)
+	if !exists {
+		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
+	}
+	return ok(w, flag)
 }
 
 func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {

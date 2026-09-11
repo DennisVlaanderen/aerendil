@@ -275,6 +275,92 @@ func TestFlagsPutRequiresPermFlagsUpdate(t *testing.T) {
 	}
 }
 
+func TestFlagsGetByKeyReturnsFlag(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
+
+	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRec := httptest.NewRecorder()
+	mux.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusOK {
+		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags/checkout?environmentId="+envID, nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getRec := httptest.NewRecorder()
+	mux.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected get to succeed, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	var got store.Flag
+	if err := json.Unmarshal(getRec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+	if got.Key != "checkout" || !got.Enabled || got.Value != "on" || got.EnvironmentID != envID {
+		t.Fatalf("unexpected flag returned: %+v", got)
+	}
+}
+
+func TestFlagsGetByKeyReturnsNotFoundForUnknownFlag(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead)
+
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags/does-not-exist?environmentId="+envID, nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getRec := httptest.NewRecorder()
+	mux.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 getting an unknown flag, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+}
+
+func TestFlagsGetByKeyRequiresEnvironmentID(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead)
+
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags/checkout", nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getRec := httptest.NewRecorder()
+	mux.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 getting a flag without environmentId, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+}
+
+func TestFlagsGetByKeyRequiresPermFlagsRead(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
+
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags/checkout?environmentId="+envID, nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getRec := httptest.NewRecorder()
+	mux.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 getting a flag without flags:read, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+}
+
+func TestFlagsGetByKeyRequiresEnvironmentAccess(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	token := tokenFor(t, auth.PermFlagsRead)
+
+	getReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/flags/checkout?environmentId="+envID, nil)
+	getReq.Header.Set("Authorization", "Bearer "+token)
+	getRec := httptest.NewRecorder()
+	mux.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 getting a flag for an environment the token isn't scoped to, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+}
+
 func TestFlagsPutRequiresUpdateNotJustWrite(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
