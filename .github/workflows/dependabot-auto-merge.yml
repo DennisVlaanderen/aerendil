@@ -1,0 +1,86 @@
+# Auto-merges Dependabot pull requests once GitHub's public compatibility
+# data says the update is safe and every other required check has passed.
+#
+# Runs as `pull_request_target` (not `pull_request`) because Dependabot-
+# triggered `pull_request` events get a read-only GITHUB_TOKEN, which can't
+# merge anything -- see
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions#enabling-auto-merge-on-a-pull-request.
+# `pull_request_target` always runs the workflow file from the base branch
+# (this file, not whatever a PR author's branch contains) and never checks
+# out the PR's own code, so there's nothing here for an attacker to hijack
+# by pushing to the PR branch -- every step below only talks to the GitHub
+# API via the trusted event payload.
+#
+# Prerequisites this workflow can't configure for you:
+#   - Repository setting "Allow auto-merge" must be enabled (Settings >
+#     General), otherwise the `gh pr merge --auto` step fails outright.
+#   - Branch protection on `main` should have required status checks (Go,
+#     Node.js, CodeQL, Docker, ...) so GitHub's native auto-merge actually
+#     waits for "all other Actions pass" before merging -- this workflow
+#     only flips the auto-merge switch, it doesn't itself wait for checks.
+#   - A `DEPENDABOT_COMPAT_PAT` repository secret: a PAT (fine-grained,
+#     read-only "Pull requests" + "Metadata" repo permissions is enough)
+#     used only for the compatibility-score lookup. The default
+#     GITHUB_TOKEN is explicitly rejected by dependabot/fetch-metadata for
+#     `compat-lookup` (https://github.com/dependabot/fetch-metadata#compat-lookup).
+
+name: Dependabot Auto-Merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: "${{ secrets.DEPENDABOT_COMPAT_PAT }}"
+          compat-lookup: true
+
+      # A score of 0 is what fetch-metadata returns both when the update
+      # genuinely has 0% known compatibility *and* when no score exists for
+      # it at all (most Go modules and anything without wide public CI
+      # history) -- the action doesn't distinguish the two. We treat "no
+      # score" as non-blocking rather than as a failure: requiring a score
+      # to exist would leave most of this repo's dependency ecosystems
+      # (Go, Docker, GitHub Actions) never auto-merging, since compatibility
+      # scores are effectively an npm/pip-ecosystem-only signal.
+      - name: Decide whether the compatibility score clears the bar
+        id: decision
+        run: |
+          score="${{ steps.metadata.outputs.compatibility-score }}"
+          if [ -z "$score" ] || [ "$score" -eq 0 ]; then
+            echo "No known compatibility score for this update; not blocking on it."
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          elif [ "$score" -gt 80 ]; then
+            echo "Compatibility score ${score}% clears the 80% threshold."
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Compatibility score ${score}% is at or below the 80% threshold; leaving for manual review."
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Enabling GitHub's native auto-merge (rather than merging directly)
+      # is what actually satisfies "when all other Actions pass": it defers
+      # the merge until every required status check on this PR succeeds,
+      # and does nothing if the PR is later marked draft or a check fails.
+      - name: Enable auto-merge
+        if: steps.decision.outputs.merge == 'true'
+        run: gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
