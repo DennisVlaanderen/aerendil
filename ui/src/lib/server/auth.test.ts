@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cookies } from '@sveltejs/kit';
 import { getSession, login } from './auth';
-import { ErrorCode } from '$lib/errors';
+import { ErrorCode } from '#lib/errors.ts';
 
 // login()/getSession() call the backend over AERENDIL_API_ORIGIN (default
 // http://127.0.0.1:8080), which only exists in a real deployment. This suite

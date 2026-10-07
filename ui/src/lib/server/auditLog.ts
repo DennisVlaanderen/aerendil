@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 
 export interface AuditEntry {
 	id: number;
@@ -20,8 +20,6 @@ export interface AuditLogFilter {
 	targetId?: string;
 	actorId?: string;
 }
-
-const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 export async function listAuditLog(
 	token: string,

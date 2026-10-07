@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { m } from '$lib/paraglide/messages.js';
-	import { formatTimestamp } from '$lib/formatDate';
+	import { m } from '#lib/paraglide/messages.js';
+	import { formatTimestamp } from '#lib/formatDate.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

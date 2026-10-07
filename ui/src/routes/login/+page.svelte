@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { apiRequest } from '$lib/client/api';
-	import { resolveErrorMessage } from '$lib/errors';
-	import LocaleSwitcher from '$lib/components/LocaleSwitcher.svelte';
-	import { localizedResolve } from '$lib/localizedResolve';
-	import { m } from '$lib/paraglide/messages.js';
+	import { apiRequest } from '#lib/client/api.ts';
+	import { resolveErrorMessage } from '#lib/errors.ts';
+	import LocaleSwitcher from '#lib/components/LocaleSwitcher.svelte';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import { m } from '#lib/paraglide/messages.js';
 
 	let isSubmitting = $state(false);
 	let errorMessage = $state('');

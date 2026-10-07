@@ -1,4 +1,4 @@
-import { m } from '$lib/paraglide/messages.js';
+import { m } from '#lib/paraglide/messages.js';
 
 // Mirrors backend/internal/api/error_codes.go verbatim -- one constant per
 // backend `Code*` value, same "<Category><Group>-<Sequence>" strings, same

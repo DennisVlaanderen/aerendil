@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { localizedResolve } from '$lib/localizedResolve';
-	import { apiRequest } from '$lib/client/api';
-	import { resolveErrorMessage } from '$lib/errors';
-	import { m } from '$lib/paraglide/messages.js';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import { apiRequest } from '#lib/client/api.ts';
+	import { resolveErrorMessage } from '#lib/errors.ts';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

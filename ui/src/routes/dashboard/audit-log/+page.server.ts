@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { getAuthToken } from '$lib/server/auth';
-import { hasPermission } from '$lib/permissions';
-import { listAuditLog } from '$lib/server/auditLog';
+import { getAuthToken } from '#lib/server/auth.ts';
+import { hasPermission } from '#lib/permissions.ts';
+import { listAuditLog } from '#lib/server/auditLog.ts';
 import type { PageServerLoad } from './$types';
 
 // Auth itself is already enforced by dashboard/+layout.server.ts; this load

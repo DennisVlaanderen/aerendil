@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { apiRequest } from '$lib/client/api';
-	import { resolveErrorMessage } from '$lib/errors';
-	import { toast } from '$lib/toast.svelte';
-	import { m } from '$lib/paraglide/messages.js';
-	import type { EnvironmentSummary } from '$lib/server/environments';
+	import { apiRequest } from '#lib/client/api.ts';
+	import { resolveErrorMessage } from '#lib/errors.ts';
+	import { toast } from '#lib/toast.svelte.ts';
+	import { m } from '#lib/paraglide/messages.js';
+	import type { EnvironmentSummary } from '#lib/server/environments.ts';
 
 	let {
 		environments,

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { toast } from '$lib/toast.svelte';
-	import { m } from '$lib/paraglide/messages.js';
+	import { toast } from '#lib/toast.svelte.ts';
+	import { m } from '#lib/paraglide/messages.js';
 </script>
 
 {#if toast.message}

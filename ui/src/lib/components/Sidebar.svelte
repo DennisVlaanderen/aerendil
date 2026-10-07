@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { localizedResolve } from '$lib/localizedResolve';
-	import { m } from '$lib/paraglide/messages.js';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import { m } from '#lib/paraglide/messages.js';
 	import LocaleSwitcher from './LocaleSwitcher.svelte';
-	import type { FlagSummary } from '$lib/server/flags';
-	import { hasPermission } from '$lib/permissions';
-	import { getInitials } from '$lib/initials';
+	import type { FlagSummary } from '#lib/server/flags.ts';
+	import { hasPermission } from '#lib/permissions.ts';
+	import { getInitials } from '#lib/initials.ts';
 
 	let {
 		flags,

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import Sidebar from '$lib/components/Sidebar.svelte';
-	import Header from '$lib/components/Header.svelte';
-	import Toast from '$lib/components/Toast.svelte';
-	import { toast } from '$lib/toast.svelte';
-	import { m } from '$lib/paraglide/messages.js';
+	import Sidebar from '#lib/components/Sidebar.svelte';
+	import Header from '#lib/components/Header.svelte';
+	import Toast from '#lib/components/Toast.svelte';
+	import { toast } from '#lib/toast.svelte.ts';
+	import { m } from '#lib/paraglide/messages.js';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();

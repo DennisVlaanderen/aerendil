@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 
 export interface GroupSummary {
 	id: string;
@@ -41,8 +41,6 @@ export const ALL_PERMISSIONS = [
 export type GroupResult =
 	| { group: GroupSummary; error?: undefined; status?: undefined; code?: undefined }
 	| { group?: undefined; error: string; status: number; code: string };
-
-const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 export async function listGroups(token: string): Promise<GroupSummary[]> {
 	const response = await fetch(`${API_ORIGIN}/api/groups`, {

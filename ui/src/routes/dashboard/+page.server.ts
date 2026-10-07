@@ -1,4 +1,4 @@
-import { readFlash } from '$lib/server/flash';
+import { readFlash } from '#lib/server/flash.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ cookies }) => {

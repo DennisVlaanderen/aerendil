@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 
 export interface FlagSummary {
 	environmentId: string;
@@ -13,8 +13,6 @@ export interface FlagSummary {
 export type FlagsResult =
 	| { flags: FlagSummary[]; error?: undefined; status?: undefined; code?: undefined }
 	| { flags?: undefined; error: string; status: number; code: string };
-
-const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 export async function listFlags(token: string, environmentId: string): Promise<FlagSummary[]> {
 	const response = await fetch(

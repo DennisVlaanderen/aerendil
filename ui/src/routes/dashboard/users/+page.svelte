@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import { apiRequest } from '$lib/client/api';
-	import { resolveErrorMessage } from '$lib/errors';
-	import { toast } from '$lib/toast.svelte';
-	import { hasPermission } from '$lib/permissions';
-	import { localizedResolve } from '$lib/localizedResolve';
-	import { m } from '$lib/paraglide/messages.js';
-	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import type { UserSummary } from '$lib/server/users';
+	import { apiRequest } from '#lib/client/api.ts';
+	import { resolveErrorMessage } from '#lib/errors.ts';
+	import { toast } from '#lib/toast.svelte.ts';
+	import { hasPermission } from '#lib/permissions.ts';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import { m } from '#lib/paraglide/messages.js';
+	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
+	import type { UserSummary } from '#lib/server/users.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

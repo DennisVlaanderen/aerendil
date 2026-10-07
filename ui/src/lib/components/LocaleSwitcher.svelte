@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { getLocale, setLocale, locales, type Locale } from '$lib/paraglide/runtime';
-	import { m } from '$lib/paraglide/messages.js';
+	import { getLocale, setLocale, locales, type Locale } from '#lib/paraglide/runtime.js';
+	import { m } from '#lib/paraglide/messages.js';
 
 	let { compact = false }: { compact?: boolean } = $props();
 

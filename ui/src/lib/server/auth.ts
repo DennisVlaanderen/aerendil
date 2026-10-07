@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { dev } from '$app/environment';
+import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
+import { dev } from '$app/env';
 import type { Cookies } from '@sveltejs/kit';
 import type { EnvironmentSummary } from './environments';
 
@@ -23,7 +23,6 @@ export interface Session {
 
 const AUTH_COOKIE = 'aerendil.auth';
 const SELECTED_ENV_COOKIE = 'aerendil.selected-environment';
-const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 function parseSession(payload: unknown): Session | null {
 	if (typeof payload !== 'object' || payload === null) {

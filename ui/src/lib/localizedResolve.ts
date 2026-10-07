@@ -1,5 +1,5 @@
 import { resolve } from '$app/paths';
-import { localizeHref } from '$lib/paraglide/runtime';
+import { localizeHref } from '#lib/paraglide/runtime.js';
 import type { ResolvedPathname } from '$app/types';
 
 // `resolve()`'s generic overload distributes over every literal in the

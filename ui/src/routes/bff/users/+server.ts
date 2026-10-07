@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
-import { getAuthToken, getSession } from '$lib/server/auth';
-import { hasPermission } from '$lib/permissions';
-import { createUser } from '$lib/server/users';
-import { ErrorCode } from '$lib/errors';
+import { getAuthToken, getSession } from '#lib/server/auth.ts';
+import { hasPermission } from '#lib/permissions.ts';
+import { createUser } from '#lib/server/users.ts';
+import { ErrorCode } from '#lib/errors.ts';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {

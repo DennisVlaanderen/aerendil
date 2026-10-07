@@ -1,5 +1,5 @@
-import type { Locale as _Locale } from '$lib/paraglide/runtime';
-import { browser } from '$app/environment';
+import type { Locale as _Locale } from '#lib/paraglide/runtime.js';
+import { browser } from '$app/env';
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 
@@ -9,7 +9,7 @@ import {
 	overwriteGetLocale,
 	overwriteSetLocale,
 	toLocale
-} from '$lib/paraglide/runtime';
+} from '#lib/paraglide/runtime.js';
 
 export class Locale {
 	#current: _Locale = $state(

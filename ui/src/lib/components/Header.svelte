@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { m } from '$lib/paraglide/messages.js';
-	import { theme } from '$lib/theme.svelte';
-	import { getInitials } from '$lib/initials';
+	import { m } from '#lib/paraglide/messages.js';
+	import { theme } from '#lib/theme.svelte.ts';
+	import { getInitials } from '#lib/initials.ts';
 	import LocaleSwitcher from './LocaleSwitcher.svelte';
 	import EnvironmentSwitcher from './EnvironmentSwitcher.svelte';
-	import type { EnvironmentSummary } from '$lib/server/environments';
+	import type { EnvironmentSummary } from '#lib/server/environments.ts';
 
 	let {
 		username,

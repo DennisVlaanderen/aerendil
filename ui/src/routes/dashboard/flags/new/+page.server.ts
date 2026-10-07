@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { hasPermission } from '$lib/permissions';
+import { hasPermission } from '#lib/permissions.ts';
 import type { PageServerLoad } from './$types';
 
 // data.environments (from dashboard/+layout.server.ts) is already scoped to
