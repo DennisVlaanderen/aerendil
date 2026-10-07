@@ -31,7 +31,7 @@ const (
 
 // command is the single Raft log entry shape for every entity; only the
 // field matching Entity is populated. Schema changes here require wiping
-// the Raft data dir on upgrade (see CLAUDE.md) -- no migration path pre-v1.
+// the Raft data dir on upgrade (see AGENTS.md) -- no migration path pre-v1.
 type command struct {
 	Op                    string                 `json:"op"`
 	Entity                entity                 `json:"entity"`
