@@ -11,6 +11,17 @@
 # by pushing to the PR branch -- every step below only talks to the GitHub
 # API via the trusted event payload.
 #
+# If branch protection on `main` requires approving reviews, this workflow
+# also casts that approval itself (as github-actions[bot], never as
+# dependabot[bot] -- GitHub forbids self-approval, so this only works
+# because the approver and the PR author are different identities) once
+# the compatibility check above clears. Any other branch-protection
+# requirement this workflow can't itself satisfy -- a CODEOWNERS review
+# from a specific human/team, a required check that never goes green, a
+# merge conflict -- leaves the PR exactly where GitHub's native auto-merge
+# puts it: queued and blocked, i.e. waiting on a human, which is the
+# intended fallback rather than a bug to work around here.
+#
 # Prerequisites this workflow can't configure for you:
 #   - Repository setting "Allow auto-merge" must be enabled (Settings >
 #     General), otherwise the `gh pr merge --auto` step fails outright.
@@ -73,6 +84,21 @@ jobs:
             echo "Compatibility score ${score}% is at or below the 80% threshold; leaving for manual review."
             echo "merge=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Satisfies a "require approving reviews" branch-protection rule so
+      # auto-merge isn't left permanently queued waiting on a human who was
+      # never going to review a routine dependency bump. Re-runs on every
+      # `synchronize` (Dependabot rebase/recreate), so a rule that dismisses
+      # stale approvals on new commits gets a fresh approval each time
+      # rather than staying stuck. If a review from a specific person or
+      # team is also required (CODEOWNERS), this approval alone won't clear
+      # it -- the PR stays blocked for that human, same as today.
+      - name: Approve pull request
+        if: steps.decision.outputs.merge == 'true'
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Enabling GitHub's native auto-merge (rather than merging directly)
       # is what actually satisfies "when all other Actions pass": it defers
