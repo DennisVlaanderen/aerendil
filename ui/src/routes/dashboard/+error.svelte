@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { localizedResolve } from '$lib/localizedResolve';
-	import { m } from '$lib/paraglide/messages.js';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import { m } from '#lib/paraglide/messages.js';
 </script>
 
 <svelte:head>

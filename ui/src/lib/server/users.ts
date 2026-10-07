@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 
 export interface UserSummary {
 	id: string;
@@ -15,8 +15,6 @@ export interface UserSummary {
 export type UserResult =
 	| { user: UserSummary; error?: undefined; status?: undefined; code?: undefined }
 	| { user?: undefined; error: string; status: number; code: string };
-
-const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 export async function listUsers(token: string): Promise<UserSummary[]> {
 	const response = await fetch(`${API_ORIGIN}/api/users`, {

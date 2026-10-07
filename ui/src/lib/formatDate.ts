@@ -1,4 +1,4 @@
-import { getLocale } from '$lib/paraglide/runtime';
+import { getLocale } from '#lib/paraglide/runtime.js';
 
 // AuditEntry.timestamp is unix seconds (see backend/internal/store/audit.go).
 export function formatTimestamp(unixSeconds: number): string {

@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { getAuthToken } from '$lib/server/auth';
-import { hasPermission } from '$lib/permissions';
-import { listApplicationCredentials } from '$lib/server/applicationCredentials';
+import { getAuthToken } from '#lib/server/auth.ts';
+import { hasPermission } from '#lib/permissions.ts';
+import { listApplicationCredentials } from '#lib/server/applicationCredentials.ts';
 import type { PageServerLoad } from './$types';
 
 // Same layering as dashboard/groups/+page.server.ts and

@@ -1,4 +1,4 @@
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import type { Cookies } from '@sveltejs/kit';
 
 export type FlashReason = 'route-not-found';

@@ -5,7 +5,7 @@ import {
 	listEnvironments,
 	updateEnvironment
 } from './environments';
-import { ErrorCode } from '$lib/errors';
+import { ErrorCode } from '#lib/errors.ts';
 
 // Same convention as groups.test.ts: fetch is mocked, these are unit tests
 // of the response-handling logic, not integration tests against a live

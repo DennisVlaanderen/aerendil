@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { apiRequest } from '$lib/client/api';
-	import { resolveErrorMessage } from '$lib/errors';
-	import { hasPermission } from '$lib/permissions';
-	import { localizedResolve } from '$lib/localizedResolve';
-	import { m } from '$lib/paraglide/messages.js';
-	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { apiRequest } from '#lib/client/api.ts';
+	import { resolveErrorMessage } from '#lib/errors.ts';
+	import { hasPermission } from '#lib/permissions.ts';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import { m } from '#lib/paraglide/messages.js';
+	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();

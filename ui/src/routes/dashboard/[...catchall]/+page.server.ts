@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { setFlash } from '$lib/server/flash';
+import { setFlash } from '#lib/server/flash.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ cookies }) => {

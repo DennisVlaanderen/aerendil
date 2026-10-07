@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 
 export interface EnvironmentSummary {
 	id: string;
@@ -11,8 +11,6 @@ export interface EnvironmentSummary {
 export type EnvironmentResult =
 	| { environment: EnvironmentSummary; error?: undefined; status?: undefined; code?: undefined }
 	| { environment?: undefined; error: string; status: number; code: string };
-
-const API_ORIGIN = env.AERENDIL_API_ORIGIN?.trim() || 'http://127.0.0.1:8080';
 
 export async function listEnvironments(token: string): Promise<EnvironmentSummary[]> {
 	const response = await fetch(`${API_ORIGIN}/api/environments`, {

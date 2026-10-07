@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGroup, deleteGroup, listGroups, updateGroup } from './groups';
-import { ErrorCode } from '$lib/errors';
+import { ErrorCode } from '#lib/errors.ts';
 
 // Same convention as auth.test.ts: fetch is mocked, these are unit tests of
 // the response-handling logic, not integration tests against a live backend.

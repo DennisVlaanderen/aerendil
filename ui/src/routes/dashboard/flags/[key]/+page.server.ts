@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { getAuthToken } from '$lib/server/auth';
-import { listFlags } from '$lib/server/flags';
+import { getAuthToken } from '#lib/server/auth.ts';
+import { listFlags } from '#lib/server/flags.ts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ cookies, params, parent }) => {

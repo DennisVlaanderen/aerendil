@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { getAuthToken, getSelectedEnvironmentId, getSession } from '$lib/server/auth';
-import { listFlags } from '$lib/server/flags';
+import { getAuthToken, getSelectedEnvironmentId, getSession } from '#lib/server/auth.ts';
+import { listFlags } from '#lib/server/flags.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ cookies }) => {
