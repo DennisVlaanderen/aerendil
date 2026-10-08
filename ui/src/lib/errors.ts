@@ -53,12 +53,16 @@ export const ErrorCode = {
 	BadRequestCredentialEnvironmentRequired: 'BR06-0002',
 	BadRequestUnknownScope: 'BR06-0003',
 
+	// BR07 -- bad request, audits domain (400).
+	BadRequestAuditIDInvalid: 'BR07-0001',
+
 	// NF -- not found (404), one group per domain.
 	NotFoundUser: 'NF01-0001',
 	NotFoundFlag: 'NF02-0001',
 	NotFoundEnvironment: 'NF03-0001',
 	NotFoundGroup: 'NF04-0001',
 	NotFoundApplicationCredential: 'NF05-0001',
+	NotFoundAudit: 'NF06-0001',
 
 	// CF -- conflict (409), one group per domain.
 	ConflictUsernameTaken: 'CF01-0001',
@@ -116,11 +120,13 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BadRequestCredentialNameRequired]: m.error_credential_name_required,
 	[ErrorCode.BadRequestCredentialEnvironmentRequired]: m.error_credential_environment_required,
 	[ErrorCode.BadRequestUnknownScope]: m.error_unknown_scope,
+	[ErrorCode.BadRequestAuditIDInvalid]: m.error_audit_id_invalid,
 	[ErrorCode.NotFoundUser]: m.error_user_not_found,
 	[ErrorCode.NotFoundFlag]: m.error_flag_not_found,
 	[ErrorCode.NotFoundEnvironment]: m.error_environment_not_found,
 	[ErrorCode.NotFoundGroup]: m.error_group_not_found,
 	[ErrorCode.NotFoundApplicationCredential]: m.error_application_credential_not_found,
+	[ErrorCode.NotFoundAudit]: m.error_audit_not_found,
 	[ErrorCode.ConflictUsernameTaken]: m.error_username_taken,
 	[ErrorCode.MethodNotAllowed]: m.error_method_not_allowed
 };

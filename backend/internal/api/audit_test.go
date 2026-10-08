@@ -230,3 +230,117 @@ func TestAuditsListFiltersByActorID(t *testing.T) {
 		t.Fatalf("expected no entries for a nonexistent actorId, got %+v", byNonexistentActor)
 	}
 }
+
+// seedAuditEntryForTest performs a flag mutation so withAudit records an
+// entry, then returns that entry as seen through the list endpoint.
+func seedAuditEntryForTest(t *testing.T, mux *http.ServeMux, readToken string) store.AuditEntry {
+	t.Helper()
+
+	envID := seedEnvironmentForTest(t, "Production")
+	writeToken := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
+
+	key := fmt.Sprintf("audit-by-id-flag-%s", store.NewID())
+	body, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "environmentIds": []string{envID}})
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+writeToken)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 setting flag, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	entries := getAudits(t, mux, readToken, "?targetType=flag&targetId="+key)
+	if len(entries) != 1 {
+		t.Fatalf("expected exactly 1 audit entry for %q, got %+v", key, entries)
+	}
+	return entries[0]
+}
+
+func TestAuditsGetByIDRequiresPermission(t *testing.T) {
+	mux := newTestMux(t)
+	seeded := seedAuditEntryForTest(t, mux, tokenFor(t, auth.PermAuditsRead))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, fmt.Sprintf("/api/audits/%d", seeded.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without audits:read, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAuditsGetByIDReturnsEntry(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+	seeded := seedAuditEntryForTest(t, mux, token)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, fmt.Sprintf("/api/audits/%d", seeded.ID), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got store.AuditEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got != seeded {
+		t.Fatalf("expected the by-id entry to match the listed entry\n got: %+v\nwant: %+v", got, seeded)
+	}
+}
+
+func TestAuditsGetByIDReturnsNotFoundForUnknownID(t *testing.T) {
+	mux := newTestMux(t)
+
+	// Audit IDs are Raft log indexes, so MaxUint64 will never be reached.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/audits/18446744073709551615", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenFor(t, auth.PermAuditsRead))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for an unknown audit id, got %d: %s", rec.Code, rec.Body.String())
+	}
+	assertErrorBody(t, rec, CodeNotFoundAudit)
+}
+
+func TestAuditsGetByIDRejectsMalformedID(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+
+	for _, id := range []string{"abc", "-1", "1.5", "18446744073709551616"} {
+		t.Run(id, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/audits/"+id, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for malformed id %q, got %d: %s", id, rec.Code, rec.Body.String())
+			}
+			assertErrorBody(t, rec, CodeBadRequestAuditIDInvalid)
+		})
+	}
+}
+
+// assertErrorBody checks rec carries the {"error", "code"} shape writeError
+// produces with wantCode, so a 404/400 from the mux itself (plain text)
+// doesn't pass.
+func assertErrorBody(t *testing.T, rec *httptest.ResponseRecorder, wantCode string) {
+	t.Helper()
+
+	var body struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("expected a JSON error body, got %q: %v", rec.Body.String(), err)
+	}
+	if body.Error == "" || body.Code != wantCode {
+		t.Fatalf("expected a non-empty error with code %q, got %+v", wantCode, body)
+	}
+}

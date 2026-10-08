@@ -58,12 +58,16 @@ const (
 	CodeBadRequestCredentialEnvironmentRequired = "BR06-0002"
 	CodeBadRequestUnknownScope                  = "BR06-0003"
 
+	// BR07 -- bad request, audits domain (400).
+	CodeBadRequestAuditIDInvalid = "BR07-0001" // audit id path value isn't a uint64
+
 	// NF -- not found (404), one group per domain.
 	CodeNotFoundUser                  = "NF01-0001"
 	CodeNotFoundFlag                  = "NF02-0001"
 	CodeNotFoundEnvironment           = "NF03-0001"
 	CodeNotFoundGroup                 = "NF04-0001"
 	CodeNotFoundApplicationCredential = "NF05-0001"
+	CodeNotFoundAudit                 = "NF06-0001"
 
 	// CF -- conflict (409), one group per domain.
 	CodeConflictUsernameTaken = "CF01-0001"
