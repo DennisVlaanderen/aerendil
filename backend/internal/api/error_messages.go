@@ -36,6 +36,7 @@ const (
 	MsgNotFoundEnvironment           = "environment not found"
 	MsgNotFoundGroup                 = "group not found"
 	MsgNotFoundApplicationCredential = "application credential not found"
+	MsgNotFoundAudit                 = "audit entry not found"
 
 	// CF -- conflict.
 	MsgConflictUsernameTaken = "username is already taken"
