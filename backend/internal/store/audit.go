@@ -36,15 +36,23 @@ func (f *fsm) applyAuditEntry(index uint64, cmd command) interface{} {
 	}
 }
 
-// AuditFilter narrows AuditRepository.List. Empty-string fields are
-// wildcards; non-empty fields are AND-combined.
+// AuditFilter narrows AuditRepository.List. Fields are AND-combined; "" and
+// 0 are wildcards. From/To are inclusive unix seconds.
 type AuditFilter struct {
 	TargetType string
 	TargetID   string
 	ActorID    string
+	From       int64
+	To         int64
 }
 
 func (af AuditFilter) matches(e AuditEntry) bool {
+	if af.From != 0 && e.Timestamp < af.From {
+		return false
+	}
+	if af.To != 0 && e.Timestamp > af.To {
+		return false
+	}
 	if af.TargetType != "" && e.TargetType != af.TargetType {
 		return false
 	}

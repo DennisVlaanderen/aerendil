@@ -204,6 +204,20 @@ never directly from the browser.
   exported-identifier doc comments start with their own name. Keep
   comments short — explain *why*, not what, and skip anything the code
   already says.
+- HTTP API endpoints follow
+  [docs/REST_API_Standards.md](./docs/REST_API_Standards.md). Known
+  project-wide deviations: routes live under `/api` with no version segment,
+  errors use the `{error, code}` body from `internal/api/errors.go` rather
+  than problem+json, and timestamps are unix seconds. Paginated collections
+  follow `GET /api/audits` (`internal/api/audits.go`): `?limit=` (1–100,
+  anything else falls back to 25) and an opaque `?cursor=` in; the items
+  array plus `page: {limit, total, start, end, prevCursor, nextCursor}` out,
+  where `total` is exact, `start`/`end` are the 1-based inclusive row
+  positions (0 on an empty page), and each cursor is omitted when nothing
+  remains in that direction. Time-window filters are
+  inclusive RFC 3339 `?from=`/`?to=` params (400 when malformed or
+  reversed); the UI sets them with `lib/components/DateTimePicker.svelte`,
+  which shows local time but submits UTC.
 - UI code is formatted with Prettier and linted with ESLint (`pnpm run
   format` / `pnpm run lint`); match existing Svelte 5 + TypeScript idioms in
   `ui/src`.

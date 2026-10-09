@@ -59,7 +59,9 @@ const (
 	CodeBadRequestUnknownScope                  = "BR06-0003"
 
 	// BR07 -- bad request, audits domain (400).
-	CodeBadRequestAuditIDInvalid = "BR07-0001" // audit id path value isn't a uint64
+	CodeBadRequestAuditIDInvalid        = "BR07-0001" // audit id path value isn't a uint64
+	CodeBadRequestAuditCursorInvalid    = "BR07-0002" // ?cursor= isn't a value nextCursor could have produced
+	CodeBadRequestAuditTimeRangeInvalid = "BR07-0003" // ?from=/?to= aren't RFC 3339, or from is after to
 
 	// NF -- not found (404), one group per domain.
 	CodeNotFoundUser                  = "NF01-0001"

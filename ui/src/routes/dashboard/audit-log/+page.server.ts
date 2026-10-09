@@ -4,6 +4,9 @@ import { hasPermission } from '#lib/permissions.ts';
 import { listAuditLog } from '#lib/server/auditLog.ts';
 import type { PageServerLoad } from './$types';
 
+const PAGE_SIZES = [10, 25, 50, 100];
+const DEFAULT_PAGE_SIZE = 25;
+
 // Auth itself is already enforced by dashboard/+layout.server.ts; this load
 // only adds the additional permission narrowing on top, the same layering
 // dashboard/users/+page.server.ts already uses for its own 403 check.
@@ -16,14 +19,21 @@ export const load: PageServerLoad = async ({ cookies, parent, url }) => {
 		error(403, 'You do not have permission to view the audit log.');
 	}
 
+	const limit = Number(url.searchParams.get('limit'));
 	const filter = {
 		targetType: url.searchParams.get('targetType') ?? '',
 		targetId: url.searchParams.get('targetId') ?? '',
-		actorId: url.searchParams.get('actorId') ?? ''
+		actorId: url.searchParams.get('actorId') ?? '',
+		from: url.searchParams.get('from') ?? '',
+		to: url.searchParams.get('to') ?? '',
+		limit: PAGE_SIZES.includes(limit) ? limit : DEFAULT_PAGE_SIZE,
+		cursor: url.searchParams.get('cursor') ?? ''
 	};
 
 	const token = getAuthToken(cookies);
-	const entries = token ? await listAuditLog(token, filter) : [];
+	const { entries, page } = token
+		? await listAuditLog(token, filter)
+		: { entries: [], page: { limit: filter.limit, total: 0, start: 0, end: 0 } };
 
-	return { entries, filter };
+	return { entries, page, filter, pageSizes: PAGE_SIZES };
 };

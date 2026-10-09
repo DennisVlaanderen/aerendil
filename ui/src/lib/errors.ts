@@ -55,6 +55,8 @@ export const ErrorCode = {
 
 	// BR07 -- bad request, audits domain (400).
 	BadRequestAuditIDInvalid: 'BR07-0001',
+	BadRequestAuditCursorInvalid: 'BR07-0002',
+	BadRequestAuditTimeRangeInvalid: 'BR07-0003',
 
 	// NF -- not found (404), one group per domain.
 	NotFoundUser: 'NF01-0001',
@@ -121,6 +123,8 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BadRequestCredentialEnvironmentRequired]: m.error_credential_environment_required,
 	[ErrorCode.BadRequestUnknownScope]: m.error_unknown_scope,
 	[ErrorCode.BadRequestAuditIDInvalid]: m.error_audit_id_invalid,
+	[ErrorCode.BadRequestAuditCursorInvalid]: m.error_audit_cursor_invalid,
+	[ErrorCode.BadRequestAuditTimeRangeInvalid]: m.error_audit_time_range_invalid,
 	[ErrorCode.NotFoundUser]: m.error_user_not_found,
 	[ErrorCode.NotFoundFlag]: m.error_flag_not_found,
 	[ErrorCode.NotFoundEnvironment]: m.error_environment_not_found,
