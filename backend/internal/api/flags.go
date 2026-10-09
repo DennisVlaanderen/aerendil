@@ -24,8 +24,7 @@ func registerFlagRoutes(mux *http.ServeMux) {
 			if err := json.Unmarshal(body, &probe); err != nil || probe.Key == "" || len(probe.EnvironmentIDs) == 0 {
 				return nil, false
 			}
-			// One Get per environment: a multi-environment create needs
-			// before-state for each one, not just the first.
+			// Before-state is needed for every environment, not just the first.
 			before := make([]store.Flag, 0, len(probe.EnvironmentIDs))
 			for _, envID := range probe.EnvironmentIDs {
 				if flag, ok := dataStore.Flags().Get(envID, probe.Key); ok {
@@ -110,8 +109,7 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestFlagsEnvironmentIDsRequired, "environmentIds is required")
 	}
 
-	// All-or-nothing: one environment the caller can't touch rejects the
-	// whole request, matching SetMany's atomic-across-environments intent.
+	// All-or-nothing, matching SetMany's atomicity.
 	principal, found := principalFromContext(r)
 	if !found {
 		return forbidden(CodeAuthForbidden, MsgAuthForbidden)

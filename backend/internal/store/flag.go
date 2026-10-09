@@ -6,13 +6,11 @@ import (
 	"sort"
 )
 
-// ErrUnknownEnvironment is returned when a flag's EnvironmentID doesn't
-// match any existing Environment.
+// ErrUnknownEnvironment means a flag's EnvironmentID names no Environment.
 var ErrUnknownEnvironment = errors.New("environment does not exist")
 
-// Flag is a feature flag scoped to exactly one Environment. The same Key
-// can exist independently in multiple environments, each a distinct
-// record (see flagMapKey) rather than one record with per-env overrides.
+// Flag is a feature flag in one Environment; the same Key in another
+// environment is a separate record (see flagMapKey).
 type Flag struct {
 	EnvironmentID string `json:"environmentId"`
 	Key           string `json:"key"`
@@ -21,8 +19,7 @@ type Flag struct {
 	Version       uint64 `json:"version"`
 }
 
-// flagMapKey is the fsm.flags map key for an environment+key pair -- an
-// internal detail; FlagRepository always takes/returns them separately.
+// flagMapKey is the internal fsm.flags key for an environment+key pair.
 func flagMapKey(environmentID, key string) string {
 	return environmentID + "/" + key
 }
@@ -37,8 +34,7 @@ func (f *fsm) applyFlag(index uint64, cmd command) any {
 		f.flags[flagMapKey(cmd.Flag.EnvironmentID, cmd.Flag.Key)] = *cmd.Flag
 		return *cmd.Flag
 	case opSetBatch:
-		// Validate every target environment before writing any -- one Raft
-		// log entry under one lock, so a bad ID rejects the whole batch atomically.
+		// Validate all environments first so a bad ID rejects the whole batch.
 		for _, flag := range cmd.Flags {
 			if _, ok := f.environments[flag.EnvironmentID]; !ok {
 				return fmt.Errorf("%w: %q", ErrUnknownEnvironment, flag.EnvironmentID)
@@ -79,8 +75,8 @@ func (f *fsm) listFlags(environmentID string) []Flag {
 	return flags
 }
 
-// hasFlagsInEnvironmentLocked reports whether any flag is scoped to
-// environmentID. Caller must already hold f.mu.
+// hasFlagsInEnvironmentLocked reports whether environmentID has flags.
+// Caller holds f.mu.
 func (f *fsm) hasFlagsInEnvironmentLocked(environmentID string) bool {
 	for _, flag := range f.flags {
 		if flag.EnvironmentID == environmentID {
@@ -90,22 +86,19 @@ func (f *fsm) hasFlagsInEnvironmentLocked(environmentID string) bool {
 	return false
 }
 
-// hasFlagsInEnvironment is the read-locking counterpart of
-// hasFlagsInEnvironmentLocked, for use outside of Apply.
+// hasFlagsInEnvironment is hasFlagsInEnvironmentLocked with a read lock.
 func (f *fsm) hasFlagsInEnvironment(environmentID string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.hasFlagsInEnvironmentLocked(environmentID)
 }
 
-// FlagRepository provides flag operations against the store. Obtain one
-// via Store.Flags().
+// FlagRepository provides flag operations; get one via Store.Flags().
 type FlagRepository struct {
 	store *Store
 }
 
-// Get returns the current value of a flag in a specific environment, if it
-// exists.
+// Get returns a flag in an environment, if it exists.
 func (r FlagRepository) Get(environmentID, key string) (Flag, bool) {
 	return r.store.fsm.getFlag(environmentID, key)
 }
@@ -115,9 +108,8 @@ func (r FlagRepository) List(environmentID string) []Flag {
 	return r.store.fsm.listFlags(environmentID)
 }
 
-// Set applies a single flag change through Raft consensus.
-// flag.EnvironmentID must reference an existing Environment
-// (ErrUnknownEnvironment otherwise).
+// Set applies a flag change through Raft; an unknown EnvironmentID returns
+// ErrUnknownEnvironment.
 func (r FlagRepository) Set(flag Flag) (Flag, error) {
 	resp, err := r.store.apply(command{Op: opSet, Entity: entityFlag, Flag: &flag})
 	if err != nil {
@@ -133,11 +125,9 @@ func (r FlagRepository) Set(flag Flag) (Flag, error) {
 	}
 }
 
-// SetMany writes the same key/enabled/value into every listed environment
-// as one atomic Raft command -- all succeed or none do
-// (ErrUnknownEnvironment if any ID doesn't exist). Takes discrete fields
-// rather than []Flag so callers can't submit divergent values per
-// environment for what should be one consistent write.
+// SetMany writes one key/enabled/value to every listed environment
+// atomically (ErrUnknownEnvironment if any ID is unknown). Discrete fields,
+// not []Flag, so values can't diverge per environment.
 func (r FlagRepository) SetMany(key string, enabled bool, value string, environmentIDs []string) ([]Flag, error) {
 	flags := make([]Flag, len(environmentIDs))
 	for i, envID := range environmentIDs {
@@ -158,7 +148,7 @@ func (r FlagRepository) SetMany(key string, enabled bool, value string, environm
 	}
 }
 
-// Delete removes a flag from a specific environment through Raft consensus.
+// Delete removes a flag from an environment through Raft.
 func (r FlagRepository) Delete(environmentID, key string) error {
 	resp, err := r.store.apply(command{Op: opDelete, Entity: entityFlag, Key: flagMapKey(environmentID, key)})
 	if err != nil {

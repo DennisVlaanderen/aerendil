@@ -5,14 +5,14 @@ import (
 	"strconv"
 )
 
-// Pagination per docs/REST_API_Standards.md §8.4; out-of-range ?limit= uses the default.
+// Per docs/REST_API_Standards.md §8.4.
 const (
 	defaultPageLimit = 25
 	maxPageLimit     = 100
 )
 
-// listPage is the list metadata. Start/End are 1-based inclusive row
-// positions (0 when empty); cursors are set only while entries remain.
+// listPage is list metadata. Start/End are 1-based inclusive rows (0 when
+// empty); a cursor is omitted when nothing remains that way.
 type listPage struct {
 	Limit      int    `json:"limit"`
 	Total      int    `json:"total"`
@@ -22,7 +22,7 @@ type listPage struct {
 	NextCursor string `json:"nextCursor,omitempty"`
 }
 
-// parseLimit reads ?limit=, falling back to the default when absent or out of range.
+// parseLimit reads ?limit=, defaulting when absent or out of range.
 func parseLimit(r *http.Request) int {
 	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
 	if err != nil || limit < 1 || limit > maxPageLimit {
@@ -31,10 +31,8 @@ func parseLimit(r *http.Request) int {
 	return limit
 }
 
-// paginate slices an already-ordered collection by ?limit= and ?cursor=.
-// Pagination is opt-in: with neither param it returns all items and a nil
-// page, so unpaginated callers keep the full list. The cursor is an offset;
-// these collections are small and admin-bounded, so offset paging is enough.
+// paginate slices ordered items by ?limit= and an offset ?cursor=. Opt-in:
+// with neither param it returns all items and a nil page.
 func paginate[T any](r *http.Request, items []T) ([]T, *listPage, error) {
 	query := r.URL.Query()
 	if !query.Has("limit") && !query.Has("cursor") {
@@ -64,7 +62,7 @@ func paginate[T any](r *http.Request, items []T) ([]T, *listPage, error) {
 	return items[offset:end], page, nil
 }
 
-// listBody builds a collection response, adding "page" only when paginated.
+// listBody adds "page" only when paginated.
 func listBody[T any](name string, items []T, page *listPage) map[string]any {
 	body := map[string]any{name: items}
 	if page != nil {

@@ -51,9 +51,8 @@ func TestPaginate(t *testing.T) {
 	}
 }
 
-// TestListEndpointsPaginate checks each collection keeps its full,
-// page-less response without params, and that walking ?limit=2 pages
-// yields the same items in the same order.
+// TestListEndpointsPaginate checks no params returns the full list, and
+// walking ?limit=2 pages yields the same items in order.
 func TestListEndpointsPaginate(t *testing.T) {
 	mux := newTestMux(t)
 	token := adminToken(t)

@@ -1,46 +1,40 @@
 package api
 
-// Error codes are stable, machine-readable identifiers on every apiError
-// (see errors.go) so the UI can translate failures instead of showing raw
-// English text. Format: "<Category><Group>-<Sequence>".
-//
-//   - Category matches the apiError constructor (A = auth, BR = badRequest,
-//     NF = notFound, CF = conflict, MN = methodNotAllowed, IE = internal).
-//   - Group (2 digits) sub-divides a category by domain.
-//   - Sequence (4 digits) identifies the error within its group.
-//
-// A code is reused across call sites sharing the same message (e.g. every
-// "invalid request body" site) -- it identifies what the user is told, not
-// which line produced it.
+// Error codes are stable identifiers on every apiError so the UI can
+// translate failures. Format "<Category><Group>-<Sequence>": Category is the
+// constructor (A auth, BR badRequest, NF notFound, CF conflict, MN
+// methodNotAllowed, IE internal), Group (2 digits) the domain, Sequence (4
+// digits) the error. A code names what the user is told, so call sites
+// sharing a message share its code.
 const (
 	// A01 -- authentication (401).
 	CodeAuthInvalidCredentials = "A01-0001" // bad username/password
-	CodeAuthInvalidToken       = "A01-0002" // missing/expired/malformed bearer token, or the user it names is gone/inactive
+	CodeAuthInvalidToken       = "A01-0002" // bad bearer token, or its user is gone/inactive
 	CodeAuthMissingHeader      = "A01-0003" // no Authorization header at all
 
 	// A02 -- authorization / access denied (403).
-	CodeAuthForbidden = "A02-0001" // insufficient permission, or no access to the requested environment
+	CodeAuthForbidden = "A02-0001" // missing permission or environment access
 
 	// A03 -- protected/business-rule restriction (403).
-	CodeBusinessLastAdmin                 = "A03-0001" // cannot remove the last remaining admin account
-	CodeBusinessProtectedGroup            = "A03-0002" // the Admin group is protected and cannot be modified/deleted
-	CodeBusinessLastEnvironment           = "A03-0003" // cannot delete the last remaining environment
-	CodeBusinessEnvironmentHasFlags       = "A03-0004" // cannot delete an environment that still has flags
-	CodeBusinessAdminGroupChange          = "A03-0005" // only an Admin can modify Admin group membership
-	CodeBusinessAdminOnlyUserDelete       = "A03-0006" // only an Admin can delete users
-	CodeBusinessEnvironmentHasCredentials = "A03-0007" // cannot delete an environment that still has application credentials
+	CodeBusinessLastAdmin                 = "A03-0001" // last remaining admin
+	CodeBusinessProtectedGroup            = "A03-0002" // Admin group is protected
+	CodeBusinessLastEnvironment           = "A03-0003" // last remaining environment
+	CodeBusinessEnvironmentHasFlags       = "A03-0004" // environment still has flags
+	CodeBusinessAdminGroupChange          = "A03-0005" // only Admins change Admin membership
+	CodeBusinessAdminOnlyUserDelete       = "A03-0006" // only Admins delete users
+	CodeBusinessEnvironmentHasCredentials = "A03-0007" // environment still has credentials
 
 	// BR01 -- bad request, general (400).
-	CodeBadRequestBody          = "BR01-0001" // malformed/undecodable JSON request body
-	CodeBadRequestCursorInvalid = "BR01-0002" // list ?cursor= isn't a value nextCursor/prevCursor could have produced
+	CodeBadRequestBody          = "BR01-0001" // undecodable JSON body
+	CodeBadRequestCursorInvalid = "BR01-0002" // list ?cursor= isn't one we issued
 
 	// BR02 -- bad request, flags domain (400).
-	CodeBadRequestFlagsEnvironmentIDRequired  = "BR02-0001" // environmentId query param missing
+	CodeBadRequestFlagsEnvironmentIDRequired  = "BR02-0001" // ?environmentId= missing
 	CodeBadRequestFlagsKeyRequired            = "BR02-0002"
 	CodeBadRequestFlagsEnvironmentIDsRequired = "BR02-0003"
 
 	// BR03 -- bad request, environments domain (400).
-	CodeBadRequestEnvironmentUnknown      = "BR03-0001" // referenced environment ID doesn't exist
+	CodeBadRequestEnvironmentUnknown      = "BR03-0001" // unknown environment ID
 	CodeBadRequestEnvironmentNameRequired = "BR03-0002"
 
 	// BR04 -- bad request, users domain (400).
@@ -60,9 +54,9 @@ const (
 	CodeBadRequestUnknownScope                  = "BR06-0003"
 
 	// BR07 -- bad request, audits domain (400).
-	CodeBadRequestAuditIDInvalid        = "BR07-0001" // audit id path value isn't a uint64
-	CodeBadRequestAuditCursorInvalid    = "BR07-0002" // ?cursor= isn't a value nextCursor could have produced
-	CodeBadRequestAuditTimeRangeInvalid = "BR07-0003" // ?from=/?to= aren't RFC 3339, or from is after to
+	CodeBadRequestAuditIDInvalid        = "BR07-0001" // audit id isn't a uint64
+	CodeBadRequestAuditCursorInvalid    = "BR07-0002" // ?cursor= isn't one we issued
+	CodeBadRequestAuditTimeRangeInvalid = "BR07-0003" // ?from=/?to= not RFC 3339, or reversed
 
 	// NF -- not found (404), one group per domain.
 	CodeNotFoundUser                  = "NF01-0001"
@@ -79,9 +73,9 @@ const (
 	CodeMethodNotAllowed = "MN01-0001"
 
 	// IE01 -- internal error (500).
-	CodeInternalGeneric          = "IE01-0000" // handleErrors' catch-all fallback for an unmapped error
+	CodeInternalGeneric          = "IE01-0000" // handleErrors' fallback for unmapped errors
 	CodeInternalTokenGen         = "IE01-0001" // failed to create a JWT
 	CodeInternalPasswordHash     = "IE01-0002" // failed to hash a password
-	CodeInternalAuditFailed      = "IE01-0003" // the mutation applied but recording its audit entry failed
-	CodeInternalClientSecretHash = "IE01-0004" // failed to generate/hash an application credential's client secret
+	CodeInternalAuditFailed      = "IE01-0003" // mutation applied, audit entry failed
+	CodeInternalClientSecretHash = "IE01-0004" // failed to generate/hash a client secret
 )

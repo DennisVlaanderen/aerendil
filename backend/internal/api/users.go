@@ -36,17 +36,13 @@ func registerUserRoutes(mux *http.ServeMux) {
 	}, handleErrors(usersDeleteHandler))))
 }
 
-// minPasswordLength is deliberately simple (length only, no complexity
-// rules) -- this is an internal admin tool, not a public consumer app.
+// minPasswordLength is the only strength rule; this is an internal admin tool.
 const minPasswordLength = 8
 
-// maxPasswordLength mirrors bcrypt's own 72-byte input limit -- rejecting an
-// oversized password here gives a clear 400 instead of letting
-// bcrypt.GenerateFromPassword fail and fall through to a generic 500.
+// maxPasswordLength is bcrypt's 72-byte limit; a clear 400 beats bcrypt's 500.
 const maxPasswordLength = 72
 
-// userResponse never includes PasswordHash -- password hashes never leave
-// the store/auth layers.
+// userResponse omits PasswordHash; hashes never leave store/auth.
 type userResponse struct {
 	ID       string   `json:"id"`
 	Username string   `json:"username"`
@@ -55,9 +51,7 @@ type userResponse struct {
 }
 
 func toUserResponse(u store.User) userResponse {
-	// GroupIDs comes back nil after Apply (omitempty drops an empty slice in
-	// the Raft-log JSON encoding) -- normalize so clients always see a real
-	// array, never null.
+	// Apply returns nil for an empty slice (omitempty); serve [] not null.
 	groupIDs := u.GroupIDs
 	if groupIDs == nil {
 		groupIDs = []string{}
@@ -120,8 +114,7 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	// Fast pre-check; fsm.applyUser is the authoritative enforcement point
-	// for username uniqueness (see store.ErrUsernameTaken).
+	// Fast pre-check; fsm.applyUser enforces uniqueness.
 	if _, exists := dataStore.Users().GetByUsername(username); exists {
 		return conflict(CodeConflictUsernameTaken, MsgConflictUsernameTaken)
 	}
@@ -149,11 +142,8 @@ func usersPostHandler(w http.ResponseWriter, r *http.Request) error {
 	return created(w, toUserResponse(user))
 }
 
-// requireAdminForAdminGroupChange returns a 403 if any of groupSets
-// includes the Admin group and the caller isn't already an admin --
-// otherwise a caller with only users:create/update could grant or retain
-// Admin membership without ever holding groups permissions or admin rights.
-// Pass a user's current and/or proposed group lists as needed.
+// requireAdminForAdminGroupChange 403s a non-admin when any groupSet
+// contains the Admin group, so users:update can't grant Admin.
 func requireAdminForAdminGroupChange(r *http.Request, groupSets ...[]string) error {
 	touchesAdmin := false
 	for _, groupIDs := range groupSets {
@@ -200,9 +190,8 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestPasswordTooLong, MsgBadRequestPasswordTooLong)
 	}
 
-	// Nil groupIds means "unchanged" (*[]string distinguishes omitted from
-	// explicitly cleared) -- a caller without groups:read can't render group
-	// checkboxes but must still be able to edit a user's other fields.
+	// Nil groupIds means "unchanged", so callers without groups:read can
+	// still edit other fields.
 	groupIDs := existing.GroupIDs
 	if payload.GroupIDs != nil {
 		groupIDs = *payload.GroupIDs
@@ -212,9 +201,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	// Fast pre-check; fsm.applyUser is the authoritative enforcement point
-	// for username uniqueness (see store.ErrUsernameTaken). Excludes this
-	// user's own record so keeping the same username isn't a false conflict.
+	// Fast pre-check (fsm.applyUser enforces); skips the user's own record.
 	if other, exists := dataStore.Users().GetByUsername(username); exists && other.ID != id {
 		return conflict(CodeConflictUsernameTaken, MsgConflictUsernameTaken)
 	}
@@ -224,8 +211,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	// Empty password means "unchanged" -- the edit form never round-trips
-	// the hash, and clearing a password isn't a supported operation.
+	// Empty password means "unchanged".
 	passwordHash := existing.PasswordHash
 	if payload.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
@@ -254,8 +240,7 @@ func usersDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 		return notFound(CodeNotFoundUser, MsgNotFoundUser)
 	}
 
-	// Hardcoded to admins only for now, on top of the users:delete check
-	// above -- removing this block is all that's needed to relax it later.
+	// Admins only for now, on top of users:delete; drop this block to relax.
 	principal, _ := principalFromContext(r)
 	if !principal.IsAdmin {
 		return forbidden(CodeBusinessAdminOnlyUserDelete, "only an Admin can delete users")

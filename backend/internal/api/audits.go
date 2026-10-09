@@ -42,7 +42,7 @@ func auditsGetHandler(w http.ResponseWriter, r *http.Request) error {
 		From:       from,
 		To:         to,
 	})
-	// all is ID-descending; the page starts at the first ID below the cursor.
+	// all is ID-descending; start at the first ID below the cursor.
 	startIdx := 0
 	if before != 0 {
 		startIdx = sort.Search(len(all), func(i int) bool { return all[i].ID < before })
@@ -68,9 +68,8 @@ func auditsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	return ok(w, map[string]any{"audits": views, "page": page})
 }
 
-// auditsGetByIDHandler looks up a single entry by its uint64 ID (the Raft
-// log index). A malformed id is a 400, not a 404 -- it can never name an
-// entry, as opposed to a well-formed id that just isn't there.
+// auditsGetByIDHandler looks up an entry by its Raft log index. A malformed
+// id is a 400, not a 404: it can never name an entry.
 func auditsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -106,7 +105,7 @@ func newAuditEntryView(e store.AuditEntry) auditEntryView {
 	return auditEntryView{AuditEntry: e, Before: nestedJSON(e.Before), After: nestedJSON(e.After)}
 }
 
-// nestedJSON returns the snapshot as raw JSON, or as a JSON string if invalid.
+// nestedJSON returns the snapshot as raw JSON, or a JSON string if invalid.
 func nestedJSON(snapshot string) json.RawMessage {
 	snapshot = strings.TrimSpace(snapshot)
 	if snapshot == "" {
