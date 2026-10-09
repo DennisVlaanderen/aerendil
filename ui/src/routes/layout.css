@@ -1,56 +1,28 @@
+@import '@fontsource/sora/400.css';
+@import '@fontsource/sora/500.css';
+@import '@fontsource/sora/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
 @import 'tailwindcss';
+@import './aerendil-theme.css';
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 @plugin '@iconify/tailwind4';
 
-@custom-variant dark (&:where(.dark, .dark *));
+/* aerendil-theme.css is the brand kit's file, kept verbatim so it can be
+   swapped for a newer kit release; app-specific additions live here. */
 
 :root {
-	--c-page: #f7f5ef;
-	--c-sidebar: #ffffff;
-	--c-surface: #ffffff;
-	--c-line-1: rgba(56, 93, 122, 0.14);
-	--c-line-2: rgba(56, 93, 122, 0.12);
-	--c-line-3: rgba(56, 93, 122, 0.1);
-	--c-line-4: rgba(56, 93, 122, 0.08);
-	--c-ink: #14233d;
-	--c-ink-muted: #385d7a;
-	--c-track: rgba(56, 93, 122, 0.14);
-	--c-nav-inactive: #385d7a;
-	--c-nav-active-bg: rgba(212, 175, 55, 0.16);
-	--c-nav-active: #9c7a1e;
-	--c-success-bg: rgba(47, 143, 109, 0.14);
-	--c-success: #2f8f6d;
-	--c-error: #b23b3b;
-	--c-control: #edeae0;
-	--c-selection: var(--c-page);
-	color-scheme: light;
+	/* Text on bg-danger. The brand kit has no danger foreground; these mirror
+	   its primary-foreground choice and stay above 4.5:1 in both themes. */
+	--danger-foreground: #ffffff;
 }
 
 .dark {
-	--c-page: #0b1220;
-	--c-sidebar: #0e1728;
-	--c-surface: #101b2e;
-	--c-line-1: rgba(143, 179, 201, 0.12);
-	--c-line-2: rgba(143, 179, 201, 0.1);
-	--c-line-3: rgba(143, 179, 201, 0.08);
-	--c-line-4: rgba(143, 179, 201, 0.06);
-	--c-ink: #f5f1e6;
-	--c-ink-muted: #8fb3c9;
-	--c-track: rgba(143, 179, 201, 0.15);
-	--c-nav-inactive: #c9d6de;
-	--c-nav-active-bg: rgba(212, 175, 55, 0.12);
-	--c-nav-active: #d4af37;
-	--c-success-bg: rgba(127, 184, 164, 0.14);
-	--c-success: #7fb8a4;
-	--c-error: #c97d7d;
-	--c-control: #14233d;
-	--c-selection: var(--c-page);
-	color-scheme: dark;
+	--danger-foreground: #0e1a2b;
 }
 
 @theme {
-	/* Disable all default colors except mauve */
+	/* Disable Tailwind's default palette so only brand colors are available */
 	--color-red: none;
 	--color-orange: none;
 	--color-yellow: none;
@@ -74,35 +46,13 @@
 	--color-neutral: none;
 	--color-stone: none;
 	--color-taupe: none;
+	--color-mauve: none;
 	--color-mist: none;
 	--color-olive: none;
+}
 
-	--font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-
-	/* Theme-responsive semantic tokens (values swap under .dark, see above) */
-	--color-page: var(--c-page);
-	--color-sidebar: var(--c-sidebar);
-	--color-surface: var(--c-surface);
-	--color-line-1: var(--c-line-1);
-	--color-line-2: var(--c-line-2);
-	--color-line-3: var(--c-line-3);
-	--color-line-4: var(--c-line-4);
-	--color-ink: var(--c-ink);
-	--color-ink-muted: var(--c-ink-muted);
-	--color-track: var(--c-track);
-	--color-nav-inactive: var(--c-nav-inactive);
-	--color-nav-active-bg: var(--c-nav-active-bg);
-	--color-nav-active: var(--c-nav-active);
-	--color-success-bg: var(--c-success-bg);
-	--color-success: var(--c-success);
-	--color-error: var(--c-error);
-	--color-control: var(--c-control);
-
-	/* Constants: identical in both themes */
-	--color-gold: #d4af37;
-	--color-avatar: #385d7a;
-	--color-cream: #f5f1e6;
-	--color-navy: #14233d;
+@theme inline {
+	--color-danger-foreground: var(--danger-foreground);
 }
 
 ::-webkit-scrollbar {
@@ -110,7 +60,7 @@
 	height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-	background: rgba(143, 179, 201, 0.3);
+	background: var(--color-border);
 	border-radius: 4px;
 }
 ::-webkit-scrollbar-track {
@@ -126,8 +76,8 @@ input[type='radio'] {
 	width: 1rem;
 	height: 1rem;
 	margin: 0;
-	border: 1.5px solid var(--color-line-1);
-	background-color: var(--color-page);
+	border: 1.5px solid var(--color-border);
+	background-color: var(--color-background);
 	cursor: pointer;
 	outline: none;
 	box-shadow: none;
@@ -152,7 +102,7 @@ input[type='radio'] {
 input[type='checkbox']::after,
 input[type='radio']::after {
 	content: '';
-	background-color: var(--c-selection);
+	background-color: var(--color-primary-foreground);
 }
 
 input[type='checkbox']::after {
@@ -181,8 +131,8 @@ input[type='checkbox']:indeterminate::after {
 input[type='checkbox']:checked,
 input[type='checkbox']:indeterminate,
 input[type='radio']:checked {
-	background-color: var(--color-gold);
-	border-color: var(--color-gold);
+	background-color: var(--color-primary);
+	border-color: var(--color-primary);
 }
 
 input[type='checkbox']:checked::after,
@@ -193,12 +143,12 @@ input[type='radio']:checked::after {
 
 input[type='checkbox']:hover:not(:disabled),
 input[type='radio']:hover:not(:disabled) {
-	border-color: var(--color-gold);
+	border-color: var(--color-primary);
 }
 
 input[type='checkbox']:focus-visible,
 input[type='radio']:focus-visible {
-	outline: 2px solid var(--color-gold);
+	outline: 2px solid var(--color-ring);
 	outline-offset: 2px;
 	box-shadow: none;
 }

@@ -35,20 +35,20 @@
 
 <div class="grid gap-6 p-7">
 	<div>
-		<h1 class="text-xl font-semibold text-ink">{m.audit_log_page_title()}</h1>
-		<p class="mt-1 text-ink-muted">{m.audit_log_page_subtitle()}</p>
+		<h1 class="text-xl font-semibold text-foreground">{m.audit_log_page_title()}</h1>
+		<p class="mt-1 text-muted-foreground">{m.audit_log_page_subtitle()}</p>
 	</div>
 
 	<form
 		method="GET"
-		class="flex flex-wrap items-end gap-3 rounded-xl border border-line-1 bg-surface p-5"
+		class="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface p-5"
 	>
-		<label class="grid gap-1.5 text-sm text-ink">
+		<label class="grid gap-1.5 text-sm text-foreground">
 			<span class="font-medium">{m.audit_log_filter_target_type()}</span>
 			<select
 				name="targetType"
 				value={data.filter.targetType}
-				class="rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+				class="rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 			>
 				<option value="">—</option>
 				<option value="flag">flag</option>
@@ -56,38 +56,38 @@
 				<option value="group">group</option>
 			</select>
 		</label>
-		<label class="grid gap-1.5 text-sm text-ink">
+		<label class="grid gap-1.5 text-sm text-foreground">
 			<span class="font-medium">{m.audit_log_filter_target_id()}</span>
 			<input
 				name="targetId"
 				value={data.filter.targetId}
-				class="rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+				class="rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 			/>
 		</label>
-		<label class="grid gap-1.5 text-sm text-ink">
+		<label class="grid gap-1.5 text-sm text-foreground">
 			<span class="font-medium">{m.audit_log_filter_actor_id()}</span>
 			<input
 				name="actorId"
 				value={data.filter.actorId}
-				class="rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+				class="rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 			/>
 		</label>
 		<button
 			type="submit"
-			class="cursor-pointer rounded-lg bg-gold px-5 py-2.25 text-sm font-semibold text-navy hover:opacity-90"
+			class="cursor-pointer rounded-lg bg-primary px-5 py-2.25 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
 		>
 			{m.audit_log_filter_submit()}
 		</button>
 	</form>
 
-	<div class="overflow-x-auto rounded-xl border border-line-1 bg-surface">
+	<div class="overflow-x-auto rounded-xl border border-border bg-surface">
 		{#if data.entries.length === 0}
-			<p class="p-6 text-sm text-ink-muted">{m.audit_log_empty()}</p>
+			<p class="p-6 text-sm text-muted-foreground">{m.audit_log_empty()}</p>
 		{:else}
 			<table class="w-full text-left text-sm">
 				<thead>
 					<tr
-						class="border-b border-line-4 text-xs font-semibold tracking-wide text-ink-muted uppercase"
+						class="border-b border-border text-xs font-semibold tracking-wide text-muted-foreground uppercase"
 					>
 						<th class="w-10 px-3 py-3"></th>
 						<th class="px-3 py-3">{m.audit_log_table_timestamp()}</th>
@@ -100,11 +100,11 @@
 				<tbody>
 					{#each data.entries as entry, i (entry.id)}
 						{@const expanded = expandedIds.has(entry.id)}
-						<tr class="{i > 0 ? 'border-t border-line-4' : ''} hover:bg-line-3">
+						<tr class="{i > 0 ? 'border-t border-border' : ''} hover:bg-surface-muted">
 							<td class="px-3 py-3">
 								<button
 									type="button"
-									class="flex size-6 cursor-pointer items-center justify-center rounded-md text-ink-muted hover:bg-line-3"
+									class="flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-surface-muted"
 									aria-expanded={expanded}
 									aria-label={m.audit_log_toggle_details()}
 									onclick={() => toggleExpanded(entry.id)}
@@ -117,63 +117,69 @@
 									></span>
 								</button>
 							</td>
-							<td class="px-3 py-3 whitespace-nowrap text-ink"
+							<td class="px-3 py-3 whitespace-nowrap text-foreground"
 								>{formatTimestamp(entry.timestamp)}</td
 							>
-							<td class="px-3 py-3 text-ink">
+							<td class="px-3 py-3 text-foreground">
 								{entry.actorId}
 								{#if entry.actorType === 'applicationCredential'}
 									<span
-										class="ml-1.5 rounded-full bg-control px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-ink-muted uppercase"
+										class="ml-1.5 rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
 									>
 										{m.audit_log_actor_type_application()}
 									</span>
 								{/if}
 							</td>
-							<td class="px-3 py-3 font-mono text-xs text-ink">{entry.action}</td>
-							<td class="px-3 py-3 text-ink-muted">
+							<td class="px-3 py-3 font-mono text-xs text-foreground">{entry.action}</td>
+							<td class="px-3 py-3 text-muted-foreground">
 								{entry.targetType}{entry.targetId ? `: ${entry.targetId}` : ''}
 							</td>
 							<td class="px-3 py-3">
 								<span
 									class="rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide uppercase {entry.success
-										? 'bg-success-bg text-success'
-										: 'bg-control text-error'}"
+										? 'bg-success/10 text-success'
+										: 'bg-danger/10 text-danger'}"
 								>
 									{entry.statusCode}
 								</span>
 							</td>
 						</tr>
 						{#if expanded}
-							<tr class="border-t border-line-4">
+							<tr class="border-t border-border">
 								<td colspan="6" class="p-5">
 									<div class="grid gap-4 sm:grid-cols-2">
 										{#if entry.error}
 											<div
-												class="col-span-full grid gap-1.5 rounded-lg border border-line-1 bg-page p-4"
+												class="col-span-full grid gap-1.5 rounded-lg border border-border bg-background p-4"
 											>
-												<span class="text-xs font-semibold tracking-wider text-ink-muted uppercase">
+												<span
+													class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+												>
 													{m.audit_log_detail_error()}
 												</span>
-												<strong class="text-error">{entry.error}</strong>
+												<strong class="text-danger">{entry.error}</strong>
 											</div>
 										{/if}
 										{#if entry.before}
-											<div class="grid gap-1.5 rounded-lg border border-line-1 bg-page p-4">
-												<span class="text-xs font-semibold tracking-wider text-ink-muted uppercase">
+											<div class="grid gap-1.5 rounded-lg border border-border bg-background p-4">
+												<span
+													class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+												>
 													{m.audit_log_detail_before()}
 												</span>
-												<pre class="overflow-x-auto text-xs text-ink">{prettyPrint(
+												<pre class="overflow-x-auto text-xs text-foreground">{prettyPrint(
 														entry.before
 													)}</pre>
 											</div>
 										{/if}
 										{#if entry.after}
-											<div class="grid gap-1.5 rounded-lg border border-line-1 bg-page p-4">
-												<span class="text-xs font-semibold tracking-wider text-ink-muted uppercase">
+											<div class="grid gap-1.5 rounded-lg border border-border bg-background p-4">
+												<span
+													class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+												>
 													{m.audit_log_detail_after()}
 												</span>
-												<pre class="overflow-x-auto text-xs text-ink">{prettyPrint(
+												<pre class="overflow-x-auto text-xs text-foreground">{prettyPrint(
 														entry.after
 													)}</pre>
 											</div>

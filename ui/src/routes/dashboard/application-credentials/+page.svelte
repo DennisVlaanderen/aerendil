@@ -182,48 +182,48 @@
 
 <div class="grid gap-6 p-7">
 	<div>
-		<h1 class="text-xl font-semibold text-ink">{m.application_credentials_page_title()}</h1>
-		<p class="mt-1 text-ink-muted">{m.application_credentials_page_subtitle()}</p>
+		<h1 class="text-xl font-semibold text-foreground">{m.application_credentials_page_title()}</h1>
+		<p class="mt-1 text-muted-foreground">{m.application_credentials_page_subtitle()}</p>
 		{#if selectedEnvironmentName}
-			<p class="mt-1 text-sm text-ink-muted">
+			<p class="mt-1 text-sm text-muted-foreground">
 				{m.flag_detail_environment({ name: selectedEnvironmentName })}
 			</p>
 		{/if}
 	</div>
 
 	{#if revealedSecret}
-		<div class="grid gap-3 rounded-xl border border-gold bg-surface p-6">
+		<div class="grid gap-3 rounded-xl border border-primary bg-surface p-6">
 			<div class="flex items-center gap-2">
-				<span class="icon-[lucide--key] size-5 text-gold" aria-hidden="true"></span>
-				<h2 class="text-base font-semibold text-ink">
+				<span class="icon-[lucide--key] size-5 text-primary" aria-hidden="true"></span>
+				<h2 class="text-base font-semibold text-foreground">
 					{m.application_credentials_secret_reveal_title()}
 				</h2>
 			</div>
-			<p class="flex items-center gap-2 text-sm text-error">
+			<p class="flex items-center gap-2 text-sm text-danger">
 				<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 				{m.application_credentials_secret_reveal_warning()}
 			</p>
 			<div class="grid gap-1.5">
-				<span class="text-sm font-medium text-ink"
+				<span class="text-sm font-medium text-foreground"
 					>{m.application_credentials_secret_client_id_label()}</span
 				>
 				<code
-					class="overflow-x-auto rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink"
+					class="overflow-x-auto rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground"
 					>{revealedSecret.clientId}</code
 				>
 			</div>
 			<div class="grid gap-1.5">
-				<span class="text-sm font-medium text-ink"
+				<span class="text-sm font-medium text-foreground"
 					>{m.application_credentials_secret_client_secret_label()}</span
 				>
 				<div class="flex items-center gap-2">
 					<code
-						class="flex-1 overflow-x-auto rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink"
+						class="flex-1 overflow-x-auto rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground"
 						>{revealedSecret.clientSecret}</code
 					>
 					<button
 						type="button"
-						class="cursor-pointer rounded-lg border border-line-1 px-4 py-2 text-sm font-medium text-ink hover:bg-line-3"
+						class="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-muted"
 						onclick={copySecret}
 					>
 						{copied
@@ -234,7 +234,7 @@
 			</div>
 			<button
 				type="button"
-				class="cursor-pointer justify-self-start rounded-lg bg-gold px-5 py-2.5 font-semibold text-navy hover:opacity-90"
+				class="cursor-pointer justify-self-start rounded-lg bg-primary px-5 py-2.5 font-semibold text-primary-foreground hover:bg-primary-hover"
 				onclick={dismissRevealedSecret}
 			>
 				{m.application_credentials_secret_dismiss_button()}
@@ -242,29 +242,29 @@
 		</div>
 	{/if}
 
-	<div class="rounded-xl border border-line-1 bg-surface">
+	<div class="rounded-xl border border-border bg-surface">
 		{#if data.applicationCredentials.length === 0}
-			<p class="p-6 text-sm text-ink-muted">{m.application_credentials_empty()}</p>
+			<p class="p-6 text-sm text-muted-foreground">{m.application_credentials_empty()}</p>
 		{:else}
 			{#each data.applicationCredentials as credential, i (credential.id)}
-				<div class="p-5 {i > 0 ? 'border-t border-line-4' : ''}">
+				<div class="p-5 {i > 0 ? 'border-t border-border' : ''}">
 					<div class="flex items-center justify-between gap-3">
 						<div class="flex items-center gap-2">
-							<strong class="text-ink">{credential.name}</strong>
-							<span class="text-sm text-ink-muted">{credential.id}</span>
+							<strong class="text-foreground">{credential.name}</strong>
+							<span class="text-sm text-muted-foreground">{credential.id}</span>
 						</div>
 						<div class="flex items-center gap-4">
 							<button
 								type="button"
 								disabled={rotatingId === credential.id}
-								class="cursor-pointer text-sm font-medium text-ink hover:underline disabled:cursor-wait disabled:opacity-70"
+								class="cursor-pointer text-sm font-medium text-foreground hover:underline disabled:cursor-wait disabled:opacity-70"
 								onclick={() => requestRotate(credential)}
 							>
 								{m.application_credentials_rotate_button()}
 							</button>
 							<button
 								type="button"
-								class="cursor-pointer text-sm font-medium text-error hover:underline"
+								class="cursor-pointer text-sm font-medium text-danger hover:underline"
 								onclick={() => requestDelete(credential)}
 							>
 								{m.application_credentials_delete_button()}
@@ -276,12 +276,12 @@
 						<input
 							name="name"
 							value={credential.name}
-							class="w-full rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+							class="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 						/>
 
 						<div class="flex flex-wrap gap-3">
 							{#each scopeOptions as scope (scope.value)}
-								<label class="flex items-center gap-1.5 text-sm text-ink">
+								<label class="flex items-center gap-1.5 text-sm text-foreground">
 									<input
 										type="checkbox"
 										name="scopes"
@@ -293,13 +293,13 @@
 							{/each}
 						</div>
 
-						<label class="flex items-center gap-1.5 text-sm text-ink">
+						<label class="flex items-center gap-1.5 text-sm text-foreground">
 							<input type="checkbox" name="active" checked={credential.active} />
 							{m.application_credentials_edit_active_label()}
 						</label>
 
 						{#if updateErrors[credential.id]}
-							<p class="flex items-center gap-2 text-sm text-error">
+							<p class="flex items-center gap-2 text-sm text-danger">
 								<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 								{updateErrors[credential.id]}
 							</p>
@@ -308,7 +308,7 @@
 						<button
 							type="submit"
 							disabled={updatingId === credential.id}
-							class="cursor-pointer justify-self-start rounded-lg border border-line-1 px-4 py-2 text-sm font-medium text-ink hover:bg-line-3 disabled:cursor-wait disabled:opacity-70"
+							class="cursor-pointer justify-self-start rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-muted disabled:cursor-wait disabled:opacity-70"
 						>
 							{m.application_credentials_edit_submit()}
 						</button>
@@ -318,29 +318,31 @@
 		{/if}
 	</div>
 
-	<div class="rounded-xl border border-line-1 bg-surface p-6">
-		<h2 class="mb-4 text-base font-semibold text-ink">
+	<div class="rounded-xl border border-border bg-surface p-6">
+		<h2 class="mb-4 text-base font-semibold text-foreground">
 			{m.application_credentials_create_button()}
 		</h2>
 		<form onsubmit={handleCreate} class="grid gap-4">
-			<label class="grid gap-1.5 text-sm font-medium text-ink">
+			<label class="grid gap-1.5 text-sm font-medium text-foreground">
 				<span>{m.application_credentials_create_name_label()}</span>
 				<input
 					name="name"
 					type="text"
 					required
-					class="w-full rounded-lg border border-line-1 bg-page px-4 py-2.5 text-base text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+					class="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-base text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 				/>
 			</label>
 
-			<div class="grid gap-1.5 text-sm font-medium text-ink">
+			<div class="grid gap-1.5 text-sm font-medium text-foreground">
 				<span>{m.application_credentials_create_environment_label()}</span>
 				{#if selectedEnvironmentName}
-					<p class="rounded-lg border border-line-1 bg-page px-4 py-2.5 text-base text-ink">
+					<p
+						class="rounded-lg border border-border bg-background px-4 py-2.5 text-base text-foreground"
+					>
 						{selectedEnvironmentName}
 					</p>
 				{:else}
-					<p class="flex items-center gap-2 text-sm text-error">
+					<p class="flex items-center gap-2 text-sm text-danger">
 						<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 						{m.application_credentials_create_no_environment()}
 					</p>
@@ -348,12 +350,12 @@
 			</div>
 
 			<fieldset class="grid gap-1.5">
-				<legend class="text-sm font-medium text-ink"
+				<legend class="text-sm font-medium text-foreground"
 					>{m.application_credentials_create_scopes_label()}</legend
 				>
 				<div class="flex flex-wrap gap-3">
 					{#each scopeOptions as scope (scope.value)}
-						<label class="flex items-center gap-1.5 text-sm text-ink">
+						<label class="flex items-center gap-1.5 text-sm text-foreground">
 							<input type="checkbox" name="scopes" value={scope.value} />
 							{scope.label()}
 						</label>
@@ -362,7 +364,7 @@
 			</fieldset>
 
 			{#if createError}
-				<p class="flex items-center gap-2 text-sm text-error">
+				<p class="flex items-center gap-2 text-sm text-danger">
 					<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 					{createError}
 				</p>
@@ -371,7 +373,7 @@
 			<button
 				type="submit"
 				disabled={isCreating || !data.selectedEnvironmentId}
-				class="cursor-pointer justify-self-start rounded-lg bg-gold px-5 py-2.5 font-semibold text-navy hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
+				class="cursor-pointer justify-self-start rounded-lg bg-primary px-5 py-2.5 font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-70"
 			>
 				{m.application_credentials_create_submit()}
 			</button>

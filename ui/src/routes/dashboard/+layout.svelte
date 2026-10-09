@@ -16,7 +16,7 @@
 	});
 </script>
 
-<div class="flex h-screen overflow-hidden bg-page">
+<div class="flex h-screen overflow-hidden bg-background">
 	<Sidebar
 		flags={data.flags}
 		username={data.username}

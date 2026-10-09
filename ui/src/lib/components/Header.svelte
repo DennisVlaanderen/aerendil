@@ -35,15 +35,17 @@
 	let title = $derived(resolveTitle(page.url.pathname, page.data));
 </script>
 
-<header class="flex h-16 shrink-0 items-center justify-between border-b border-line-2 bg-page px-7">
-	<div class="truncate text-base font-semibold text-ink">{title}</div>
+<header
+	class="flex h-16 shrink-0 items-center justify-between border-b border-border bg-background px-7"
+>
+	<div class="truncate text-base font-semibold text-foreground">{title}</div>
 
 	<div class="flex items-center gap-4">
 		<EnvironmentSwitcher {environments} {selectedEnvironmentId} />
 
 		<button
 			type="button"
-			class="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-control text-ink-muted"
+			class="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-surface-muted text-muted-foreground"
 			aria-label={theme.effective === 'dark' ? m.theme_toggle_light() : m.theme_toggle_dark()}
 			onclick={() => theme.toggle()}
 		>
@@ -57,7 +59,7 @@
 		<LocaleSwitcher compact={false} />
 
 		<div
-			class="flex size-7.5 shrink-0 items-center justify-center rounded-full bg-avatar text-xs font-semibold text-cream"
+			class="flex size-7.5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
 			aria-hidden="true"
 		>
 			{getInitials(username)}

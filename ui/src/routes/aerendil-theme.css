@@ -1,0 +1,134 @@
+/*
+ * Aerendil brand theme for Tailwind CSS v4.
+ *
+ * Import it from your main stylesheet, after Tailwind itself:
+ *   @import "tailwindcss";
+ *   @import "./aerendil-theme.css";
+ *
+ * Dark mode is class based: put `dark` on <html> (see README.md for the
+ * small script that follows the OS setting and remembers a user choice).
+ */
+
+/* Make `dark:` follow the `.dark` class instead of only the OS media query,
+   so the app can offer a manual light/dark switch. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Raw palette ──────────────────────────────────────────────────────────
+   Generates bg-brand-500, text-ink-900 etc. Prefer the semantic tokens
+   below in components; reach for these only for one-off illustration. */
+@theme {
+	--color-brand-50: #eef4ff;
+	--color-brand-100: #dce8ff;
+	--color-brand-200: #bcd3ff;
+	--color-brand-300: #8eb5ff;
+	--color-brand-400: #4c8dff; /* Signal blue: the star in the logo */
+	--color-brand-500: #2f72f0;
+	--color-brand-600: #2460db;
+	--color-brand-700: #1f55c7; /* Deep shade: text and fills on light */
+	--color-brand-800: #1c459c;
+	--color-brand-900: #1b3b7a;
+	--color-brand-950: #14264d;
+
+	--color-ink-50: #f6f7f9;
+	--color-ink-100: #eceef2;
+	--color-ink-200: #d5dae2;
+	--color-ink-300: #b3bcc9;
+	--color-ink-400: #8593a8;
+	--color-ink-500: #64748b;
+	--color-ink-600: #4a5568;
+	--color-ink-700: #36435a;
+	--color-ink-800: #1f2b3e;
+	--color-ink-900: #152235;
+	--color-ink-950: #0e1a2b; /* Navy: the logo's pill */
+
+	--color-paper: #f3f1ec; /* Warm off-white: light background */
+
+	--font-sans: 'Sora', ui-sans-serif, system-ui, sans-serif;
+	--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* ── Semantic tokens ──────────────────────────────────────────────────────
+   One set of names, two sets of values. Components use these
+   (bg-background, text-primary, border-border …) and switch theme for free.
+   Every text/background pair below is at least 4.5:1 (WCAG AA). */
+:root {
+	--background: #f3f1ec;
+	--foreground: #0e1a2b;
+	--surface: #ffffff;
+	--surface-muted: #eceef2;
+	--muted-foreground: #4a5568;
+	--border: #d5dae2;
+	--ring: #2f72f0;
+
+	--primary: #1f55c7;
+	--primary-hover: #1c459c;
+	--primary-foreground: #ffffff;
+
+	--accent: #eef4ff;
+	--accent-foreground: #1c459c;
+
+	/* Flag states: on / kill switch / caution */
+	--success: #067647;
+	--danger: #b42318;
+	--warning: #b54708;
+
+	--logo-pill: #0e1a2b;
+	--logo-star: #4c8dff;
+
+	color-scheme: light;
+}
+
+.dark {
+	--background: #0e1a2b;
+	--foreground: #f3f1ec;
+	--surface: #152235;
+	--surface-muted: #1f2b3e;
+	--muted-foreground: #a9b4c4;
+	--border: #2a3850;
+	--ring: #4c8dff;
+
+	--primary: #4c8dff;
+	--primary-hover: #8eb5ff;
+	/* Dark text on the bright blue: white on #4c8dff would only reach ~3:1 */
+	--primary-foreground: #0e1a2b;
+
+	--accent: #172f5c;
+	--accent-foreground: #bcd3ff;
+
+	--success: #47cd89;
+	--danger: #f97066;
+	--warning: #fdb022;
+
+	--logo-pill: #f3f1ec;
+	--logo-star: #4c8dff;
+
+	color-scheme: dark;
+}
+
+/* `inline` makes the utilities reference the variables directly, so the
+   values swap at runtime when `.dark` toggles instead of being baked in. */
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-surface: var(--surface);
+	--color-surface-muted: var(--surface-muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-border: var(--border);
+	--color-ring: var(--ring);
+	--color-primary: var(--primary);
+	--color-primary-hover: var(--primary-hover);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-success: var(--success);
+	--color-danger: var(--danger);
+	--color-warning: var(--warning);
+	--color-logo-pill: var(--logo-pill);
+	--color-logo-star: var(--logo-star);
+}
+
+@layer base {
+	body {
+		@apply bg-background font-sans text-foreground;
+	}
+}

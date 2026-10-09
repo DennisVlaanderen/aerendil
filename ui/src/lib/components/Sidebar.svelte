@@ -86,24 +86,27 @@
 <svelte:window onclick={handleClickOutsideDropdowns} onkeydown={handleKeydown} />
 
 <aside
-	class="flex h-full shrink-0 flex-col border-r border-line-2 bg-sidebar transition-[width] duration-200 {collapsed
+	class="flex h-full shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 {collapsed
 		? 'w-18'
 		: 'w-62.5'}"
 >
-	<div class="flex h-16 items-center gap-2.5 border-b border-line-2 px-4.5 py-5">
-		<img src="/aerendil-logo.svg" width="26" height="26" class="shrink-0" alt="Aerendil Logo" />
-		{#if !collapsed}
-			<span class="truncate text-base font-semibold tracking-[0.3px] text-ink">Aerendil</span>
+	<div class="flex h-16 items-center gap-2.5 border-b border-border px-4.5 py-5">
+		{#if collapsed}
+			<img src="/favicon.svg" width="26" height="26" class="shrink-0" alt="Aerendil" />
+		{:else}
+			<!-- An <img> can't see the .dark class, so render both variants -->
+			<img src="/aerendil-logo.svg" class="h-7 w-auto dark:hidden" alt="Aerendil" />
+			<img src="/aerendil-logo-dark.svg" class="hidden h-7 w-auto dark:block" alt="Aerendil" />
 		{/if}
 	</div>
 
 	<nav class="flex flex-1 flex-col gap-1 overflow-y-auto p-2.5">
 		<a
-			class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-line-3 {isActive(
+			class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-surface-muted {isActive(
 				'/dashboard'
 			)
-				? 'bg-nav-active-bg text-nav-active'
-				: 'text-nav-inactive'}"
+				? 'bg-accent text-accent-foreground'
+				: 'text-muted-foreground'}"
 			href={localizedResolve('/dashboard')}
 		>
 			<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
@@ -115,10 +118,11 @@
 		{#if canSeeUserManagement}
 			<div bind:this={userManagementContainer}>
 				<div
-					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive('/dashboard/users') ||
-					isActive('/dashboard/groups')
-						? 'bg-nav-active-bg text-nav-active'
-						: 'text-nav-inactive'}"
+					class="flex items-center gap-1 rounded-lg hover:bg-surface-muted {isActive(
+						'/dashboard/users'
+					) || isActive('/dashboard/groups')
+						? 'bg-accent text-accent-foreground'
+						: 'text-muted-foreground'}"
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
@@ -149,14 +153,14 @@
 				</div>
 
 				{#if userManagementOpen && !collapsed}
-					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-line-3 pl-2.5">
+					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-border pl-2.5">
 						{#if canSeeUsers}
 							<a
-								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-surface-muted {isActive(
 									'/dashboard/users'
 								)
-									? 'bg-nav-active-bg text-nav-active'
-									: 'text-nav-inactive'}"
+									? 'bg-accent text-accent-foreground'
+									: 'text-muted-foreground'}"
 								href={localizedResolve('/dashboard/users')}
 							>
 								{m.nav_users()}
@@ -164,11 +168,11 @@
 						{/if}
 						{#if canSeeGroups}
 							<a
-								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-surface-muted {isActive(
 									'/dashboard/groups'
 								)
-									? 'bg-nav-active-bg text-nav-active'
-									: 'text-nav-inactive'}"
+									? 'bg-accent text-accent-foreground'
+									: 'text-muted-foreground'}"
 								href={localizedResolve('/dashboard/groups')}
 							>
 								{m.nav_groups()}
@@ -182,11 +186,11 @@
 		{#if canSeeApplicationSettings}
 			<div bind:this={applicationSettingsContainer}>
 				<div
-					class="flex items-center gap-1 rounded-lg hover:bg-line-3 {isActive(
+					class="flex items-center gap-1 rounded-lg hover:bg-surface-muted {isActive(
 						'/dashboard/settings/environments'
 					) || isActive('/dashboard/application-credentials')
-						? 'bg-nav-active-bg text-nav-active'
-						: 'text-nav-inactive'}"
+						? 'bg-accent text-accent-foreground'
+						: 'text-muted-foreground'}"
 				>
 					<a
 						class="flex flex-1 items-center gap-3 truncate px-2.5 py-2.25 text-[13.5px] font-medium no-underline"
@@ -217,14 +221,14 @@
 				</div>
 
 				{#if applicationSettingsOpen && !collapsed}
-					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-line-3 pl-2.5">
+					<div class="mt-0.5 ml-7.5 flex flex-col gap-0.5 border-l border-border pl-2.5">
 						{#if canSeeEnvironments}
 							<a
-								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-surface-muted {isActive(
 									'/dashboard/settings/environments'
 								)
-									? 'bg-nav-active-bg text-nav-active'
-									: 'text-nav-inactive'}"
+									? 'bg-accent text-accent-foreground'
+									: 'text-muted-foreground'}"
 								href={localizedResolve('/dashboard/settings/environments')}
 							>
 								{m.nav_environments()}
@@ -232,11 +236,11 @@
 						{/if}
 						{#if canSeeApplicationCredentials}
 							<a
-								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-line-3 {isActive(
+								class="flex items-center gap-2.5 truncate rounded-md px-2.5 py-1.75 text-[13px] font-medium no-underline hover:bg-surface-muted {isActive(
 									'/dashboard/application-credentials'
 								)
-									? 'bg-nav-active-bg text-nav-active'
-									: 'text-nav-inactive'}"
+									? 'bg-accent text-accent-foreground'
+									: 'text-muted-foreground'}"
 								href={localizedResolve('/dashboard/application-credentials')}
 							>
 								{m.nav_application_credentials()}
@@ -249,11 +253,11 @@
 
 		{#if canSeeAuditLog}
 			<a
-				class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-line-3 {isActive(
+				class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-surface-muted {isActive(
 					'/dashboard/audit-log'
 				)
-					? 'bg-nav-active-bg text-nav-active'
-					: 'text-nav-inactive'}"
+					? 'bg-accent text-accent-foreground'
+					: 'text-muted-foreground'}"
 				href={localizedResolve('/dashboard/audit-log')}
 			>
 				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
@@ -266,14 +270,14 @@
 		{#if !collapsed}
 			<div class="mt-3 mb-0.5 flex items-center justify-between gap-1.5 px-2.5">
 				<p
-					class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-nav-inactive uppercase"
+					class="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase"
 				>
 					<span class="icon-[lucide--flag] size-3.5" aria-hidden="true"></span>
 					{m.nav_flags()}
 				</p>
 				{#if canCreateFlags}
 					<a
-						class="flex size-4.5 shrink-0 items-center justify-center rounded text-nav-inactive no-underline hover:bg-line-3 hover:text-nav-active"
+						class="flex size-4.5 shrink-0 items-center justify-center rounded text-muted-foreground no-underline hover:bg-surface-muted hover:text-primary"
 						href={localizedResolve('/dashboard/flags/new')}
 						aria-label={m.nav_new_flag()}
 					>
@@ -284,22 +288,22 @@
 		{/if}
 
 		{#if flags.length === 0 && !collapsed}
-			<p class="px-2.5 text-sm text-ink-muted">{m.nav_no_flags()}</p>
+			<p class="px-2.5 text-sm text-muted-foreground">{m.nav_no_flags()}</p>
 		{:else}
 			{#each flags as flag (flag.key)}
 				<a
-					class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-line-3 {isActive(
+					class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-surface-muted {isActive(
 						`/dashboard/flags/${flag.key}`
 					)
-						? 'bg-nav-active-bg text-nav-active'
-						: 'text-nav-inactive'}"
+						? 'bg-accent text-accent-foreground'
+						: 'text-muted-foreground'}"
 					href={localizedResolve(`/dashboard/flags/${flag.key}`)}
 				>
 					<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 						{#if flag.enabled}
 							<span class="icon-[lucide--toggle-right] size-4.5 text-success"></span>
 						{:else}
-							<span class="icon-[lucide--toggle-left] size-4.5 text-ink-muted"></span>
+							<span class="icon-[lucide--toggle-left] size-4.5 text-muted-foreground"></span>
 						{/if}
 					</span>
 					{#if !collapsed}<span>{flag.key}</span>{/if}
@@ -308,12 +312,12 @@
 		{/if}
 	</nav>
 
-	<div class="flex flex-col gap-0.5 border-t border-line-2 p-2.5">
+	<div class="flex flex-col gap-0.5 border-t border-border p-2.5">
 		<LocaleSwitcher compact={collapsed} />
 		<form method="POST" action="/logout">
 			<button
 				type="submit"
-				class="flex w-full cursor-pointer items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium text-error hover:bg-line-3"
+				class="flex w-full cursor-pointer items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium text-danger hover:bg-surface-muted"
 			>
 				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
 					<span class="icon-[lucide--log-out] size-4.5"></span>
@@ -323,16 +327,16 @@
 		</form>
 	</div>
 
-	<div class="flex items-center gap-2.5 border-t border-line-2 px-4 py-3.5">
+	<div class="flex items-center gap-2.5 border-t border-border px-4 py-3.5">
 		<div
-			class="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-avatar text-[11px] font-semibold text-cream"
+			class="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
 		>
 			{getInitials(username)}
 		</div>
 		{#if !collapsed}
 			<div class="min-w-0">
-				<div class="truncate text-[12.5px] font-medium text-ink">{username}</div>
-				<div class="truncate text-[11px] text-ink-muted">
+				<div class="truncate text-[12.5px] font-medium text-foreground">{username}</div>
+				<div class="truncate text-[11px] text-muted-foreground">
 					{isAdmin ? m.sidebar_role_admin() : m.sidebar_role_member()}
 				</div>
 			</div>
@@ -341,7 +345,7 @@
 
 	<button
 		type="button"
-		class="flex h-10 cursor-pointer items-center gap-2 border-t border-line-2 px-4 py-3 text-ink-muted"
+		class="flex h-10 cursor-pointer items-center gap-2 border-t border-border px-4 py-3 text-muted-foreground"
 		onclick={() => (collapsed = !collapsed)}
 		aria-label={collapsed ? m.sidebar_expand() : m.sidebar_collapse()}
 	>

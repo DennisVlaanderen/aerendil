@@ -1,7 +1,10 @@
 # Aerendil
 
 <p align="center">
-  <img src="./docs/aerendil-logo.svg" width="500rem" alt="Aerendil mascot holding a toggle button"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/aerendil-logo-dark.svg"/>
+    <img src="./docs/aerendil-logo.svg" width="400" alt="Aerendil"/>
+  </picture>
 </p>
 
 **At this time Aerendil is not a working product, but very much a WIP**
