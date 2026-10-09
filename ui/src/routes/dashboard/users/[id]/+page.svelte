@@ -74,37 +74,37 @@
 </svelte:head>
 
 <div class="p-7">
-	<div class="w-full max-w-2xl rounded-xl border border-line-1 bg-surface p-6">
+	<div class="w-full max-w-2xl rounded-xl border border-border bg-surface p-6">
 		<a
-			class="mb-1 inline-block text-xs font-semibold tracking-widest text-nav-active uppercase no-underline"
+			class="mb-1 inline-block text-xs font-semibold tracking-widest text-primary uppercase no-underline"
 			href={localizedResolve('/dashboard/users')}
 		>
 			{m.nav_users()}
 		</a>
-		<h1 class="mb-5 flex items-center gap-3 text-xl font-semibold break-words text-ink">
-			<span class="icon-[lucide--user] size-6 shrink-0 text-gold" aria-hidden="true"></span>
+		<h1 class="mb-5 flex items-center gap-3 text-xl font-semibold break-words text-foreground">
+			<span class="icon-[lucide--user] size-6 shrink-0 text-primary" aria-hidden="true"></span>
 			{data.user.username}
 		</h1>
 
 		<form onsubmit={handleSave} class="grid gap-4">
 			<div class="grid gap-3 sm:grid-cols-2">
-				<label class="grid gap-1.5 text-sm text-ink">
+				<label class="grid gap-1.5 text-sm text-foreground">
 					<span class="font-medium">{m.users_table_username()}</span>
 					<input
 						name="username"
 						value={data.user.username}
 						disabled={!canUpdate}
-						class="w-full rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none disabled:opacity-60"
+						class="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none disabled:opacity-60"
 					/>
 				</label>
-				<label class="grid gap-1.5 text-sm text-ink">
+				<label class="grid gap-1.5 text-sm text-foreground">
 					<span class="font-medium">{m.users_edit_password_label()}</span>
 					<input
 						name="password"
 						type="password"
 						placeholder={m.users_edit_password_placeholder()}
 						disabled={!canUpdate}
-						class="w-full rounded-lg border border-line-1 bg-page px-4 py-2 text-sm text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none disabled:opacity-60"
+						class="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none disabled:opacity-60"
 					/>
 				</label>
 			</div>
@@ -112,7 +112,7 @@
 			{#if data.groups.length > 0}
 				<div class="flex flex-wrap gap-3">
 					{#each data.groups as group (group.id)}
-						<label class="flex items-center gap-1.5 text-sm text-ink">
+						<label class="flex items-center gap-1.5 text-sm text-foreground">
 							<input
 								type="checkbox"
 								name="groupIds"
@@ -126,13 +126,13 @@
 				</div>
 			{/if}
 
-			<label class="flex items-center gap-1.5 text-sm text-ink">
+			<label class="flex items-center gap-1.5 text-sm text-foreground">
 				<input type="checkbox" name="active" checked={data.user.active} disabled={!canUpdate} />
 				{m.users_edit_active_label()}
 			</label>
 
 			{#if saveError}
-				<p class="flex items-center gap-2 text-sm text-error">
+				<p class="flex items-center gap-2 text-sm text-danger">
 					<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 					{saveError}
 				</p>
@@ -142,7 +142,7 @@
 				<button
 					type="submit"
 					disabled={isSaving}
-					class="cursor-pointer justify-self-start rounded-lg border border-line-1 px-4 py-2 text-sm font-medium text-ink hover:bg-line-3 disabled:cursor-wait disabled:opacity-70"
+					class="cursor-pointer justify-self-start rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-muted disabled:cursor-wait disabled:opacity-70"
 				>
 					{m.users_edit_submit()}
 				</button>
@@ -150,9 +150,9 @@
 		</form>
 
 		{#if data.isAdmin}
-			<div class="mt-6 border-t border-line-4 pt-5">
+			<div class="mt-6 border-t border-border pt-5">
 				{#if deleteError}
-					<p class="mb-3 flex items-center gap-2 text-sm text-error">
+					<p class="mb-3 flex items-center gap-2 text-sm text-danger">
 						<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 						{deleteError}
 					</p>
@@ -160,7 +160,7 @@
 				<button
 					type="button"
 					disabled={isDeleting}
-					class="cursor-pointer text-sm font-medium text-error hover:underline disabled:cursor-wait disabled:opacity-70"
+					class="cursor-pointer text-sm font-medium text-danger hover:underline disabled:cursor-wait disabled:opacity-70"
 					onclick={() => deleteModal?.show()}
 				>
 					{m.users_delete_button()}

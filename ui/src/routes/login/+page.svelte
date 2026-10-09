@@ -43,22 +43,24 @@
 	<LocaleSwitcher />
 </div>
 
-<div class="grid min-h-screen place-items-center bg-page p-8 font-sans">
-	<div class="w-full max-w-md rounded-xl border border-line-1 bg-surface p-8">
+<div class="grid min-h-screen place-items-center bg-background p-8 font-sans">
+	<div class="w-full max-w-md rounded-xl border border-border bg-surface p-8">
+		<img src="/aerendil-logo.svg" class="mb-6 h-8 w-auto dark:hidden" alt="Aerendil" />
+		<img src="/aerendil-logo-dark.svg" class="mb-6 hidden h-8 w-auto dark:block" alt="Aerendil" />
 		<div class="mb-6">
-			<p class="mb-1 text-xs font-semibold tracking-widest text-nav-active uppercase">
+			<p class="mb-1 text-xs font-semibold tracking-widest text-primary uppercase">
 				{m.login_eyebrow()}
 			</p>
-			<h1 class="text-2xl font-semibold text-ink">{m.login_title()}</h1>
-			<p class="mt-1 text-ink-muted">{m.login_subtitle()}</p>
+			<h1 class="text-2xl font-semibold text-foreground">{m.login_title()}</h1>
+			<p class="mt-1 text-muted-foreground">{m.login_subtitle()}</p>
 		</div>
 
 		<form method="POST" class="grid gap-4" onsubmit={handleSubmit}>
-			<label class="grid gap-1.5 text-sm font-medium text-ink">
+			<label class="grid gap-1.5 text-sm font-medium text-foreground">
 				<span>{m.login_username_label()}</span>
 				<div class="relative">
 					<span
-						class="absolute top-1/2 left-3.5 icon-[lucide--user] size-4 -translate-y-1/2 text-ink-muted"
+						class="absolute top-1/2 left-3.5 icon-[lucide--user] size-4 -translate-y-1/2 text-muted-foreground"
 						aria-hidden="true"
 					></span>
 					<input
@@ -66,16 +68,16 @@
 						type="text"
 						autocomplete="username"
 						required
-						class="w-full rounded-lg border border-line-1 bg-page py-3 pr-4 pl-10 text-base text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+						class="w-full rounded-lg border border-border bg-background py-3 pr-4 pl-10 text-base text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 					/>
 				</div>
 			</label>
 
-			<label class="grid gap-1.5 text-sm font-medium text-ink">
+			<label class="grid gap-1.5 text-sm font-medium text-foreground">
 				<span>{m.login_password_label()}</span>
 				<div class="relative">
 					<span
-						class="absolute top-1/2 left-3.5 icon-[lucide--lock] size-4 -translate-y-1/2 text-ink-muted"
+						class="absolute top-1/2 left-3.5 icon-[lucide--lock] size-4 -translate-y-1/2 text-muted-foreground"
 						aria-hidden="true"
 					></span>
 					<input
@@ -83,13 +85,13 @@
 						type="password"
 						autocomplete="current-password"
 						required
-						class="w-full rounded-lg border border-line-1 bg-page py-3 pr-4 pl-10 text-base text-ink focus:border-gold focus:ring-2 focus:ring-gold/40 focus:outline-none"
+						class="w-full rounded-lg border border-border bg-background py-3 pr-4 pl-10 text-base text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 					/>
 				</div>
 			</label>
 
 			{#if errorMessage}
-				<p class="flex items-center gap-2 text-sm text-error">
+				<p class="flex items-center gap-2 text-sm text-danger">
 					<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
 					{errorMessage}
 				</p>
@@ -98,13 +100,13 @@
 			<button
 				type="submit"
 				disabled={isSubmitting}
-				class="cursor-pointer rounded-lg bg-gold px-4 py-3.5 font-semibold text-navy hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
+				class="cursor-pointer rounded-lg bg-primary px-4 py-3.5 font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-70"
 			>
 				{isSubmitting ? m.login_submitting() : m.login_submit()}
 			</button>
 		</form>
 
-		<div class="mt-5 border-t border-line-2 pt-4 text-sm text-ink-muted">
+		<div class="mt-5 border-t border-border pt-4 text-sm text-muted-foreground">
 			<p>{m.login_demo_hint()}</p>
 			<p>{m.login_demo_admin()}</p>
 		</div>

@@ -17,6 +17,6 @@
 		min-height: 100vh;
 		font-size: 1.1rem;
 		font-weight: 600;
-		color: var(--color-ink);
+		color: var(--color-foreground);
 	}
 </style>

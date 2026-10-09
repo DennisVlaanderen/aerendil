@@ -61,16 +61,16 @@
 	<div class="relative flex" bind:this={container}>
 		<button
 			type="button"
-			class="flex cursor-pointer items-center gap-2 rounded-lg border border-line-1 bg-page px-2.5 py-2.25 text-[13.5px] font-medium whitespace-nowrap text-ink"
+			class="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-2.25 text-[13.5px] font-medium whitespace-nowrap text-foreground"
 			aria-haspopup="listbox"
 			aria-expanded={open}
 			aria-label={m.header_environment_select_label()}
 			onclick={toggleOpen}
 		>
-			<span class="icon-[lucide--layers] size-3.5 text-ink-muted" aria-hidden="true"></span>
+			<span class="icon-[lucide--layers] size-3.5 text-muted-foreground" aria-hidden="true"></span>
 			<span>{selected?.name ?? ''}</span>
 			<span
-				class="icon-[lucide--chevron-down] size-3.5 text-ink-muted transition-transform duration-150 {open
+				class="icon-[lucide--chevron-down] size-3.5 text-muted-foreground transition-transform duration-150 {open
 					? 'rotate-180'
 					: ''}"
 				aria-hidden="true"
@@ -79,7 +79,7 @@
 
 		{#if open}
 			<ul
-				class="absolute top-[calc(100%+0.4rem)] right-0 z-30 flex min-w-40 flex-col gap-0.5 rounded-xl border border-line-1 bg-surface p-1.5"
+				class="absolute top-[calc(100%+0.4rem)] right-0 z-30 flex min-w-40 flex-col gap-0.5 rounded-xl border border-border bg-surface p-1.5"
 				role="listbox"
 				aria-label={m.header_environment_select_label()}
 			>
@@ -87,9 +87,9 @@
 					<li>
 						<button
 							type="button"
-							class="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm font-medium text-ink hover:bg-line-3 {environment.id ===
+							class="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm font-medium text-foreground hover:bg-surface-muted {environment.id ===
 							selectedEnvironmentId
-								? 'bg-nav-active-bg text-nav-active'
+								? 'bg-accent text-accent-foreground'
 								: ''}"
 							role="option"
 							aria-selected={environment.id === selectedEnvironmentId}
