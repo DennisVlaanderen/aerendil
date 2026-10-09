@@ -3,20 +3,18 @@ package store
 import (
 	"errors"
 	"fmt"
+	"sort"
 )
 
-// ErrProtectedSystemGroup is returned when the target group has System
-// set -- currently only Admin. Lets api's writeStoreError map this to a
-// 403 without every caller needing its own AdminGroupID check.
+// ErrProtectedSystemGroup is returned when targeting a System group
+// (only Admin), so the API can 403 without its own AdminGroupID checks.
 var ErrProtectedSystemGroup = errors.New("this group is a protected system group and cannot be modified or deleted")
 
-// Group is a named set of permissions that can be assigned to users.
+// Group is a named set of permissions assigned to users.
 //
-// EnvironmentIDs grants members access to specific environments' flags;
-// empty/nil means no access (deny-by-default). Unlike Permissions, it's
-// API-validated only, not FSM-enforced -- a dangling ID after an
-// environment is deleted is harmless, unlike a Flag pointing at a deleted
-// environment (see ErrEnvironmentHasFlags).
+// EnvironmentIDs grants access to those environments (empty means none). It
+// is API-validated only; a dangling ID after an environment is deleted is
+// harmless.
 type Group struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
@@ -26,8 +24,7 @@ type Group struct {
 	Version        uint64   `json:"version"`
 }
 
-// AdminGroupID is the Admin group's fixed ID; see Group's doc comment for
-// how its permission bypass is anchored on this ID.
+// AdminGroupID is the Admin group's fixed ID.
 const AdminGroupID = "admin"
 
 func (f *fsm) applyGroup(index uint64, cmd command) any {
@@ -64,27 +61,27 @@ func (f *fsm) listGroups() []Group {
 	for _, g := range f.groups {
 		groups = append(groups, g)
 	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].ID < groups[j].ID })
 	return groups
 }
 
-// GroupRepository provides group operations against the store. Obtain one
-// via Store.Groups().
+// GroupRepository provides group operations; get one via Store.Groups().
 type GroupRepository struct {
 	store *Store
 }
 
-// Get returns the current state of a group, if it exists.
+// Get returns a group, if it exists.
 func (r GroupRepository) Get(id string) (Group, bool) {
 	return r.store.fsm.getGroup(id)
 }
 
-// List returns all known groups.
+// List returns all known groups, ordered by ID.
 func (r GroupRepository) List() []Group {
 	return r.store.fsm.listGroups()
 }
 
-// Set applies a group create/update through Raft consensus. The Admin
-// group is rejected as a fast pre-check; fsm.Apply enforces it too.
+// Set creates or updates a group through Raft. The Admin group is rejected
+// here as a fast pre-check; fsm.Apply enforces it too.
 func (r GroupRepository) Set(group Group) (Group, error) {
 	if existing, ok := r.store.fsm.getGroup(group.ID); ok && existing.System {
 		return Group{}, fmt.Errorf("%w: %q", ErrProtectedSystemGroup, existing.ID)

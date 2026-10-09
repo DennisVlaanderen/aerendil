@@ -4,20 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 )
 
-// ErrUsernameTaken is returned when the username on a record already
-// belongs to a different user.
+// ErrUsernameTaken means another user has that username.
 var ErrUsernameTaken = errors.New("username is already taken")
 
-// ErrLastAdmin is returned when an operation (delete, deactivate, or
-// stripping Admin group membership) would leave zero active admins --
-// otherwise the Admin group's own undeletability would be no guarantee.
+// ErrLastAdmin is returned when a delete, deactivation or Admin-membership
+// removal would leave no active admin.
 var ErrLastAdmin = errors.New("cannot remove the last remaining admin account")
 
-// User is a persisted account record. Password hashing/validation is the
-// auth package's job; store only enforces what fsm.Apply does (e.g.
-// username uniqueness), same split as Flag.
+// User is a persisted account. Password handling lives in auth; store only
+// enforces invariants like username uniqueness.
 type User struct {
 	ID           string   `json:"id"`
 	Username     string   `json:"username"`
@@ -56,9 +54,8 @@ func isActiveAdmin(u User) bool {
 	return u.Active && slices.Contains(u.GroupIDs, AdminGroupID)
 }
 
-// isSoleActiveAdminLocked reports whether id currently is the only active
-// admin -- an active member of the Admin group with no other active member
-// to fall back on. Caller must hold f.mu.
+// isSoleActiveAdminLocked reports whether id is the only active admin.
+// Caller holds f.mu.
 func (f *fsm) isSoleActiveAdminLocked(id string) bool {
 	target, ok := f.users[id]
 	if !ok || !isActiveAdmin(target) {
@@ -72,9 +69,8 @@ func (f *fsm) isSoleActiveAdminLocked(id string) bool {
 	return true
 }
 
-// isSoleActiveAdmin is the read-locking counterpart of
-// isSoleActiveAdminLocked, for use outside of Apply (e.g. a repository's
-// fast pre-check before proposing a command to Raft at all).
+// isSoleActiveAdmin is isSoleActiveAdminLocked with a read lock, for
+// pre-checks outside Apply.
 func (f *fsm) isSoleActiveAdmin(id string) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -88,8 +84,7 @@ func (f *fsm) getUser(id string) (User, bool) {
 	return u, ok
 }
 
-// getUserByUsername is a linear scan -- fine at the scale a single-cluster
-// user store operates at; add an index if that ever stops being true.
+// getUserByUsername is a linear scan; add an index if user counts grow.
 func (f *fsm) getUserByUsername(username string) (User, bool) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -108,16 +103,16 @@ func (f *fsm) listUsers() []User {
 	for _, u := range f.users {
 		users = append(users, u)
 	}
+	sort.Slice(users, func(i, j int) bool { return users[i].ID < users[j].ID })
 	return users
 }
 
-// UserRepository provides user operations against the store. Obtain one via
-// Store.Users().
+// UserRepository provides user operations; get one via Store.Users().
 type UserRepository struct {
 	store *Store
 }
 
-// Get returns the current state of a user, if it exists.
+// Get returns a user, if it exists.
 func (r UserRepository) Get(id string) (User, bool) {
 	return r.store.fsm.getUser(id)
 }
@@ -127,14 +122,13 @@ func (r UserRepository) GetByUsername(username string) (User, bool) {
 	return r.store.fsm.getUserByUsername(username)
 }
 
-// List returns all known users.
+// List returns all known users, ordered by ID.
 func (r UserRepository) List() []User {
 	return r.store.fsm.listUsers()
 }
 
-// Set applies a user create/update through Raft consensus. A duplicate
-// username or an edit that would strip the last admin is rejected as a
-// fast pre-check; fsm.Apply enforces both as the ultimate source of truth.
+// Set creates or updates a user through Raft. Duplicate usernames and
+// removing the last admin are pre-checked here; fsm.Apply enforces both.
 func (r UserRepository) Set(user User) (User, error) {
 	if existing, ok := r.store.fsm.getUserByUsername(user.Username); ok && existing.ID != user.ID {
 		return User{}, ErrUsernameTaken
@@ -157,8 +151,7 @@ func (r UserRepository) Set(user User) (User, error) {
 	}
 }
 
-// Delete removes a user by ID. The sole remaining admin can never be
-// deleted -- see ErrLastAdmin.
+// Delete removes a user by ID, except the last admin (ErrLastAdmin).
 func (r UserRepository) Delete(id string) error {
 	if r.store.fsm.isSoleActiveAdmin(id) {
 		return ErrLastAdmin

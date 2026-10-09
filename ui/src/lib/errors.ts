@@ -27,6 +27,7 @@ export const ErrorCode = {
 
 	// BR01 -- bad request, general (400).
 	BadRequestBody: 'BR01-0001',
+	BadRequestCursorInvalid: 'BR01-0002',
 
 	// BR02 -- bad request, flags domain (400).
 	BadRequestFlagsEnvironmentIDRequired: 'BR02-0001',
@@ -107,6 +108,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BusinessAdminOnlyUserDelete]: m.error_admin_only_user_delete,
 	[ErrorCode.BusinessEnvironmentHasCredentials]: m.error_environment_has_credentials,
 	[ErrorCode.BadRequestBody]: m.error_invalid_body,
+	[ErrorCode.BadRequestCursorInvalid]: m.error_cursor_invalid,
 	[ErrorCode.BadRequestFlagsEnvironmentIDRequired]: m.error_environment_id_required,
 	[ErrorCode.BadRequestFlagsKeyRequired]: m.error_flag_key_required,
 	[ErrorCode.BadRequestFlagsEnvironmentIDsRequired]: m.error_flag_environments_required,

@@ -47,12 +47,9 @@ func toEnvironmentResponse(e store.Environment) environmentResponse {
 	}
 }
 
-// resolveEnvironmentSummaries returns the environments principal should see
-// in /api/auth/me: all of them for Admin, else only what principal.Envs
-// grants. Resolved to real records (not bare IDs) so a client never needs
-// environments:read just to see names of environments it can already
-// access. Filters the Order-sorted List() rather than iterating Envs.Keys()
-// (which sorts alphabetically) to preserve ordering.
+// resolveEnvironmentSummaries returns the environments principal sees in
+// /api/auth/me (all for Admin), as records so names need no
+// environments:read. Filters List() to keep its Order sorting.
 func resolveEnvironmentSummaries(principal resolvedPrincipal) []environmentResponse {
 	all := dataStore.Environments().List()
 	resp := make([]environmentResponse, 0, len(all))
@@ -70,7 +67,11 @@ func environmentsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	for _, e := range environments {
 		resp = append(resp, toEnvironmentResponse(e))
 	}
-	return ok(w, map[string]any{"environments": resp})
+	resp, page, err := paginate(r, resp)
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("environments", resp, page))
 }
 
 func environmentsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
@@ -126,8 +127,7 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
-	// Order is fixed at creation (see environmentsPostHandler) and not
-	// accepted here; reordering is a future follow-up.
+	// Order is fixed at creation; reordering is a future follow-up.
 	env, err := dataStore.Environments().Set(store.Environment{
 		ID:    existing.ID,
 		Name:  name,

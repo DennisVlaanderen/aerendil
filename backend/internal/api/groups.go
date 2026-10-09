@@ -43,9 +43,7 @@ type groupResponse struct {
 }
 
 func toGroupResponse(g store.Group) groupResponse {
-	// Permissions/EnvironmentIDs come back nil after Apply (omitempty drops
-	// an empty slice in the Raft-log JSON encoding) -- normalize to non-nil
-	// so clients always see a real array, never null.
+	// Apply returns nil for empty slices (omitempty); serve [] not null.
 	permissions := g.Permissions
 	if permissions == nil {
 		permissions = []string{}
@@ -69,7 +67,11 @@ func groupsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	for _, g := range groups {
 		resp = append(resp, toGroupResponse(g))
 	}
-	return ok(w, map[string]any{"groups": resp})
+	resp, page, err := paginate(r, resp)
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("groups", resp, page))
 }
 
 func groupsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
@@ -107,7 +109,7 @@ func groupsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		Name:           name,
 		Permissions:    payload.Permissions,
 		EnvironmentIDs: payload.EnvironmentIDs,
-		System:         false, // a client can never create a second system group
+		System:         false, // clients can't create system groups
 	})
 	if err != nil {
 		return err
@@ -118,8 +120,7 @@ func groupsPostHandler(w http.ResponseWriter, r *http.Request) error {
 func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
-	// No pre-check for the Admin group -- Set below is the source of truth
-	// and returns ErrProtectedSystemGroup, which maps to the same 403.
+	// Set enforces Admin group protection (ErrProtectedSystemGroup, 403).
 	existing, found := dataStore.Groups().Get(id)
 	if !found {
 		return notFound(CodeNotFoundGroup, MsgNotFoundGroup)
@@ -161,8 +162,7 @@ func groupsPutHandler(w http.ResponseWriter, r *http.Request) error {
 func groupsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	id := r.PathValue("id")
 
-	// No pre-check for the Admin group -- see groupsPutHandler; Delete is
-	// the source of truth.
+	// Delete enforces Admin group protection.
 	if _, found := dataStore.Groups().Get(id); !found {
 		return notFound(CodeNotFoundGroup, MsgNotFoundGroup)
 	}
@@ -182,9 +182,7 @@ func validatePermissions(perms []string) error {
 	return nil
 }
 
-// validateEnvironmentIDs mirrors validatePermissions -- each ID must
-// resolve to an existing Environment, so a client can't grant a group
-// access to a typo'd or already-deleted environment.
+// validateEnvironmentIDs requires every ID to name an existing Environment.
 func validateEnvironmentIDs(ids []string) error {
 	for _, id := range ids {
 		if _, ok := dataStore.Environments().Get(id); !ok {

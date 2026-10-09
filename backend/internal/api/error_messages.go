@@ -1,17 +1,14 @@
 package api
 
-// Client-facing message text for the codes in error_codes.go, defined once
-// per code that is (or is expected to become) reused across call sites --
-// same reasoning as the Code catalog itself: text lives here once so it
-// can't drift between the two-plus places that return it. A code used at a
-// single call site keeps its message inline until a second call site shows
-// up; move it here at that point instead of copy-pasting the literal.
+// Messages for codes returned from more than one call site, so the text
+// can't drift. Single-use messages stay inline until a second site appears.
 const (
 	// A01/A02 -- auth.
 	MsgAuthForbidden = "forbidden"
 
 	// BR01 -- bad request, general.
-	MsgBadRequestBody = "invalid request body"
+	MsgBadRequestBody          = "invalid request body"
+	MsgBadRequestCursorInvalid = "cursor must be a value returned as nextCursor or prevCursor"
 
 	// BR02 -- bad request, flags domain.
 	MsgBadRequestFlagsEnvironmentIDRequired = "environmentId is required"
@@ -45,12 +42,11 @@ const (
 	MsgMethodNotAllowed = "method not allowed"
 
 	// IE01 -- internal error.
-	//nolint:gosec // G101: false positive -- this is client-facing error text, not a credential
+	//nolint:gosec // G101: error text, not a credential
 	MsgInternalPasswordHash = "failed to hash password"
 )
 
-// unknownGroupIDMessage builds the CodeBadRequestUnknownGroupID message --
-// kept as a function rather than a constant since the id is parameterized.
+// unknownGroupIDMessage builds the CodeBadRequestUnknownGroupID message.
 func unknownGroupIDMessage(id string) string {
 	return "unknown group id: " + id
 }
