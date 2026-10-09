@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"aerendil/backend/internal/auth"
 	"aerendil/backend/internal/store"
 )
 
-func getAudits(t *testing.T, mux *http.ServeMux, token string, query string) []store.AuditEntry {
+func getAudits(t *testing.T, mux *http.ServeMux, token string, query string) []auditEntryView {
 	t.Helper()
 
 	req := httptest.NewRequest(http.MethodGet, "/api/audits"+query, nil)
@@ -26,7 +30,7 @@ func getAudits(t *testing.T, mux *http.ServeMux, token string, query string) []s
 	}
 
 	var payload struct {
-		Audits []store.AuditEntry `json:"audits"`
+		Audits []auditEntryView `json:"audits"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode audits response: %v", err)
@@ -77,7 +81,7 @@ func TestAuditRecordsSuccessfulUserUpdateWithoutLeakingPasswordHash(t *testing.T
 	}
 
 	entries := getAudits(t, mux, readToken, "?targetType=user&targetId="+created.ID)
-	var updateEntry *store.AuditEntry
+	var updateEntry *auditEntryView
 	for i := range entries {
 		if entries[i].Action == "user.update" {
 			updateEntry = &entries[i]
@@ -89,13 +93,13 @@ func TestAuditRecordsSuccessfulUserUpdateWithoutLeakingPasswordHash(t *testing.T
 	if !updateEntry.Success || updateEntry.StatusCode != http.StatusOK {
 		t.Fatalf("expected a successful update entry, got %+v", updateEntry)
 	}
-	if updateEntry.Before == "" || updateEntry.After == "" {
+	if len(updateEntry.Before) == 0 || len(updateEntry.After) == 0 {
 		t.Fatalf("expected both Before and After to be populated, got %+v", updateEntry)
 	}
-	if strings.Contains(updateEntry.Before, "password") || strings.Contains(updateEntry.After, "password") {
+	if strings.Contains(string(updateEntry.Before), "password") || strings.Contains(string(updateEntry.After), "password") {
 		t.Fatalf("expected no password hash to leak into the audit trail, got %+v", updateEntry)
 	}
-	if !strings.Contains(updateEntry.Before, "alice") || !strings.Contains(updateEntry.After, "alice2") {
+	if !strings.Contains(string(updateEntry.Before), "alice") || !strings.Contains(string(updateEntry.After), "alice2") {
 		t.Fatalf("expected Before/After to reflect the username change, got %+v", updateEntry)
 	}
 }
@@ -125,7 +129,7 @@ func TestAuditRecordsRejectedMutation(t *testing.T) {
 	}
 
 	entries := getAudits(t, mux, readToken, "")
-	var rejected *store.AuditEntry
+	var rejected *auditEntryView
 	for i := range entries {
 		if entries[i].Action == "user.create" && !entries[i].Success {
 			rejected = &entries[i]
@@ -140,7 +144,7 @@ func TestAuditRecordsRejectedMutation(t *testing.T) {
 	if rejected.Error == "" {
 		t.Fatalf("expected a populated Error on the rejected entry, got %+v", rejected)
 	}
-	if rejected.After != "" {
+	if len(rejected.After) != 0 {
 		t.Fatalf("expected no After state on a rejected create, got %+v", rejected)
 	}
 }
@@ -179,12 +183,12 @@ func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
 	// Newest first: entries[0] is the second set, whose Before should
 	// reflect the first flag's prior (enabled=true) state.
 	second := entries[0]
-	if second.Before == "" || !strings.Contains(second.Before, `"enabled":true`) {
+	if len(second.Before) == 0 || !strings.Contains(string(second.Before), `"enabled":true`) {
 		t.Fatalf("expected second entry's Before to reflect the prior enabled=true state, got %+v", second)
 	}
 
 	first := entries[1]
-	if first.Before != "" {
+	if len(first.Before) != 0 {
 		t.Fatalf("expected first entry to have no prior state, got %+v", first)
 	}
 }
@@ -233,7 +237,7 @@ func TestAuditsListFiltersByActorID(t *testing.T) {
 
 // seedAuditEntryForTest performs a flag mutation so withAudit records an
 // entry, then returns that entry as seen through the list endpoint.
-func seedAuditEntryForTest(t *testing.T, mux *http.ServeMux, readToken string) store.AuditEntry {
+func seedAuditEntryForTest(t *testing.T, mux *http.ServeMux, readToken string) auditEntryView {
 	t.Helper()
 
 	envID := seedEnvironmentForTest(t, "Production")
@@ -284,11 +288,16 @@ func TestAuditsGetByIDReturnsEntry(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var got store.AuditEntry
+	// after is a nested object, not a JSON string.
+	if !strings.Contains(rec.Body.String(), `"after":{`) {
+		t.Fatalf("expected after to be a nested JSON object, got %s", rec.Body.String())
+	}
+
+	var got auditEntryView
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if got != seeded {
+	if !reflect.DeepEqual(got, seeded) {
 		t.Fatalf("expected the by-id entry to match the listed entry\n got: %+v\nwant: %+v", got, seeded)
 	}
 }
@@ -342,5 +351,179 @@ func assertErrorBody(t *testing.T, rec *httptest.ResponseRecorder, wantCode stri
 	}
 	if body.Error == "" || body.Code != wantCode {
 		t.Fatalf("expected a non-empty error with code %q, got %+v", wantCode, body)
+	}
+}
+
+// getAuditsPage is getAudits plus the pagination metadata.
+func getAuditsPage(t *testing.T, mux *http.ServeMux, token string, query string) ([]auditEntryView, auditPage) {
+	t.Helper()
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/audits"+query, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /api/audits%s, got %d: %s", query, rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Audits []auditEntryView `json:"audits"`
+		Page   auditPage        `json:"page"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode audits response: %v", err)
+	}
+	return payload.Audits, payload.Page
+}
+
+// seedAuditEntriesForTest adds n entries under a fresh targetId and returns it.
+func seedAuditEntriesForTest(t *testing.T, n int) string {
+	t.Helper()
+
+	targetID := "paged-" + store.NewID()
+	for range n {
+		if _, err := dataStore.Audits().Append(store.AuditEntry{ActorID: "pager", Action: "flag.set", TargetType: "flag", TargetID: targetID, Success: true, StatusCode: http.StatusOK}); err != nil {
+			t.Fatalf("seed audit entry: %v", err)
+		}
+	}
+	return targetID
+}
+
+func TestAuditsListPaginatesWithCursor(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+	targetID := seedAuditEntriesForTest(t, defaultAuditLimit+1)
+
+	first, page := getAuditsPage(t, mux, token, "?targetId="+targetID)
+	if len(first) != defaultAuditLimit || page.Limit != defaultAuditLimit || page.Total != defaultAuditLimit+1 || page.NextCursor == "" {
+		t.Fatalf("expected a full default page with a nextCursor, got %d entries, page %+v", len(first), page)
+	}
+	for i := 1; i < len(first); i++ {
+		if first[i-1].ID <= first[i].ID {
+			t.Fatalf("expected newest-first order, got %d before %d", first[i-1].ID, first[i].ID)
+		}
+	}
+
+	if page.Start != 1 || page.End != defaultAuditLimit || page.PrevCursor != "" {
+		t.Fatalf("expected the first page to cover rows 1-%d with no prevCursor, got %+v", defaultAuditLimit, page)
+	}
+
+	rest, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&cursor="+page.NextCursor)
+	if len(rest) != 1 || rest[0].ID >= first[len(first)-1].ID || page.NextCursor != "" || page.Total != defaultAuditLimit+1 {
+		t.Fatalf("expected the single remaining older entry and no nextCursor, got %+v, page %+v", rest, page)
+	}
+	if page.Start != defaultAuditLimit+1 || page.End != defaultAuditLimit+1 || page.PrevCursor == "" {
+		t.Fatalf("expected the last page to be row %d with a prevCursor, got %+v", defaultAuditLimit+1, page)
+	}
+
+	back, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&cursor="+page.PrevCursor)
+	if len(back) != defaultAuditLimit || back[0].ID != first[0].ID || page.Start != 1 || page.End != defaultAuditLimit {
+		t.Fatalf("expected prevCursor to lead back to the first page, got %d entries starting at %d, page %+v", len(back), back[0].ID, page)
+	}
+
+	limited, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&limit=10")
+	if len(limited) != 10 || page.Limit != 10 {
+		t.Fatalf("expected limit=10 to be honored, got %d entries, page %+v", len(limited), page)
+	}
+
+	// Cursor still respects filters.
+	other, _ := getAuditsPage(t, mux, token, "?targetType=user&targetId="+targetID+"&cursor="+strconv.FormatUint(limited[0].ID, 10))
+	if len(other) != 0 {
+		t.Fatalf("expected no entries for a non-matching targetType, got %+v", other)
+	}
+}
+
+func TestAuditsListFallsBackToDefaultLimit(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+	targetID := seedAuditEntriesForTest(t, defaultAuditLimit+1)
+
+	for _, limit := range []string{"0", "-5", "101", "abc"} {
+		t.Run(limit, func(t *testing.T) {
+			entries, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&limit="+limit)
+			if len(entries) != defaultAuditLimit || page.Limit != defaultAuditLimit {
+				t.Fatalf("expected limit=%s to fall back to %d, got %d entries, page %+v", limit, defaultAuditLimit, len(entries), page)
+			}
+		})
+	}
+}
+
+func TestAuditsListRejectsMalformedCursor(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+
+	for _, cursor := range []string{"abc", "-1", "1.5"} {
+		t.Run(cursor, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/audits?cursor="+cursor, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for malformed cursor %q, got %d: %s", cursor, rec.Code, rec.Body.String())
+			}
+			assertErrorBody(t, rec, CodeBadRequestAuditCursorInvalid)
+		})
+	}
+}
+
+func TestAuditsListFiltersByTimeWindow(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+	targetID := seedAuditEntriesForTest(t, 3)
+
+	format := func(t time.Time) string { return url.QueryEscape(t.Format(time.RFC3339)) }
+	now := time.Now()
+	cases := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{"window around now", "&from=" + format(now.Add(-time.Hour)) + "&to=" + format(now.Add(time.Hour)), 3},
+		{"open-ended from", "&from=" + format(now.Add(-time.Hour)), 3},
+		{"from in the future", "&from=" + format(now.Add(time.Hour)), 0},
+		{"to in the past", "&to=" + format(now.Add(-time.Hour)), 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			entries, page := getAuditsPage(t, mux, token, "?targetId="+targetID+c.query)
+			if len(entries) != c.want || page.Total != c.want {
+				t.Fatalf("expected %d entries, got %d (total %d)", c.want, len(entries), page.Total)
+			}
+		})
+	}
+}
+
+func TestAuditsListRejectsInvalidTimeWindow(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermAuditsRead)
+
+	for _, query := range []string{"from=yesterday", "to=2026-10-09", "from=2026-10-09T12:00:00Z&to=2026-10-09T11:00:00Z"} {
+		t.Run(query, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/audits?"+query, nil)
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("expected 400 for %q, got %d: %s", query, rec.Code, rec.Body.String())
+			}
+			assertErrorBody(t, rec, CodeBadRequestAuditTimeRangeInvalid)
+		})
+	}
+}
+
+func TestNestedJSON(t *testing.T) {
+	cases := map[string]string{
+		"":                  "",
+		"{\"key\":\"a\"}\n": `{"key":"a"}`,
+		`[1,2]`:             `[1,2]`,
+		"not json":          `"not json"`,
+	}
+	for in, want := range cases {
+		if got := string(nestedJSON(in)); got != want {
+			t.Errorf("nestedJSON(%q) = %s, want %s", in, got, want)
+		}
 	}
 }

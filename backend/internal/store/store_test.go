@@ -620,3 +620,24 @@ func TestFSMSnapshotRestoreRoundTrip(t *testing.T) {
 		t.Fatalf("unexpected restored state: %+v", restored.flags)
 	}
 }
+
+func TestAuditFilterTimeWindowIsInclusive(t *testing.T) {
+	e := AuditEntry{Timestamp: 1000}
+	cases := []struct {
+		filter AuditFilter
+		want   bool
+	}{
+		{AuditFilter{}, true},
+		{AuditFilter{From: 1000}, true},
+		{AuditFilter{From: 1001}, false},
+		{AuditFilter{To: 1000}, true},
+		{AuditFilter{To: 999}, false},
+		{AuditFilter{From: 900, To: 1100}, true},
+		{AuditFilter{From: 900, To: 1100, ActorID: "someone-else"}, false},
+	}
+	for _, c := range cases {
+		if got := c.filter.matches(e); got != c.want {
+			t.Errorf("%+v.matches(timestamp 1000) = %v, want %v", c.filter, got, c.want)
+		}
+	}
+}

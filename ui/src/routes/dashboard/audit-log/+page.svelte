@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
+	import { navigating, page } from '$app/state';
+	import DateTimePicker from '#lib/components/DateTimePicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { formatTimestamp } from '#lib/formatDate.ts';
 	import type { PageProps } from './$types';
@@ -7,6 +9,34 @@
 	let { data }: PageProps = $props();
 
 	let expandedIds = new SvelteSet<number>();
+
+	// Filters and paging navigate to this same path.
+	let loading = $derived(navigating.to?.url.pathname === page.url.pathname);
+
+	// Writable deriveds: reset on navigation, bound so the pickers keep from <= to.
+	let from = $derived(data.filter.from);
+	let to = $derived(data.filter.to);
+
+	// Swaps only the cursor; none means newest.
+	function cursorHref(cursor: string | undefined): string {
+		const params = [...page.url.searchParams].filter(([key]) => key !== 'cursor');
+		if (cursor) params.push(['cursor', cursor]);
+		const query = new URLSearchParams(params).toString();
+		return query ? `?${query}` : page.url.pathname;
+	}
+
+	// Assumes the page size hasn't changed while paging.
+	let pageNumber = $derived(Math.ceil(data.page.end / data.page.limit));
+	let pageCount = $derived(Math.ceil(data.page.total / data.page.limit));
+	let pagerLinks = $derived([
+		{ label: m.audit_log_newest(), cursor: data.filter.cursor ? '' : undefined },
+		{ label: m.audit_log_previous(), cursor: data.page.prevCursor },
+		{ label: m.audit_log_next(), cursor: data.page.nextCursor }
+	]);
+
+	const pagerClass =
+		'rounded-lg border border-border bg-surface px-4 py-2 font-medium text-foreground hover:bg-surface-muted';
+	const pagerDisabledClass = 'pointer-events-none opacity-50';
 
 	function toggleExpanded(id: number) {
 		if (expandedIds.has(id)) {
@@ -16,16 +46,9 @@
 		}
 	}
 
-	// before/after are JSON-encoded strings (see AuditEntry in
-	// lib/server/auditLog.ts) -- pretty-print when parseable, otherwise fall
-	// back to showing the raw string rather than hiding the data.
-	function prettyPrint(value: string | undefined): string | null {
-		if (!value) return null;
-		try {
-			return JSON.stringify(JSON.parse(value), null, 2);
-		} catch {
-			return value;
-		}
+	// before/after are nested JSON, or a string if not JSON.
+	function prettyPrint(value: unknown): string {
+		return typeof value === 'string' ? value : JSON.stringify(value, null, 2);
 	}
 </script>
 
@@ -48,7 +71,7 @@
 			<select
 				name="targetType"
 				value={data.filter.targetType}
-				class="rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
+				class="rounded-lg border border-border bg-background py-2 pr-10 pl-4 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 			>
 				<option value="">—</option>
 				<option value="flag">flag</option>
@@ -72,15 +95,40 @@
 				class="rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 			/>
 		</label>
+		<DateTimePicker name="from" label={m.audit_log_filter_from()} bind:value={from} max={to} />
+		<DateTimePicker name="to" label={m.audit_log_filter_to()} bind:value={to} min={from} />
+		<label class="grid gap-1.5 text-sm text-foreground">
+			<span class="font-medium">{m.audit_log_per_page()}</span>
+			<select
+				name="limit"
+				value={String(data.filter.limit)}
+				class="rounded-lg border border-border bg-background py-2 pr-10 pl-4 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
+			>
+				{#each data.pageSizes as size (size)}
+					<option value={String(size)}>{size}</option>
+				{/each}
+			</select>
+		</label>
 		<button
 			type="submit"
-			class="cursor-pointer rounded-lg bg-primary px-5 py-2.25 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
+			disabled={loading}
+			class="flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-5 py-2.25 text-sm font-semibold text-primary-foreground hover:bg-primary-hover disabled:cursor-wait disabled:opacity-70"
 		>
-			{m.audit_log_filter_submit()}
+			{#if loading}
+				<span class="icon-[lucide--loader-circle] size-4 animate-spin" aria-hidden="true"></span>
+				{m.audit_log_filter_submitting()}
+			{:else}
+				{m.audit_log_filter_submit()}
+			{/if}
 		</button>
 	</form>
 
-	<div class="overflow-x-auto rounded-xl border border-border bg-surface">
+	<div
+		aria-busy={loading}
+		class="overflow-x-auto rounded-xl border border-border bg-surface transition-opacity {loading
+			? 'pointer-events-none opacity-50'
+			: ''}"
+	>
 		{#if data.entries.length === 0}
 			<p class="p-6 text-sm text-muted-foreground">{m.audit_log_empty()}</p>
 		{:else}
@@ -193,4 +241,33 @@
 			</table>
 		{/if}
 	</div>
+
+	{#if data.page.total > 0}
+		<nav
+			class="flex flex-wrap items-center justify-between gap-3 text-sm transition-opacity {loading
+				? 'pointer-events-none opacity-50'
+				: ''}"
+		>
+			{#if data.page.start > 0}
+				<span class="text-muted-foreground">
+					{m.audit_log_range({
+						start: data.page.start,
+						end: data.page.end,
+						total: data.page.total
+					})}
+					·
+					{m.audit_log_page_of({ page: pageNumber, pages: pageCount })}
+				</span>
+			{/if}
+			<div class="flex gap-2">
+				{#each pagerLinks as link (link.label)}
+					{#if link.cursor !== undefined}
+						<a href={cursorHref(link.cursor)} class={pagerClass}>{link.label}</a>
+					{:else}
+						<span aria-disabled="true" class="{pagerClass} {pagerDisabledClass}">{link.label}</span>
+					{/if}
+				{/each}
+			</div>
+		</nav>
+	{/if}
 </div>
