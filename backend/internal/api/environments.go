@@ -70,7 +70,11 @@ func environmentsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	for _, e := range environments {
 		resp = append(resp, toEnvironmentResponse(e))
 	}
-	return ok(w, map[string]any{"environments": resp})
+	resp, page, err := paginate(r, resp)
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("environments", resp, page))
 }
 
 func environmentsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {

@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"sort"
 )
 
 // ErrProtectedSystemGroup is returned when the target group has System
@@ -64,6 +65,7 @@ func (f *fsm) listGroups() []Group {
 	for _, g := range f.groups {
 		groups = append(groups, g)
 	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].ID < groups[j].ID })
 	return groups
 }
 
@@ -78,7 +80,7 @@ func (r GroupRepository) Get(id string) (Group, bool) {
 	return r.store.fsm.getGroup(id)
 }
 
-// List returns all known groups.
+// List returns all known groups, ordered by ID.
 func (r GroupRepository) List() []Group {
 	return r.store.fsm.listGroups()
 }

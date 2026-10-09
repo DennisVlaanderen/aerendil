@@ -31,7 +31,8 @@ const (
 	CodeBusinessEnvironmentHasCredentials = "A03-0007" // cannot delete an environment that still has application credentials
 
 	// BR01 -- bad request, general (400).
-	CodeBadRequestBody = "BR01-0001" // malformed/undecodable JSON request body
+	CodeBadRequestBody          = "BR01-0001" // malformed/undecodable JSON request body
+	CodeBadRequestCursorInvalid = "BR01-0002" // list ?cursor= isn't a value nextCursor/prevCursor could have produced
 
 	// BR02 -- bad request, flags domain (400).
 	CodeBadRequestFlagsEnvironmentIDRequired  = "BR02-0001" // environmentId query param missing

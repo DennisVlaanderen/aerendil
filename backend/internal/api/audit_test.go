@@ -355,7 +355,7 @@ func assertErrorBody(t *testing.T, rec *httptest.ResponseRecorder, wantCode stri
 }
 
 // getAuditsPage is getAudits plus the pagination metadata.
-func getAuditsPage(t *testing.T, mux *http.ServeMux, token string, query string) ([]auditEntryView, auditPage) {
+func getAuditsPage(t *testing.T, mux *http.ServeMux, token string, query string) ([]auditEntryView, listPage) {
 	t.Helper()
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/audits"+query, nil)
@@ -369,7 +369,7 @@ func getAuditsPage(t *testing.T, mux *http.ServeMux, token string, query string)
 
 	var payload struct {
 		Audits []auditEntryView `json:"audits"`
-		Page   auditPage        `json:"page"`
+		Page   listPage         `json:"page"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode audits response: %v", err)
@@ -393,10 +393,10 @@ func seedAuditEntriesForTest(t *testing.T, n int) string {
 func TestAuditsListPaginatesWithCursor(t *testing.T) {
 	mux := newTestMux(t)
 	token := tokenFor(t, auth.PermAuditsRead)
-	targetID := seedAuditEntriesForTest(t, defaultAuditLimit+1)
+	targetID := seedAuditEntriesForTest(t, defaultPageLimit+1)
 
 	first, page := getAuditsPage(t, mux, token, "?targetId="+targetID)
-	if len(first) != defaultAuditLimit || page.Limit != defaultAuditLimit || page.Total != defaultAuditLimit+1 || page.NextCursor == "" {
+	if len(first) != defaultPageLimit || page.Limit != defaultPageLimit || page.Total != defaultPageLimit+1 || page.NextCursor == "" {
 		t.Fatalf("expected a full default page with a nextCursor, got %d entries, page %+v", len(first), page)
 	}
 	for i := 1; i < len(first); i++ {
@@ -405,20 +405,20 @@ func TestAuditsListPaginatesWithCursor(t *testing.T) {
 		}
 	}
 
-	if page.Start != 1 || page.End != defaultAuditLimit || page.PrevCursor != "" {
-		t.Fatalf("expected the first page to cover rows 1-%d with no prevCursor, got %+v", defaultAuditLimit, page)
+	if page.Start != 1 || page.End != defaultPageLimit || page.PrevCursor != "" {
+		t.Fatalf("expected the first page to cover rows 1-%d with no prevCursor, got %+v", defaultPageLimit, page)
 	}
 
 	rest, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&cursor="+page.NextCursor)
-	if len(rest) != 1 || rest[0].ID >= first[len(first)-1].ID || page.NextCursor != "" || page.Total != defaultAuditLimit+1 {
+	if len(rest) != 1 || rest[0].ID >= first[len(first)-1].ID || page.NextCursor != "" || page.Total != defaultPageLimit+1 {
 		t.Fatalf("expected the single remaining older entry and no nextCursor, got %+v, page %+v", rest, page)
 	}
-	if page.Start != defaultAuditLimit+1 || page.End != defaultAuditLimit+1 || page.PrevCursor == "" {
-		t.Fatalf("expected the last page to be row %d with a prevCursor, got %+v", defaultAuditLimit+1, page)
+	if page.Start != defaultPageLimit+1 || page.End != defaultPageLimit+1 || page.PrevCursor == "" {
+		t.Fatalf("expected the last page to be row %d with a prevCursor, got %+v", defaultPageLimit+1, page)
 	}
 
 	back, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&cursor="+page.PrevCursor)
-	if len(back) != defaultAuditLimit || back[0].ID != first[0].ID || page.Start != 1 || page.End != defaultAuditLimit {
+	if len(back) != defaultPageLimit || back[0].ID != first[0].ID || page.Start != 1 || page.End != defaultPageLimit {
 		t.Fatalf("expected prevCursor to lead back to the first page, got %d entries starting at %d, page %+v", len(back), back[0].ID, page)
 	}
 
@@ -437,13 +437,13 @@ func TestAuditsListPaginatesWithCursor(t *testing.T) {
 func TestAuditsListFallsBackToDefaultLimit(t *testing.T) {
 	mux := newTestMux(t)
 	token := tokenFor(t, auth.PermAuditsRead)
-	targetID := seedAuditEntriesForTest(t, defaultAuditLimit+1)
+	targetID := seedAuditEntriesForTest(t, defaultPageLimit+1)
 
 	for _, limit := range []string{"0", "-5", "101", "abc"} {
 		t.Run(limit, func(t *testing.T) {
 			entries, page := getAuditsPage(t, mux, token, "?targetId="+targetID+"&limit="+limit)
-			if len(entries) != defaultAuditLimit || page.Limit != defaultAuditLimit {
-				t.Fatalf("expected limit=%s to fall back to %d, got %d entries, page %+v", limit, defaultAuditLimit, len(entries), page)
+			if len(entries) != defaultPageLimit || page.Limit != defaultPageLimit {
+				t.Fatalf("expected limit=%s to fall back to %d, got %d entries, page %+v", limit, defaultPageLimit, len(entries), page)
 			}
 		})
 	}

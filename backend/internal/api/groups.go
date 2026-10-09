@@ -69,7 +69,11 @@ func groupsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	for _, g := range groups {
 		resp = append(resp, toGroupResponse(g))
 	}
-	return ok(w, map[string]any{"groups": resp})
+	resp, page, err := paginate(r, resp)
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("groups", resp, page))
 }
 
 func groupsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {

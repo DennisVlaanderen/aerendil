@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"sort"
 )
 
 // ErrUnknownEnvironment is returned when a flag's EnvironmentID doesn't
@@ -74,6 +75,7 @@ func (f *fsm) listFlags(environmentID string) []Flag {
 			flags = append(flags, flag)
 		}
 	}
+	sort.Slice(flags, func(i, j int) bool { return flags[i].Key < flags[j].Key })
 	return flags
 }
 
@@ -108,7 +110,7 @@ func (r FlagRepository) Get(environmentID, key string) (Flag, bool) {
 	return r.store.fsm.getFlag(environmentID, key)
 }
 
-// List returns all flags scoped to environmentID.
+// List returns all flags scoped to environmentID, ordered by Key.
 func (r FlagRepository) List(environmentID string) []Flag {
 	return r.store.fsm.listFlags(environmentID)
 }

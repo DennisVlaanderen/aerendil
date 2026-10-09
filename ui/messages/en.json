@@ -200,6 +200,7 @@
 	"error_admin_only_user_delete": "Only an Admin can delete users.",
 	"error_environment_has_credentials": "This environment still has application credentials and can't be deleted.",
 	"error_invalid_body": "Invalid request. Please check your input.",
+	"error_cursor_invalid": "That page link is invalid. Go back to the first page.",
 	"error_environment_id_required": "Select an environment.",
 	"error_flag_key_required": "Enter a key for the flag.",
 	"error_flag_environments_required": "Select at least one environment.",

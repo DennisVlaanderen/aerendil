@@ -17,31 +17,12 @@ func registerAuditRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/audits/{id}", requirePermission(auth.PermAuditsRead, handleErrors(auditsGetByIDHandler)))
 }
 
-// Pagination per docs/REST_API_Standards.md §8.4; out-of-range ?limit= uses the default.
-const (
-	defaultAuditLimit = 25
-	maxAuditLimit     = 100
-)
-
-// auditPage is the list metadata. Start/End are 1-based inclusive row
-// positions (0 when empty); cursors are set only while entries remain.
-type auditPage struct {
-	Limit      int    `json:"limit"`
-	Total      int    `json:"total"`
-	Start      int    `json:"start"`
-	End        int    `json:"end"`
-	PrevCursor string `json:"prevCursor,omitempty"`
-	NextCursor string `json:"nextCursor,omitempty"`
-}
-
 func auditsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	query := r.URL.Query()
-	limit, err := strconv.Atoi(query.Get("limit"))
-	if err != nil || limit < 1 || limit > maxAuditLimit {
-		limit = defaultAuditLimit
-	}
+	limit := parseLimit(r)
 	var before uint64
 	if cursor := query.Get("cursor"); cursor != "" {
+		var err error
 		before, err = strconv.ParseUint(cursor, 10, 64)
 		if err != nil {
 			return badRequest(CodeBadRequestAuditCursorInvalid, "cursor must be a value returned as nextCursor")
@@ -69,7 +50,7 @@ func auditsGetHandler(w http.ResponseWriter, r *http.Request) error {
 	endIdx := min(startIdx+limit, len(all))
 	entries := all[startIdx:endIdx]
 
-	page := auditPage{Limit: limit, Total: len(all)}
+	page := listPage{Limit: limit, Total: len(all)}
 	if len(entries) > 0 {
 		page.Start, page.End = startIdx+1, endIdx
 	}

@@ -200,6 +200,7 @@
 	"error_admin_only_user_delete": "Alleen een beheerder kan gebruikers verwijderen.",
 	"error_environment_has_credentials": "Deze omgeving heeft nog applicatiereferenties en kan niet worden verwijderd.",
 	"error_invalid_body": "Ongeldig verzoek. Controleer je invoer.",
+	"error_cursor_invalid": "Die paginalink is ongeldig. Ga terug naar de eerste pagina.",
 	"error_environment_id_required": "Selecteer een omgeving.",
 	"error_flag_key_required": "Voer een sleutel in voor de flag.",
 	"error_flag_environments_required": "Selecteer ten minste één omgeving.",

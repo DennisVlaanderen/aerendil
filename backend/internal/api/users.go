@@ -76,7 +76,11 @@ func usersGetHandler(w http.ResponseWriter, r *http.Request) error {
 	for _, u := range users {
 		resp = append(resp, toUserResponse(u))
 	}
-	return ok(w, map[string]any{"users": resp})
+	resp, page, err := paginate(r, resp)
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("users", resp, page))
 }
 
 func usersGetByIDHandler(w http.ResponseWriter, r *http.Request) error {

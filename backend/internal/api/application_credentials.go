@@ -146,7 +146,11 @@ func applicationCredentialsGetHandler(w http.ResponseWriter, r *http.Request) er
 		}
 		resp = append(resp, toApplicationCredentialResponse(c))
 	}
-	return ok(w, map[string]any{"applicationCredentials": resp})
+	resp, page, err := paginate(r, resp)
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("applicationCredentials", resp, page))
 }
 
 func applicationCredentialsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {

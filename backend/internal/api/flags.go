@@ -67,7 +67,11 @@ func flagsGetHandler(w http.ResponseWriter, r *http.Request) error {
 		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
-	return ok(w, map[string]any{"flags": dataStore.Flags().List(environmentID)})
+	flags, page, err := paginate(r, dataStore.Flags().List(environmentID))
+	if err != nil {
+		return err
+	}
+	return ok(w, listBody("flags", flags, page))
 }
 
 func flagsGetByKeyHandler(w http.ResponseWriter, r *http.Request) error {

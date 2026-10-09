@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sort"
 )
 
 // ErrUsernameTaken is returned when the username on a record already
@@ -108,6 +109,7 @@ func (f *fsm) listUsers() []User {
 	for _, u := range f.users {
 		users = append(users, u)
 	}
+	sort.Slice(users, func(i, j int) bool { return users[i].ID < users[j].ID })
 	return users
 }
 
@@ -127,7 +129,7 @@ func (r UserRepository) GetByUsername(username string) (User, bool) {
 	return r.store.fsm.getUserByUsername(username)
 }
 
-// List returns all known users.
+// List returns all known users, ordered by ID.
 func (r UserRepository) List() []User {
 	return r.store.fsm.listUsers()
 }

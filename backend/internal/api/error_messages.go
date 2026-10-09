@@ -11,7 +11,8 @@ const (
 	MsgAuthForbidden = "forbidden"
 
 	// BR01 -- bad request, general.
-	MsgBadRequestBody = "invalid request body"
+	MsgBadRequestBody          = "invalid request body"
+	MsgBadRequestCursorInvalid = "cursor must be a value returned as nextCursor or prevCursor"
 
 	// BR02 -- bad request, flags domain.
 	MsgBadRequestFlagsEnvironmentIDRequired = "environmentId is required"

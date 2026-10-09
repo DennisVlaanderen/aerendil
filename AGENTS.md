@@ -214,7 +214,11 @@ never directly from the browser.
   array plus `page: {limit, total, start, end, prevCursor, nextCursor}` out,
   where `total` is exact, `start`/`end` are the 1-based inclusive row
   positions (0 on an empty page), and each cursor is omitted when nothing
-  remains in that direction. Time-window filters are
+  remains in that direction. The other collections (flags, users, groups,
+  environments, application credentials) share that shape via `paginate`
+  in `internal/api/pagination.go`, but opt-in: with neither param they
+  return the full list and no `page`, and their cursor is an offset.
+  Time-window filters are
   inclusive RFC 3339 `?from=`/`?to=` params (400 when malformed or
   reversed); the UI sets them with `lib/components/DateTimePicker.svelte`,
   which shows local time but submits UTC.
