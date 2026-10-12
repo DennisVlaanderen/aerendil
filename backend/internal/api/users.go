@@ -173,7 +173,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		Username string    `json:"username"`
 		Password string    `json:"password"`
 		GroupIDs *[]string `json:"groupIds"`
-		Active   bool      `json:"active"`
+		Active   *bool     `json:"active"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
@@ -195,6 +195,14 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 	groupIDs := existing.GroupIDs
 	if payload.GroupIDs != nil {
 		groupIDs = *payload.GroupIDs
+	}
+
+	// Nil active means "unchanged", matching the pointer idiom already
+	// used by applicationCredentialsPutHandler; with a plain bool an
+	// omitted "active" decodes as false and silently deactivates the user.
+	active := existing.Active
+	if payload.Active != nil {
+		active = *payload.Active
 	}
 
 	if err := requireAdminForAdminGroupChange(r, existing.GroupIDs, groupIDs); err != nil {
@@ -226,7 +234,7 @@ func usersPutHandler(w http.ResponseWriter, r *http.Request) error {
 		Username:     username,
 		PasswordHash: passwordHash,
 		GroupIDs:     groupIDs,
-		Active:       payload.Active,
+		Active:       active,
 	})
 	if err != nil {
 		return err
