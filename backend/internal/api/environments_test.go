@@ -343,6 +343,13 @@ func TestNormalizeEnvironmentColorOnInvalidShortHex(t *testing.T) {
 	}
 }
 
+func TestNormalizeEnvironmentColorOnInvalidShortHexWrongFormat(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("#]]]")
+	if valid {
+		t.Fatalf("expected invalid color for '#]]]'")
+	}
+}
+
 func TestNormalizeEnvironmentColorOnInvalidNumber(t *testing.T) {
 	_, valid := normalizeEnvironmentColor("100")
 	if valid {

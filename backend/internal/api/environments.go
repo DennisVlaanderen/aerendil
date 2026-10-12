@@ -169,7 +169,7 @@ func environmentsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 	return ok(w, map[string]string{"status": "deleted"})
 }
 
-var regexpEnvironmentColorPattern = regexp.MustCompile(`^(\d{1,2}|#[]0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$`)
+var regexpEnvironmentColorPattern = regexp.MustCompile(`^(\d{1,2}|#([0-9a-fA-F]{3}){1,2})$`)
 
 func normalizeEnvironmentColor(raw string) (string, bool) {
 	color := strings.TrimSpace(raw)
