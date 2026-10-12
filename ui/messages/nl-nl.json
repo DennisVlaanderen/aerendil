@@ -199,6 +199,7 @@
 	"error_admin_group_change_forbidden": "Alleen een beheerder kan het lidmaatschap van de Admin-groep wijzigen.",
 	"error_admin_only_user_delete": "Alleen een beheerder kan gebruikers verwijderen.",
 	"error_environment_has_credentials": "Deze omgeving heeft nog applicatiereferenties en kan niet worden verwijderd.",
+	"error_environment_color_invalid": "Kleur moet een geldige hex-kleur of paletnummer zijn.",
 	"error_invalid_body": "Ongeldig verzoek. Controleer je invoer.",
 	"error_cursor_invalid": "Die paginalink is ongeldig. Ga terug naar de eerste pagina.",
 	"error_environment_id_required": "Selecteer een omgeving.",

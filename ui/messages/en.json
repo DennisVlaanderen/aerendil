@@ -206,6 +206,7 @@
 	"error_flag_environments_required": "Select at least one environment.",
 	"error_unknown_environment": "That environment no longer exists.",
 	"error_environment_name_required": "Enter a name for the environment.",
+	"error_environment_color_invalid": "Color must be a valid hex color or palette number.",
 	"error_username_required": "Enter a username.",
 	"error_password_required": "Enter a password.",
 	"error_password_too_short": "Password must be at least 8 characters.",
