@@ -31,7 +31,7 @@ export async function listEnvironments(token: string): Promise<EnvironmentSummar
 
 export async function createEnvironment(
 	token: string,
-	input: { name: string, color?: string }
+	input: { name: string; color?: string }
 ): Promise<EnvironmentResult> {
 	const response = await fetch(`${API_ORIGIN}/api/environments`, {
 		method: 'POST',
@@ -57,7 +57,7 @@ export async function createEnvironment(
 export async function updateEnvironment(
 	token: string,
 	id: string,
-	input: { name: string, color?: string }
+	input: { name: string; color?: string }
 ): Promise<EnvironmentResult> {
 	const response = await fetch(`${API_ORIGIN}/api/environments/${encodeURIComponent(id)}`, {
 		method: 'PUT',

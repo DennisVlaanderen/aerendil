@@ -27,7 +27,8 @@ export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 		);
 	}
 
-	const color = typeof body?.color === 'string' ? body.color.trim() : '';
+	// Omitted (not '') when absent, so the backend keeps the existing color.
+	const color = typeof body?.color === 'string' ? body.color.trim() : undefined;
 
 	const token = getAuthToken(cookies);
 	const result = token
