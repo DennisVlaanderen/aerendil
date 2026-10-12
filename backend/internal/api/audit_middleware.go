@@ -79,7 +79,7 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if _, err := dataStore.Audits().Append(entry); err != nil {
-			log.Printf("api: failed to record audit entry for %q (mutation status %d): %q", r.Pattern, status, err)
+			log.Printf("api: failed to record audit entry for %s on %s (mutation status %d): %v", cfg.Action, cfg.TargetType, status, err)
 			writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, "the request may have been applied, but recording its audit trail failed; verify before retrying")
 			return
 		}
