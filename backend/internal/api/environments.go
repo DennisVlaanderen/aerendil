@@ -126,8 +126,8 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	var payload struct {
-		Name  string `json:"name"`
-		Color string `json:"color"`
+		Name  string  `json:"name"`
+		Color *string `json:"color"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
@@ -138,9 +138,15 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
-	color, colorValid := normalizeEnvironmentColor(payload.Color)
-	if !colorValid {
-		return badRequest(CodeBadRequestEnvironmentColorInvalid, MsgBadRequestEnvironmentColorInvalid)
+	var color string
+	var colorValid bool
+	if payload.Color != nil {
+		color, colorValid = normalizeEnvironmentColor(*payload.Color)
+		if !colorValid {
+			return badRequest(CodeBadRequestEnvironmentColorInvalid, MsgBadRequestEnvironmentColorInvalid)
+		}
+	} else {
+		color = existing.Color
 	}
 
 	// Order is fixed at creation; reordering is a future follow-up.
