@@ -758,3 +758,37 @@ func TestUsersPutRejectsRemovingSoleRemainingAdminFromAdminGroup(t *testing.T) {
 		t.Fatalf("expected the sole remaining admin to keep Admin group membership, got %+v (ok=%v)", got, ok)
 	}
 }
+
+// TestUsersPutLeavesActiveUnchangedWhenOmitted guards against silently
+// deactivating a user as a side effect of an unrelated field change: the PUT
+// payload's "active" is a *bool so an omitted field means "unchanged" rather
+// than decoding to false.
+func TestUsersPutLeavesActiveUnchangedWhenOmitted(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermUsersCreate, auth.PermUsersUpdate)
+	id := createUser(t, mux, token, "keepactive", "s3cret!!", nil)
+
+	// No "active" key at all in this body.
+	body, _ := json.Marshal(map[string]any{"username": "keepactive-renamed"})
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/users/"+id, bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var updated struct {
+		Active bool `json:"active"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if !updated.Active {
+		t.Fatal("expected omitting \"active\" to leave the user active")
+	}
+	if got, ok := dataStore.Users().Get(id); !ok || !got.Active {
+		t.Fatalf("expected stored user to remain active, got %+v (ok=%v)", got, ok)
+	}
+}
