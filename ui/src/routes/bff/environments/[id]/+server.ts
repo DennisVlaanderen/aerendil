@@ -27,9 +27,11 @@ export const PUT: RequestHandler = async ({ request, cookies, params }) => {
 		);
 	}
 
+	const color = typeof body?.color === 'string' ? body.color.trim() : '';
+
 	const token = getAuthToken(cookies);
 	const result = token
-		? await updateEnvironment(token, params.id, { name })
+		? await updateEnvironment(token, params.id, { name, color })
 		: { error: 'Not authenticated.', code: ErrorCode.AuthInvalidToken, status: 401 };
 	if (result.error) {
 		return json({ error: result.error, code: result.code }, { status: result.status });
