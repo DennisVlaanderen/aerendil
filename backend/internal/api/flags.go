@@ -144,23 +144,36 @@ func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
-	if _, exists := dataStore.Flags().Get(environmentID, key); !exists {
+	existing, exists := dataStore.Flags().Get(environmentID, key)
+	if !exists {
 		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
 
+	// Pointers so an omitted field means "unchanged"; an omitted "enabled"
+	// would otherwise turn the flag off, and an omitted "value" would blank
+	// it, as a side effect of updating the other one.
 	var payload struct {
-		Enabled bool   `json:"enabled"`
-		Value   string `json:"value"`
+		Enabled *bool   `json:"enabled"`
+		Value   *string `json:"value"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
 
+	enabled := existing.Enabled
+	if payload.Enabled != nil {
+		enabled = *payload.Enabled
+	}
+	value := existing.Value
+	if payload.Value != nil {
+		value = *payload.Value
+	}
+
 	flag, err := dataStore.Flags().Set(store.Flag{
 		EnvironmentID: environmentID,
 		Key:           key,
-		Enabled:       payload.Enabled,
-		Value:         payload.Value,
+		Enabled:       enabled,
+		Value:         value,
 	})
 	if err != nil {
 		return err

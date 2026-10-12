@@ -245,6 +245,63 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	}
 }
 
+// An omitted field must mean "unchanged", matching the contract already used
+// for groupIds in usersPutHandler and active in applicationCredentialsPutHandler.
+// Before the fix, a value-only PUT decoded enabled as false and silently turned
+// the flag off.
+func TestFlagsPutLeavesOmittedFieldsUnchanged(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		body        map[string]any
+		wantEnabled bool
+		wantValue   string
+	}{
+		{"value only", map[string]any{"value": "on-v2"}, true, "on-v2"},
+		{"enabled only", map[string]any{"enabled": false}, false, "on"},
+		{"empty body", map[string]any{}, true, "on"},
+		{"explicit zero values still apply", map[string]any{"enabled": false, "value": ""}, false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := newTestMux(t)
+			envID := seedEnvironmentForTest(t, "Production")
+			token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate)
+
+			createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
+			createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
+			createReq.Header.Set("Authorization", "Bearer "+token)
+			createRec := httptest.NewRecorder()
+			mux.ServeHTTP(createRec, createReq)
+			if createRec.Code != http.StatusOK {
+				t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
+			}
+
+			putBody, _ := json.Marshal(tc.body)
+			putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
+			putReq.Header.Set("Authorization", "Bearer "+token)
+			putRec := httptest.NewRecorder()
+			mux.ServeHTTP(putRec, putReq)
+			if putRec.Code != http.StatusOK {
+				t.Fatalf("expected update to succeed, got %d: %s", putRec.Code, putRec.Body.String())
+			}
+			var updated store.Flag
+			if err := json.Unmarshal(putRec.Body.Bytes(), &updated); err != nil {
+				t.Fatalf("decode update response: %v", err)
+			}
+			if updated.Enabled != tc.wantEnabled || updated.Value != tc.wantValue {
+				t.Fatalf("expected enabled=%v value=%q, got %+v", tc.wantEnabled, tc.wantValue, updated)
+			}
+
+			stored, exists := dataStore.Flags().Get(envID, "checkout")
+			if !exists {
+				t.Fatal("expected the flag to still exist")
+			}
+			if stored.Enabled != tc.wantEnabled || stored.Value != tc.wantValue {
+				t.Fatalf("expected the store to hold enabled=%v value=%q, got %+v", tc.wantEnabled, tc.wantValue, stored)
+			}
+		})
+	}
+}
+
 func TestFlagsPutReturnsNotFoundForUnknownFlag(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
