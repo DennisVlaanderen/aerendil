@@ -138,15 +138,13 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
-	var color string
-	var colorValid bool
+	color := existing.Color
 	if payload.Color != nil {
-		color, colorValid = normalizeEnvironmentColor(*payload.Color)
+		normalized, colorValid := normalizeEnvironmentColor(*payload.Color)
 		if !colorValid {
 			return badRequest(CodeBadRequestEnvironmentColorInvalid, MsgBadRequestEnvironmentColorInvalid)
 		}
-	} else {
-		color = existing.Color
+		color = normalized
 	}
 
 	// Order is fixed at creation; reordering is a future follow-up.
