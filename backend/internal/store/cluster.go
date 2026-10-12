@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,9 +15,13 @@ import (
 // newRaft wires up a Raft node backed by BoltDB (log/stable store) and a
 // file snapshot store, bootstrapping a single-member cluster on first run
 // when bootstrap is true; restarts rejoin existing state instead.
-func newRaft(nodeID, bindAddr, dataDir string, bootstrap bool) (*raft.Raft, *fsm, error) {
+//
+// The open BoltDB store is returned so the caller can close it: Raft shuts
+// down its own goroutines but never closes the LogStore/StableStore it was
+// handed, so whoever opened raft.db owns releasing it.
+func newRaft(nodeID, bindAddr, dataDir string, bootstrap bool) (*raft.Raft, *fsm, io.Closer, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return nil, nil, fmt.Errorf("create raft data dir: %w", err)
+		return nil, nil, nil, fmt.Errorf("create raft data dir: %w", err)
 	}
 
 	config := raft.DefaultConfig()
@@ -26,32 +31,41 @@ func newRaft(nodeID, bindAddr, dataDir string, bootstrap bool) (*raft.Raft, *fsm
 
 	boltStore, err := raftboltdb.NewBoltStore(filepath.Join(dataDir, "raft.db"))
 	if err != nil {
-		return nil, nil, fmt.Errorf("open raft log store: %w", err)
+		return nil, nil, nil, fmt.Errorf("open raft log store: %w", err)
 	}
+	// Every return past this point owns boltStore. Close it on any failure;
+	// hand it to the caller only on the success path.
+	ok := false
+	defer func() {
+		if !ok {
+			_ = boltStore.Close()
+		}
+	}()
 
 	snapshotStore, err := raft.NewFileSnapshotStore(dataDir, 2, os.Stderr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open raft snapshot store: %w", err)
+		return nil, nil, nil, fmt.Errorf("open raft snapshot store: %w", err)
 	}
 
 	addr, err := net.ResolveTCPAddr("tcp", bindAddr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("resolve raft bind address: %w", err)
+		return nil, nil, nil, fmt.Errorf("resolve raft bind address: %w", err)
 	}
 	transport, err := raft.NewTCPTransport(bindAddr, addr, 3, 10*time.Second, os.Stderr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("open raft transport: %w", err)
+		return nil, nil, nil, fmt.Errorf("open raft transport: %w", err)
 	}
 
 	r, err := raft.NewRaft(config, fsmStore, boltStore, boltStore, snapshotStore, transport)
 	if err != nil {
-		return nil, nil, fmt.Errorf("start raft node: %w", err)
+		return nil, nil, nil, fmt.Errorf("start raft node: %w", err)
 	}
 
 	if bootstrap {
 		hasState, err := raft.HasExistingState(boltStore, boltStore, snapshotStore)
 		if err != nil {
-			return nil, nil, fmt.Errorf("check existing raft state: %w", err)
+			_ = r.Shutdown().Error()
+			return nil, nil, nil, fmt.Errorf("check existing raft state: %w", err)
 		}
 		if !hasState {
 			bootstrapConfig := raft.Configuration{
@@ -60,10 +74,12 @@ func newRaft(nodeID, bindAddr, dataDir string, bootstrap bool) (*raft.Raft, *fsm
 				},
 			}
 			if err := r.BootstrapCluster(bootstrapConfig).Error(); err != nil {
-				return nil, nil, fmt.Errorf("bootstrap raft cluster: %w", err)
+				_ = r.Shutdown().Error()
+				return nil, nil, nil, fmt.Errorf("bootstrap raft cluster: %w", err)
 			}
 		}
 	}
 
-	return r, fsmStore, nil
+	ok = true
+	return r, fsmStore, boltStore, nil
 }
