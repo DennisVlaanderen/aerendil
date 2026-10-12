@@ -287,7 +287,7 @@ func TestEnvironmentsPutUpdatesColor(t *testing.T) {
 	}
 }
 
-func TestNormalizeEnvironmentColorOnEmptyInput(t *testing.T) {
+func TestNormalizeEnvironmentColor(t *testing.T) {
 	cases := []struct {
 		name      string
 		input     string
