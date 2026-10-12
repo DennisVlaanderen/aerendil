@@ -290,7 +290,7 @@ func TestEnvironmentsPutUpdatesColor(t *testing.T) {
 func TestNormalizeEnvironmentColorOnEmptyInput(t *testing.T) {
 	cases := []struct {
 		name      string
-		input 	  string
+		input     string
 		wantColor string
 		wantValid bool
 	}{
