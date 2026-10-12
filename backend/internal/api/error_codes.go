@@ -36,6 +36,7 @@ const (
 	// BR03 -- bad request, environments domain (400).
 	CodeBadRequestEnvironmentUnknown      = "BR03-0001" // unknown environment ID
 	CodeBadRequestEnvironmentNameRequired = "BR03-0002"
+	CodeBadRequestEnvironmentColorInvalid = "BR03-0003" // not a valid hex color
 
 	// BR04 -- bad request, users domain (400).
 	CodeBadRequestUsernameRequired = "BR04-0001"
