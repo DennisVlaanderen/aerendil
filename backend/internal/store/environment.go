@@ -29,36 +29,38 @@ type Environment struct {
 	Name    string `json:"name"`
 	Order   int    `json:"order"`
 	Version uint64 `json:"version"`
+	Color   string `json:"color"`
 }
 
-func (f *fsm) applyEnvironment(index uint64, cmd command) any {
-	switch cmd.Op {
+func (f *fsm) applyEnvironment(logIndex uint64, raftCommand command) any {
+	switch raftCommand.Op {
 	case opSet:
-		cmd.Environment.Version = index
-		f.environments[cmd.Environment.ID] = *cmd.Environment
-		return *cmd.Environment
+		raftCommand.Environment.Version = logIndex
+		f.environments[raftCommand.Environment.ID] = *raftCommand.Environment
+		return *raftCommand.Environment
 	case opDelete:
-		if _, ok := f.environments[cmd.Key]; ok && len(f.environments) <= 1 {
-			return fmt.Errorf("%w: %q", ErrLastEnvironment, cmd.Key)
+		environmentID := raftCommand.Key
+		if _, exists := f.environments[environmentID]; exists && len(f.environments) <= 1 {
+			return fmt.Errorf("%w: %q", ErrLastEnvironment, environmentID)
 		}
-		if f.hasFlagsInEnvironmentLocked(cmd.Key) {
-			return fmt.Errorf("%w: %q", ErrEnvironmentHasFlags, cmd.Key)
+		if f.hasFlagsInEnvironmentLocked(environmentID) {
+			return fmt.Errorf("%w: %q", ErrEnvironmentHasFlags, environmentID)
 		}
-		if f.hasCredentialsInEnvironmentLocked(cmd.Key) {
-			return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, cmd.Key)
+		if f.hasCredentialsInEnvironmentLocked(environmentID) {
+			return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, environmentID)
 		}
-		delete(f.environments, cmd.Key)
+		delete(f.environments, environmentID)
 		return nil
 	default:
-		return fmt.Errorf("unknown command op %q", cmd.Op)
+		return fmt.Errorf("unknown command op %q", raftCommand.Op)
 	}
 }
 
 func (f *fsm) getEnvironment(id string) (Environment, bool) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	e, ok := f.environments[id]
-	return e, ok
+	environment, exists := f.environments[id]
+	return environment, exists
 }
 
 // listEnvironments returns every environment ordered by Order ascending,
@@ -66,17 +68,18 @@ func (f *fsm) getEnvironment(id string) (Environment, bool) {
 func (f *fsm) listEnvironments() []Environment {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	envs := make([]Environment, 0, len(f.environments))
-	for _, e := range f.environments {
-		envs = append(envs, e)
+	sortedEnvironments := make([]Environment, 0, len(f.environments))
+	for _, environment := range f.environments {
+		sortedEnvironments = append(sortedEnvironments, environment)
 	}
-	sort.Slice(envs, func(i, j int) bool {
-		if envs[i].Order != envs[j].Order {
-			return envs[i].Order < envs[j].Order
+	sort.Slice(sortedEnvironments, func(left, right int) bool {
+		leftEnvironment, rightEnvironment := sortedEnvironments[left], sortedEnvironments[right]
+		if leftEnvironment.Order != rightEnvironment.Order {
+			return leftEnvironment.Order < rightEnvironment.Order
 		}
-		return envs[i].ID < envs[j].ID
+		return leftEnvironment.ID < rightEnvironment.ID
 	})
-	return envs
+	return sortedEnvironments
 }
 
 // EnvironmentRepository provides environment operations against the store.
@@ -96,18 +99,18 @@ func (r EnvironmentRepository) List() []Environment {
 }
 
 // Set applies an environment create/update through Raft consensus.
-func (r EnvironmentRepository) Set(env Environment) (Environment, error) {
-	resp, err := r.store.apply(command{Op: opSet, Entity: entityEnvironment, Environment: &env})
-	if err != nil {
-		return Environment{}, err
+func (r EnvironmentRepository) Set(environment Environment) (Environment, error) {
+	applyResponse, applyErr := r.store.apply(command{Op: opSet, Entity: entityEnvironment, Environment: &environment})
+	if applyErr != nil {
+		return Environment{}, applyErr
 	}
-	switch v := resp.(type) {
+	switch result := applyResponse.(type) {
 	case Environment:
-		return v, nil
+		return result, nil
 	case error:
-		return Environment{}, v
+		return Environment{}, result
 	default:
-		return Environment{}, fmt.Errorf("unexpected apply response type %T", resp)
+		return Environment{}, fmt.Errorf("unexpected apply response type %T", applyResponse)
 	}
 }
 
@@ -115,7 +118,7 @@ func (r EnvironmentRepository) Set(env Environment) (Environment, error) {
 // ErrEnvironmentHasFlags, or ErrEnvironmentHasCredentials -- fast
 // pre-checks here, fsm.applyEnvironment is the ultimate source of truth.
 func (r EnvironmentRepository) Delete(id string) error {
-	if _, ok := r.store.fsm.getEnvironment(id); ok && len(r.store.fsm.listEnvironments()) <= 1 {
+	if _, exists := r.store.fsm.getEnvironment(id); exists && len(r.store.fsm.listEnvironments()) <= 1 {
 		return fmt.Errorf("%w: %q", ErrLastEnvironment, id)
 	}
 	if r.store.fsm.hasFlagsInEnvironment(id) {
@@ -125,12 +128,12 @@ func (r EnvironmentRepository) Delete(id string) error {
 		return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, id)
 	}
 
-	resp, err := r.store.apply(command{Op: opDelete, Entity: entityEnvironment, Key: id})
-	if err != nil {
-		return err
+	applyResponse, applyErr := r.store.apply(command{Op: opDelete, Entity: entityEnvironment, Key: id})
+	if applyErr != nil {
+		return applyErr
 	}
-	if respErr, ok := resp.(error); ok {
-		return respErr
+	if fsmErr, isError := applyResponse.(error); isError {
+		return fsmErr
 	}
 	return nil
 }

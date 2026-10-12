@@ -15,6 +15,7 @@ const (
 
 	// BR03 -- bad request, environments domain.
 	MsgBadRequestEnvironmentNameRequired = "name is required"
+	MsgBadRequestEnvironmentColorInvalid = "color must be a valid hex color or palette number"
 
 	// BR04 -- bad request, users domain.
 	MsgBadRequestUsernameRequired = "username is required"
