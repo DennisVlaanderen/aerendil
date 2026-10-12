@@ -288,78 +288,33 @@ func TestEnvironmentsPutUpdatesColor(t *testing.T) {
 }
 
 func TestNormalizeEnvironmentColorOnEmptyInput(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("")
-	if !valid {
-		t.Fatalf("expected valid color for empty input")
+	cases := []struct {
+		name      string
+		input 	  string
+		wantColor string
+		wantValid bool
+	}{
+		{"empty string", "", "", true},
+		{"whitespace string", "   ", "", true},
+		{"valid hex color", "#1a2b3c", "#1a2b3c", true},
+		{"valid short hex color", "#abc", "#abc", true},
+		{"valid palette number low", "1", "1", true},
+		{"valid palette number high", "6", "6", true},
+		{"invalid string", "invalid", "", false},
+		{"invalid hex color", "#12345", "", false},
+		{"invalid short hex color", "#1GF", "", false},
+		{"invalid short hex color wrong format", "#]]]", "", false},
+		{"invalid number too high", "7", "", false},
+		{"invalid negative number", "-1", "", false},
+		{"invalid number too low", "0", "", false},
 	}
-}
 
-func TestNormalizeEnvironmentColorOnValidHex(t *testing.T) {
-	color, valid := normalizeEnvironmentColor("#1a2b3c")
-	if !valid || color != "#1a2b3c" {
-		t.Fatalf("expected valid color for #1a2b3c, got %q", color)
-	}
-}
-
-func TestNormalizeEnvironmentColorOnValidShortHex(t *testing.T) {
-	color, valid := normalizeEnvironmentColor("#abc")
-	if !valid || color != "#abc" {
-		t.Fatalf("expected valid color for #abc, got %q", color)
-	}
-}
-
-func TestNormalizeEnvironmentColorOnValidNumber(t *testing.T) {
-	color, valid := normalizeEnvironmentColor("42")
-	if !valid || color != "42" {
-		t.Fatalf("expected valid color for 42, got %q", color)
-	}
-}
-
-func TestNormalizeEnvironmentColorOnValidNumberDoubleDigit(t *testing.T) {
-	color, valid := normalizeEnvironmentColor("99")
-	if !valid || color != "99" {
-		t.Fatalf("expected valid color for 99, got %q", color)
-	}
-}
-
-func TestNormalizeEnvironmentColorOnInvalidInput(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("invalid")
-	if valid {
-		t.Fatalf("expected invalid color for 'invalid'")
-	}
-}
-
-func TestNormalizeEnvironmentColorOnInvalidHex(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("#12345")
-	if valid {
-		t.Fatalf("expected invalid color for '#12345'")
-	}
-}
-
-func TestNormalizeEnvironmentColorOnInvalidShortHex(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("#1GF")
-	if valid {
-		t.Fatalf("expected invalid color for '#1GF'")
-	}
-}
-
-func TestNormalizeEnvironmentColorOnInvalidShortHexWrongFormat(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("#]]]")
-	if valid {
-		t.Fatalf("expected invalid color for '#]]]'")
-	}
-}
-
-func TestNormalizeEnvironmentColorOnInvalidNumber(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("100")
-	if valid {
-		t.Fatalf("expected invalid color for '100'")
-	}
-}
-
-func TestNormalizeEnvironmentColorOnInvalidNegativeNumber(t *testing.T) {
-	_, valid := normalizeEnvironmentColor("-1")
-	if valid {
-		t.Fatalf("expected invalid color for '-1'")
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			color, valid := normalizeEnvironmentColor(testCase.input)
+			if color != testCase.wantColor || valid != testCase.wantValid {
+				t.Fatalf("expected color %q and valid %v for input %q, got color %q and valid %v", testCase.wantColor, testCase.wantValid, testCase.input, color, valid)
+			}
+		})
 	}
 }
