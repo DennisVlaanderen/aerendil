@@ -232,7 +232,7 @@ func TestEnvironmentsPostValidatesAndNormalizesColor(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			createBody, _ := json.Marshal(map[string]any{"name": "Production", "color": testCase.color})
-			createReq := httptest.NewRequest(http.MethodPost, "/api/environments", bytes.NewReader(createBody))
+			createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/environments", bytes.NewReader(createBody))
 			createReq.Header.Set("Authorization", "Bearer "+token)
 			createRec := httptest.NewRecorder()
 			mux.ServeHTTP(createRec, createReq)
@@ -259,7 +259,7 @@ func TestEnvironmentsPutUpdatesColor(t *testing.T) {
 	token := tokenFor(t, auth.PermEnvironmentsCreate, auth.PermEnvironmentsUpdate)
 
 	createBody, _ := json.Marshal(map[string]any{"name": "Production", "color": "4"})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/environments", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/environments", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -267,10 +267,13 @@ func TestEnvironmentsPutUpdatesColor(t *testing.T) {
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create response: %v", err)
 	}
-	id := created["id"].(string)
+	id, isString := created["id"].(string)
+	if !isString {
+		t.Fatalf("expected a string id in create response, got %v", created["id"])
+	}
 
 	updateBody, _ := json.Marshal(map[string]any{"name": "Production", "color": "#1a2b3c"})
-	updateReq := httptest.NewRequest(http.MethodPut, "/api/environments/"+id, bytes.NewReader(updateBody))
+	updateReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/environments/"+id, bytes.NewReader(updateBody))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
 	updateRec := httptest.NewRecorder()
 	mux.ServeHTTP(updateRec, updateReq)
@@ -292,7 +295,7 @@ func TestEnvironmentsPutWithoutColorKeepsExistingColor(t *testing.T) {
 	token := tokenFor(t, auth.PermEnvironmentsCreate, auth.PermEnvironmentsUpdate)
 
 	createBody, _ := json.Marshal(map[string]any{"name": "Production", "color": "4"})
-	createReq := httptest.NewRequest(http.MethodPost, "/api/environments", bytes.NewReader(createBody))
+	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/environments", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
 	mux.ServeHTTP(createRec, createReq)
@@ -300,10 +303,13 @@ func TestEnvironmentsPutWithoutColorKeepsExistingColor(t *testing.T) {
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create response: %v", err)
 	}
-	id := created["id"].(string)
+	id, isString := created["id"].(string)
+	if !isString {
+		t.Fatalf("expected a string id in create response, got %v", created["id"])
+	}
 
 	updateBody, _ := json.Marshal(map[string]any{"name": "Renamed"})
-	updateReq := httptest.NewRequest(http.MethodPut, "/api/environments/"+id, bytes.NewReader(updateBody))
+	updateReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/environments/"+id, bytes.NewReader(updateBody))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
 	updateRec := httptest.NewRecorder()
 	mux.ServeHTTP(updateRec, updateReq)
