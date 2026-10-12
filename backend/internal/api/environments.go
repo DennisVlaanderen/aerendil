@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 
 	"aerendil/backend/internal/auth"
@@ -37,6 +38,7 @@ type environmentResponse struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Order int    `json:"order"`
+	Color string `json:"color"`
 }
 
 func toEnvironmentResponse(e store.Environment) environmentResponse {
@@ -44,6 +46,7 @@ func toEnvironmentResponse(e store.Environment) environmentResponse {
 		ID:    e.ID,
 		Name:  e.Name,
 		Order: e.Order,
+		Color: e.Color,
 	}
 }
 
@@ -85,7 +88,8 @@ func environmentsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
 
 func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	var payload struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Color string `json:"color"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
@@ -96,10 +100,16 @@ func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
+	color, colorValid := normalizeEnvironmentColor(payload.Color)
+	if !colorValid {
+		return badRequest(CodeBadRequestEnvironmentColorInvalid, MsgBadRequestEnvironmentColorInvalid)
+	}
+
 	env, err := dataStore.Environments().Set(store.Environment{
 		ID:    store.NewID(),
 		Name:  name,
 		Order: len(dataStore.Environments().List()),
+		Color: color,
 	})
 	if err != nil {
 		return err
@@ -116,7 +126,8 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	var payload struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Color string `json:"color"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
@@ -127,11 +138,17 @@ func environmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return badRequest(CodeBadRequestEnvironmentNameRequired, MsgBadRequestEnvironmentNameRequired)
 	}
 
+	color, colorValid := normalizeEnvironmentColor(payload.Color)
+	if !colorValid {
+		return badRequest(CodeBadRequestEnvironmentColorInvalid, MsgBadRequestEnvironmentColorInvalid)
+	}
+
 	// Order is fixed at creation; reordering is a future follow-up.
 	env, err := dataStore.Environments().Set(store.Environment{
 		ID:    existing.ID,
 		Name:  name,
 		Order: existing.Order,
+		Color: color,
 	})
 	if err != nil {
 		return err
@@ -150,4 +167,20 @@ func environmentsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return ok(w, map[string]string{"status": "deleted"})
+}
+
+var regexpEnvironmentColorPattern = regexp.MustCompile(`^(\d{1,2}|#[]0-9a-fA-F]{3}|#[0-9a-fA-F]{6})$`)
+
+func normalizeEnvironmentColor(raw string) (string, bool) {
+	color := strings.TrimSpace(raw)
+	if color == "" {
+		return "", true
+	}
+
+	if regexpEnvironmentColorPattern.MatchString(color) {
+		color = strings.ToLower(color)
+		return color, true
+	}
+
+	return "", false
 }

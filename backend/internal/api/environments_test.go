@@ -207,3 +207,152 @@ func TestEnvironmentsDeleteRejectsLastEnvironment(t *testing.T) {
 		t.Fatalf("expected 403 deleting the last remaining environment, got %d: %s", deleteRec.Code, deleteRec.Body.String())
 	}
 }
+
+func TestEnvironmentsPostValidatesAndNormalizesColor(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermEnvironmentsCreate)
+
+	cases := []struct {
+		name       string
+		color      string
+		wantStatus int
+		wantColor  string
+	}{
+		{"empty color", "", http.StatusCreated, ""},
+		{"palette key", "4", http.StatusCreated, "4"},
+		{"hex lowercase", "#1a2b3c", http.StatusCreated, "#1a2b3c"},
+		{"hex uppercase", "#1A2B3C", http.StatusCreated, "#1a2b3c"},
+		{"short hex lowercase", "#abc", http.StatusCreated, "#abc"},
+		{"short hex uppercase", "#ABC", http.StatusCreated, "#abc"},
+		{"invalid color", "invalid", http.StatusBadRequest, ""},
+		{"three digit number", "100", http.StatusBadRequest, ""},
+		{"negative number", "-1", http.StatusBadRequest, ""},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			createBody, _ := json.Marshal(map[string]any{"name": "Production", "color": testCase.color})
+			createReq := httptest.NewRequest(http.MethodPost, "/api/environments", bytes.NewReader(createBody))
+			createReq.Header.Set("Authorization", "Bearer "+token)
+			createRec := httptest.NewRecorder()
+			mux.ServeHTTP(createRec, createReq)
+			if createRec.Code != testCase.wantStatus {
+				t.Fatalf("expected status %d, got %d: %s", testCase.wantStatus, createRec.Code, createRec.Body.String())
+			}
+			if testCase.wantStatus != http.StatusCreated {
+				return
+			}
+
+			var created map[string]any
+			if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+				t.Fatalf("decode create response: %v", err)
+			}
+			if created["color"] != testCase.wantColor {
+				t.Fatalf("expected color %q, got %v", testCase.wantColor, created["color"])
+			}
+		})
+	}
+}
+
+func TestEnvironmentsPutUpdatesColor(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermEnvironmentsCreate, auth.PermEnvironmentsUpdate)
+
+	createBody, _ := json.Marshal(map[string]any{"name": "Production", "color": "4"})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/environments", bytes.NewReader(createBody))
+	createReq.Header.Set("Authorization", "Bearer "+token)
+	createRec := httptest.NewRecorder()
+	mux.ServeHTTP(createRec, createReq)
+	var created map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	id := created["id"].(string)
+
+	updateBody, _ := json.Marshal(map[string]any{"name": "Production", "color": "#1a2b3c"})
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/environments/"+id, bytes.NewReader(updateBody))
+	updateReq.Header.Set("Authorization", "Bearer "+token)
+	updateRec := httptest.NewRecorder()
+	mux.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("expected update to succeed, got %d: %s", updateRec.Code, updateRec.Body.String())
+	}
+
+	var updated map[string]any
+	if err := json.Unmarshal(updateRec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if updated["color"] != "#1a2b3c" {
+		t.Fatalf("expected color to change from palette key to #1a2b3c, got %v", updated["color"])
+	}
+}
+
+func TestNormalizeEnvironmentColorOnEmptyInput(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("")
+	if !valid {
+		t.Fatalf("expected valid color for empty input")
+	}
+}
+
+func TestNormalizeEnvironmentColorOnValidHex(t *testing.T) {
+	color, valid := normalizeEnvironmentColor("#1a2b3c")
+	if !valid || color != "#1a2b3c" {
+		t.Fatalf("expected valid color for #1a2b3c, got %q", color)
+	}
+}
+
+func TestNormalizeEnvironmentColorOnValidShortHex(t *testing.T) {
+	color, valid := normalizeEnvironmentColor("#abc")
+	if !valid || color != "#abc" {
+		t.Fatalf("expected valid color for #abc, got %q", color)
+	}
+}
+
+func TestNormalizeEnvironmentColorOnValidNumber(t *testing.T) {
+	color, valid := normalizeEnvironmentColor("42")
+	if !valid || color != "42" {
+		t.Fatalf("expected valid color for 42, got %q", color)
+	}
+}
+
+func TestNormalizeEnvironmentColorOnValidNumberDoubleDigit(t *testing.T) {
+	color, valid := normalizeEnvironmentColor("99")
+	if !valid || color != "99" {
+		t.Fatalf("expected valid color for 99, got %q", color)
+	}
+}
+
+func TestNormalizeEnvironmentColorOnInvalidInput(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("invalid")
+	if valid {
+		t.Fatalf("expected invalid color for 'invalid'")
+	}
+}
+
+func TestNormalizeEnvironmentColorOnInvalidHex(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("#12345")
+	if valid {
+		t.Fatalf("expected invalid color for '#12345'")
+	}
+}
+
+func TestNormalizeEnvironmentColorOnInvalidShortHex(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("#1GF")
+	if valid {
+		t.Fatalf("expected invalid color for '#1GF'")
+	}
+}
+
+func TestNormalizeEnvironmentColorOnInvalidNumber(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("100")
+	if valid {
+		t.Fatalf("expected invalid color for '100'")
+	}
+}
+
+func TestNormalizeEnvironmentColorOnInvalidNegativeNumber(t *testing.T) {
+	_, valid := normalizeEnvironmentColor("-1")
+	if valid {
+		t.Fatalf("expected invalid color for '-1'")
+	}
+}
