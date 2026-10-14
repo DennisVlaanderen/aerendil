@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -31,15 +32,18 @@ type Config struct {
 type Store struct {
 	raft *raft.Raft
 	fsm  *fsm
+	// boltStore is the raft.db BoltDB log/stable store opened by newRaft.
+	// Raft never closes it, so Store.Close owns the handle.
+	boltStore io.Closer
 }
 
 // Open starts (or rejoins) a Raft node and returns a ready-to-use Store.
 func Open(cfg Config) (*Store, error) {
-	r, fsmStore, err := newRaft(cfg.NodeID, cfg.BindAddr, cfg.DataDir, cfg.Bootstrap)
+	r, fsmStore, boltStore, err := newRaft(cfg.NodeID, cfg.BindAddr, cfg.DataDir, cfg.Bootstrap)
 	if err != nil {
 		return nil, err
 	}
-	return &Store{raft: r, fsm: fsmStore}, nil
+	return &Store{raft: r, fsm: fsmStore, boltStore: boltStore}, nil
 }
 
 // Flags returns a repository for flag operations against the store.
@@ -84,7 +88,12 @@ func (s *Store) apply(cmd command) (any, error) {
 	return future.Response(), nil
 }
 
-// Close shuts down the Raft node.
+// Close shuts down the Raft node and releases the BoltDB store it was
+// opened with, so the data dir can be reopened or removed afterwards.
 func (s *Store) Close() error {
-	return s.raft.Shutdown().Error()
+	err := s.raft.Shutdown().Error()
+	if s.boltStore != nil {
+		err = errors.Join(err, s.boltStore.Close())
+	}
+	return err
 }
