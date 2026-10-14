@@ -24,11 +24,7 @@
 		permissions={data.permissions}
 	/>
 	<div class="flex min-w-0 flex-1 flex-col">
-		<Header
-			username={data.username}
-			environments={data.environments}
-			selectedEnvironmentId={data.selectedEnvironmentId}
-		/>
+		<Header environments={data.environments} selectedEnvironmentId={data.selectedEnvironmentId} />
 		<main class="min-w-0 flex-1 overflow-y-auto">
 			{@render children()}
 		</main>

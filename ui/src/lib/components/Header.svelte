@@ -1,18 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { m } from '#lib/paraglide/messages.js';
-	import { theme } from '#lib/theme.svelte.ts';
-	import { getInitials } from '#lib/initials.ts';
-	import LocaleSwitcher from './LocaleSwitcher.svelte';
 	import EnvironmentSwitcher from './EnvironmentSwitcher.svelte';
 	import type { EnvironmentSummary } from '#lib/server/environments.ts';
 
 	let {
-		username,
 		environments,
 		selectedEnvironmentId
 	}: {
-		username: string;
 		environments: EnvironmentSummary[];
 		selectedEnvironmentId: string | undefined;
 	} = $props();
@@ -40,29 +35,5 @@
 >
 	<div class="truncate text-base font-semibold text-foreground">{title}</div>
 
-	<div class="flex items-center gap-4">
-		<EnvironmentSwitcher {environments} {selectedEnvironmentId} />
-
-		<button
-			type="button"
-			class="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-surface-muted text-muted-foreground"
-			aria-label={theme.effective === 'dark' ? m.theme_toggle_light() : m.theme_toggle_dark()}
-			onclick={() => theme.toggle()}
-		>
-			{#if theme.effective === 'dark'}
-				<span class="icon-[lucide--sun] size-4" aria-hidden="true"></span>
-			{:else}
-				<span class="icon-[lucide--moon] size-4" aria-hidden="true"></span>
-			{/if}
-		</button>
-
-		<LocaleSwitcher compact={false} />
-
-		<div
-			class="flex size-7.5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
-			aria-hidden="true"
-		>
-			{getInitials(username)}
-		</div>
-	</div>
+	<EnvironmentSwitcher {environments} {selectedEnvironmentId} />
 </header>
