@@ -2,10 +2,9 @@
 	import { page } from '$app/state';
 	import { localizedResolve } from '#lib/localizedResolve.ts';
 	import { m } from '#lib/paraglide/messages.js';
-	import LocaleSwitcher from './LocaleSwitcher.svelte';
+	import ProfileMenu from './ProfileMenu.svelte';
 	import type { FlagSummary } from '#lib/server/flags.ts';
 	import { hasPermission } from '#lib/permissions.ts';
-	import { getInitials } from '#lib/initials.ts';
 
 	let {
 		flags,
@@ -312,36 +311,7 @@
 		{/if}
 	</nav>
 
-	<div class="flex flex-col gap-0.5 border-t border-border p-2.5">
-		<LocaleSwitcher compact={collapsed} />
-		<form method="POST" action="/logout">
-			<button
-				type="submit"
-				class="flex w-full cursor-pointer items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium text-danger hover:bg-surface-muted"
-			>
-				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
-					<span class="icon-[lucide--log-out] size-4.5"></span>
-				</span>
-				{#if !collapsed}<span>{m.logout_button()}</span>{/if}
-			</button>
-		</form>
-	</div>
-
-	<div class="flex items-center gap-2.5 border-t border-border px-4 py-3.5">
-		<div
-			class="flex size-6.5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
-		>
-			{getInitials(username)}
-		</div>
-		{#if !collapsed}
-			<div class="min-w-0">
-				<div class="truncate text-[12.5px] font-medium text-foreground">{username}</div>
-				<div class="truncate text-[11px] text-muted-foreground">
-					{isAdmin ? m.sidebar_role_admin() : m.sidebar_role_member()}
-				</div>
-			</div>
-		{/if}
-	</div>
+	<ProfileMenu {username} {isAdmin} {collapsed} />
 
 	<button
 		type="button"

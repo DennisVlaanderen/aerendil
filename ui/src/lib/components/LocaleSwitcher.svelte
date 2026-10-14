@@ -1,13 +1,17 @@
-<script lang="ts">
-	import { getLocale, setLocale, locales, type Locale } from '#lib/paraglide/runtime.js';
-	import { m } from '#lib/paraglide/messages.js';
+<script lang="ts" module>
+	import type { Locale } from '#lib/paraglide/runtime.js';
 
-	let { compact = false }: { compact?: boolean } = $props();
-
-	const localeMeta: Record<Locale, { name: string; flag: string }> = {
+	export const localeMeta: Record<Locale, { name: string; flag: string }> = {
 		en: { name: 'English', flag: '🇬🇧' },
 		'nl-nl': { name: 'Nederlands', flag: '🇳🇱' }
 	};
+</script>
+
+<script lang="ts">
+	import { getLocale, setLocale, locales } from '#lib/paraglide/runtime.js';
+	import { m } from '#lib/paraglide/messages.js';
+
+	let { compact = false }: { compact?: boolean } = $props();
 
 	let open = $state(false);
 	let openUpward = $state(false);
