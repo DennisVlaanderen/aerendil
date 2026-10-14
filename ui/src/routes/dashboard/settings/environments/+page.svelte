@@ -7,11 +7,14 @@
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import type { EnvironmentSummary } from '#lib/server/environments.ts';
 	import type { PageProps } from './$types';
+	import EnvironmentColorPicker from '#lib/components/EnvironmentColorPicker.svelte';
+	import { resolveEnvironmentColor } from '#lib/environment-colors.ts';
 
 	let { data }: PageProps = $props();
 
 	let isCreating = $state(false);
 	let createError = $state('');
+	let createColor = $state('');
 
 	let updatingId: string | null = $state(null);
 	let updateErrors: Record<string, string> = $state({});
@@ -51,7 +54,8 @@
 		const result = await apiRequest(`/bff/environments/${encodeURIComponent(environment.id)}`, {
 			method: 'PUT',
 			body: JSON.stringify({
-				name: (data.get('name') ?? '').toString()
+				name: (data.get('name') ?? '').toString(),
+				color: (data.get('color') ?? '').toString()
 			})
 		});
 
@@ -78,7 +82,8 @@
 		const result = await apiRequest('/bff/environments', {
 			method: 'POST',
 			body: JSON.stringify({
-				name: (data.get('name') ?? '').toString()
+				name: (data.get('name') ?? '').toString(),
+				color: (data.get('color') ?? '').toString()
 			})
 		});
 
@@ -88,6 +93,7 @@
 			return;
 		}
 		formEl.reset();
+		createColor = '';
 		await invalidateAll();
 	}
 </script>
@@ -110,6 +116,13 @@
 				<div class="p-5 {i > 0 ? 'border-t border-border' : ''}">
 					<div class="flex items-center justify-between gap-3">
 						<div class="flex items-center gap-2">
+							{#if resolveEnvironmentColor(environment.color)}
+								<span
+									class="size-3 shrink-0 rounded-full"
+									style:background-color={resolveEnvironmentColor(environment.color)}
+									aria-hidden="true"
+								></span>
+							{/if}
 							<strong class="text-foreground">{environment.name}</strong>
 							<span class="text-sm text-muted-foreground"
 								>{m.environments_table_order()}: {environment.order}</span
@@ -129,6 +142,11 @@
 							name="name"
 							value={environment.name}
 							class="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
+						/>
+						<EnvironmentColorPicker
+							name="color"
+							label={m.environments_color_label()}
+							value={environment.color}
 						/>
 
 						{#if updateErrors[environment.id]}
@@ -163,6 +181,12 @@
 					class="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-base text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
 				/>
 			</label>
+
+			<EnvironmentColorPicker
+				name="color"
+				label={m.environments_color_label()}
+				bind:value={createColor}
+			/>
 
 			{#if createError}
 				<p class="flex items-center gap-2 text-sm text-danger">

@@ -37,6 +37,7 @@ export const ErrorCode = {
 	// BR03 -- bad request, environments domain (400).
 	BadRequestEnvironmentUnknown: 'BR03-0001',
 	BadRequestEnvironmentNameRequired: 'BR03-0002',
+	BadRequestEnvironmentColorInvalid: 'BR03-0003',
 
 	// BR04 -- bad request, users domain (400).
 	BadRequestUsernameRequired: 'BR04-0001',
@@ -114,6 +115,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BadRequestFlagsEnvironmentIDsRequired]: m.error_flag_environments_required,
 	[ErrorCode.BadRequestEnvironmentUnknown]: m.error_unknown_environment,
 	[ErrorCode.BadRequestEnvironmentNameRequired]: m.error_environment_name_required,
+	[ErrorCode.BadRequestEnvironmentColorInvalid]: m.error_environment_color_invalid,
 	[ErrorCode.BadRequestUsernameRequired]: m.error_username_required,
 	[ErrorCode.BadRequestPasswordRequired]: m.error_password_required,
 	[ErrorCode.BadRequestPasswordTooShort]: m.error_password_too_short,
