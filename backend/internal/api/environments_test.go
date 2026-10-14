@@ -357,3 +357,67 @@ func TestNormalizeEnvironmentColor(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvironmentsCreateKeepsOrderUniqueAfterDelete(t *testing.T) {
+	mux := newTestMux(t)
+	token := tokenFor(t, auth.PermEnvironmentsCreate, auth.PermEnvironmentsRead, auth.PermEnvironmentsDelete)
+
+	create := func(name string) environmentResponse {
+		body, err := json.Marshal(map[string]any{"name": name})
+		if err != nil {
+			t.Fatalf("marshal create %q: %v", name, err)
+		}
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/environments", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("create %q: expected 201, got %d: %s", name, rec.Code, rec.Body.String())
+		}
+		var out environmentResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode create %q: %v", name, err)
+		}
+		return out
+	}
+
+	a, b, c := create("A"), create("B"), create("C")
+	if a.Order != 0 || b.Order != 1 || c.Order != 2 {
+		t.Fatalf("unexpected initial orders: A=%v B=%v C=%v", a.Order, b.Order, c.Order)
+	}
+
+	// Delete a middle environment: its Order must not be handed to the next
+	// create, or two environments would end up sharing Order 2 and sorting by
+	// random UUID instead of creation order.
+	deleteReq := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/environments/"+b.ID, nil)
+	deleteReq.Header.Set("Authorization", "Bearer "+token)
+	deleteRec := httptest.NewRecorder()
+	mux.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("delete: expected 200, got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	d := create("D")
+	if d.Order != 3 {
+		t.Fatalf("expected D's order to be 3 (strictly after C's 2), got %v", d.Order)
+	}
+
+	// Survivors plus the new environment must have all-distinct Orders.
+	listReq := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/environments", nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	listRec := httptest.NewRecorder()
+	mux.ServeHTTP(listRec, listReq)
+	var listed struct {
+		Environments []environmentResponse `json:"environments"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	seen := map[int]string{}
+	for _, env := range listed.Environments {
+		if other, dup := seen[env.Order]; dup {
+			t.Fatalf("order %v used by both %q and %q", env.Order, other, env.Name)
+		}
+		seen[env.Order] = env.Name
+	}
+}

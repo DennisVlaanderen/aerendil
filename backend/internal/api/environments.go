@@ -86,6 +86,22 @@ func environmentsGetByIDHandler(w http.ResponseWriter, r *http.Request) error {
 	return ok(w, toEnvironmentResponse(env))
 }
 
+// nextEnvironmentOrder returns one past the highest Order currently in
+// use, so a new environment always sequences after every existing one.
+// A plain count would reuse the Order of a still-present environment once
+// any earlier one is deleted, letting two environments share an Order;
+// listEnvironments then falls back to comparing random UUIDs, so their
+// relative position is no longer creation order (see #52).
+func nextEnvironmentOrder() int {
+	next := 0
+	for _, environment := range dataStore.Environments().List() {
+		if environment.Order >= next {
+			next = environment.Order + 1
+		}
+	}
+	return next
+}
+
 func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	var payload struct {
 		Name  string `json:"name"`
@@ -108,7 +124,7 @@ func environmentsPostHandler(w http.ResponseWriter, r *http.Request) error {
 	env, err := dataStore.Environments().Set(store.Environment{
 		ID:    store.NewID(),
 		Name:  name,
-		Order: len(dataStore.Environments().List()),
+		Order: nextEnvironmentOrder(),
 		Color: color,
 	})
 	if err != nil {
