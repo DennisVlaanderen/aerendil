@@ -39,10 +39,6 @@ class ThemeStore {
 		}
 		this.#applyDom();
 	}
-
-	toggle() {
-		this.setOverride(this.effective === 'dark' ? 'light' : 'dark');
-	}
 }
 
 export const theme = new ThemeStore();
