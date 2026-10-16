@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { userEvent } from 'vitest/browser';
 import Sidebar from './Sidebar.svelte';
 
 const baseProps = {
@@ -148,5 +149,62 @@ describe('Sidebar application settings visibility', () => {
 		await expect
 			.element(screen.getByRole('link', { name: 'Environments' }))
 			.not.toBeInTheDocument();
+	});
+});
+
+describe('Sidebar profile menu', () => {
+	const props = { ...baseProps, isAdmin: false, permissions: [] };
+
+	test('opens a menu with language, theme and logout', async () => {
+		const screen = await render(Sidebar, props);
+
+		await screen.getByRole('button', { name: 'Account menu' }).click();
+
+		await expect
+			.element(screen.getByRole('menuitemradio', { name: 'English' }))
+			.toBeInTheDocument();
+		await expect.element(screen.getByRole('menuitemradio', { name: 'Light' })).toBeInTheDocument();
+		await expect.element(screen.getByRole('menuitemradio', { name: 'Dark' })).toBeInTheDocument();
+		await expect.element(screen.getByRole('menuitemradio', { name: 'System' })).toBeInTheDocument();
+		await expect.element(screen.getByRole('menuitem', { name: 'Log out' })).toBeInTheDocument();
+	});
+
+	test('sets the theme to light, dark or system', async () => {
+		const screen = await render(Sidebar, props);
+		const trigger = screen.getByRole('button', { name: 'Account menu' });
+
+		await trigger.click();
+		await screen.getByRole('menuitemradio', { name: 'Dark' }).click();
+		expect(localStorage.getItem('aerendil-theme')).toBe('dark');
+
+		await trigger.click();
+		await screen.getByRole('menuitemradio', { name: 'System' }).click();
+		expect(localStorage.getItem('aerendil-theme')).toBeNull();
+
+		await trigger.click();
+		await expect
+			.element(screen.getByRole('menuitemradio', { name: 'System' }))
+			.toHaveAttribute('aria-checked', 'true');
+	});
+
+	test('closes on Escape and returns focus to the trigger', async () => {
+		const screen = await render(Sidebar, props);
+		const trigger = screen.getByRole('button', { name: 'Account menu' });
+
+		await trigger.click();
+		await expect.element(screen.getByRole('menu')).toBeInTheDocument();
+		await userEvent.keyboard('{Escape}');
+
+		await expect.element(screen.getByRole('menu')).not.toBeInTheDocument();
+		await expect.element(trigger).toHaveFocus();
+	});
+
+	test('still opens when the sidebar is collapsed', async () => {
+		const screen = await render(Sidebar, props);
+
+		await screen.getByRole('button', { name: 'Collapse sidebar' }).click();
+		await screen.getByRole('button', { name: 'Account menu' }).click();
+
+		await expect.element(screen.getByRole('menu')).toBeInTheDocument();
 	});
 });

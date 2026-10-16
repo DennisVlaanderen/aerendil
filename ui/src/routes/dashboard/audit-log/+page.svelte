@@ -4,6 +4,8 @@
 	import DateTimePicker from '#lib/components/DateTimePicker.svelte';
 	import { m } from '#lib/paraglide/messages.js';
 	import { formatTimestamp } from '#lib/formatDate.ts';
+	import { localizedResolve } from '#lib/localizedResolve.ts';
+	import type { ResolvedPathname } from '$app/types';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -18,11 +20,11 @@
 	let to = $derived(data.filter.to);
 
 	// Swaps only the cursor; none means newest.
-	function cursorHref(cursor: string | undefined): string {
+	function cursorHref(cursor: string | undefined): ResolvedPathname {
 		const params = [...page.url.searchParams].filter(([key]) => key !== 'cursor');
 		if (cursor) params.push(['cursor', cursor]);
 		const query = new URLSearchParams(params).toString();
-		return query ? `?${query}` : page.url.pathname;
+		return localizedResolve(query ? `/dashboard/audit-log?${query}` : '/dashboard/audit-log');
 	}
 
 	// Assumes the page size hasn't changed while paging.
