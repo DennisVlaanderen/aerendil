@@ -73,8 +73,8 @@ flag queries, subscriptions and definition delivery.
 | Readiness timeout | deployment-configured | §4.1 |
 | `heartbeat_interval_s` | announced by the server in the HandshakeAck | §4.6 |
 | Dead-peer timeout | 3 × `heartbeat_interval_s` | §4.6 |
-| `credential_check_interval` | 30 s recommended (configurable) | §4.4 |
-| Re-authentication window | start below 20% of the token lifetime remaining; at the latest 60 s before expiry | §4.3 |
+| `credential_check_interval` | 30 s recommended; client-chosen in the Handshake, capped by the server | §4.2, §4.4 |
+| Re-authentication window | the earlier of 20% of the token lifetime remaining or 60 s before expiry | §4.3 |
 | Max active subscriptions per session | 256 recommended (configurable) | §8.2 |
 | Rollout buckets | 100,000 (weights sum to 100000) | §6.5 |
 | Bucketing hash | SHA-256, first 8 bytes as big-endian u64 | §6.5 |
@@ -133,11 +133,11 @@ All other type values are unassigned and get `Error` 100.
 | Subscribe `mode` (u8) | 0 value, 1 definition |
 | `value_type` (u8) | 0 bool, 1 int, 2 string, 3 json, 0xFF none |
 | `reason` (u8) | 0 `flag_disabled`, 1 `rule_match`, 2 `fallthrough`, 3 `flag_not_found`, 4 `error` |
-| `error_kind` (u8) | 0 none, 1 `malformed_flag`, 2 `invalid_context` |
+| `error_kind` (u8) | 0 none, 1 `malformed_flag` |
 | `change_kind` (u8) | 0 upsert, 1 delete |
 | `item_kind` (u8) | 0 flag, 1 segment, 2 server-evaluated flag |
 | `update_flags` (u8) | bit 0 `SNAPSHOT`, bit 1 `SNAPSHOT_END` |
-| `response_flags` (u8) | bit 0 `MORE` |
+| `response_flags` (u8) | bit 0 `MORE` (QueryResponse, DefinitionResponse) |
 | Nack `ref_kind` (u8) | 0 `query_id`, 1 `subscription_id` |
 | Flag `type` (u8) | 0 boolean, 1 integer, 2 string, 3 json |
 | `flag_bits` (u8) | bit 0 enabled |
@@ -158,7 +158,7 @@ rejects one request, and the connection stays open. Codes 125–199 are reserved
 | 102 | `ErrHandshakeTokenTruncated` | Error | `token_len` runs past the payload. |
 | 103 | `ErrHandshakeNotImplemented` | Error | Stub server only. Retired once the Handshake is implemented. |
 | 104 | `ErrUnsupportedVersion` | Error | The version is not implemented (§4.7). The message names the supported versions. |
-| 105 | `ErrAuthenticationFailed` | Error | Invalid token; unknown or inactive credential; invalid Reauthenticate token. |
+| 105 | `ErrAuthenticationFailed` | Error | Invalid token; not an application-credential service token; unknown or inactive credential; invalid Reauthenticate token, or one without `flags:read`. |
 | 106 | `ErrCredentialRevoked` | Error | The session's credential was revoked or deactivated. Either side of the credential check (§4.4) can detect this. |
 | 107 | `ErrRateLimited` | Error | A connection or request rate limit was exceeded (§12). |
 | 108 | `ErrFrameTooLarge` | Error | `length` exceeds `MaximumFrameSize`. |
@@ -167,7 +167,7 @@ rejects one request, and the connection stays open. Codes 125–199 are reserved
 | 111 | `ErrInvalidContext` | Nack | The context does not decode, has no `key`, has a bad attribute name, or exceeds limits. |
 | 112 | `ErrInvalidCriteria` | Nack | The criteria list is empty, or a criterion is not a valid key, prefix or `*`. |
 | 113 | `ErrUnknownMode` | Nack | The Subscribe `mode` is neither 0 nor 1. |
-| 114 | `ErrDuplicateSubscription` | Nack | The `subscription_id` is already active in the session. |
+| 114 | `ErrDuplicateSubscription` | Nack | The `subscription_id` was already used in the session. |
 | 115 | `ErrMalformedMessage` | Error | A known message type whose body does not decode: truncated, trailing bytes, or an unknown enum value (including `ack_kind`). |
 | 116 | `ErrTokenExpired` | Error | The token expired before a successful Reauthenticate. |
 | 117 | `ErrServerUnavailable` | Error | The node cannot establish the session within its readiness timeout. The client should try another node. |
@@ -175,7 +175,7 @@ rejects one request, and the connection stays open. Codes 125–199 are reserved
 | 119 | `ErrHeartbeatTimeout` | Error | No frame from the client for 3 × `heartbeat_interval_s`. Sent best-effort. |
 | 120 | `ErrHandshakeTimeout` | Error | No Handshake arrived within the handshake timeout. |
 | 121 | `ErrAlreadyAuthenticated` | Error | A second Handshake on an established connection. Reauthenticate is the way to replace a token. |
-| 122 | `ErrInvalidRequest` | Nack | An empty key list, an invalid flag key, or another per-request limit exceeded. |
+| 122 | `ErrInvalidRequest` | Nack | An empty key list, an invalid flag key, a reused `query_id`, or another per-request limit exceeded. |
 | 123 | `ErrSubscriptionLimit` | Nack | The session already has the maximum number of active subscriptions. |
 | 124 | `ErrServerShuttingDown` | Error | The node is draining or shutting down. The client should reconnect, ideally to another node. |
 
@@ -205,8 +205,9 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Ack(SESSION_READY)──�
    └──Error 120 (no Handshake in time)                            └─┘ Ack(CHECK)      → Ack(CHECK_OK)
 ```
 
-- **CONNECTED.** TCP (and TLS) is up. The server accepts only a Handshake: any other message gets `Error` 109. If no Handshake arrives within the handshake timeout, the server sends `Error` 120.
-- **AUTHENTICATED.** The server has validated the token and sent the HandshakeAck. It now finishes setting up the session: registering it, and making sure the node can serve consistent data (for example, that it has caught up with the cluster leader). A request in this state gets `Error` 109.
+- **Any state.** A Heartbeat (§4.6) is accepted in every state. An unassigned message type gets `Error` 100 in every state; this check comes before the state checks below.
+- **CONNECTED.** TCP (and TLS) is up. The server accepts only a Handshake (and Heartbeats): any other known message gets `Error` 109. If no Handshake arrives within the handshake timeout, the server sends `Error` 120.
+- **AUTHENTICATED.** The server has validated the token and sent the HandshakeAck. It now finishes setting up the session: registering it, and making sure the node can serve consistent data (for example, that it has caught up with the cluster leader). A request in this state gets `Error` 109; Heartbeats keep flowing as usual.
 - **ESTABLISHED.** The server has sent `Ack(SESSION_READY)`. The client may now assume a healthy connection and send requests.
   - If the node cannot become ready within its readiness timeout, it sends `Error` 117 instead, so the client can try another node.
   - A second Handshake in this state gets `Error` 121.
@@ -220,9 +221,14 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Ack(SESSION_READY)──�
 [u8 ver_major]                  // 0
 [u8 ver_minor]                  // 1
 [u16 client_capabilities]
+[u16 credential_check_interval_s]  // 0 = server default
 [u16 token_len][token]          // UTF-8
 [u16 client_id_len][client_id]  // optional, 0 if absent
 ```
+
+- **`credential_check_interval_s`.** A client-side setting (SDK default 30 s) that the client announces here. The server uses `min(client value, server maximum)` as this session's `credential_check_interval` (§4.4), so a client can shorten but never lengthen the time to detect a revocation (§12).
+- **`client_id`.** A free-form label for the client (for example `checkout-service@1.4.2`). It has no protocol meaning; the server records it in session logs and the session registry (§13) to help operators identify connections.
+- **Token kind.** The token must be an application-credential service token (§12), which is scoped to exactly one environment. Any other token, such as a human login token, gets `Error` 105.
 
 | Capability bit | Name | Meaning |
 | --- | --- | --- |
@@ -240,7 +246,6 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Ack(SESSION_READY)──�
 [16 bytes session_id]             // opaque, e.g. a UUID
 [u8 server_flags]                 // capability bits 0–7 that were granted
 [u16 heartbeat_interval_s]
-[u16 welcome_len][welcome_msg]    // optional, 0 if absent
 ```
 
 - **Failure.** A version the server doesn't implement gets `Error` 104. A token that fails validation gets `Error` 105.
@@ -257,12 +262,12 @@ snapshots and sequence numbers survive token rotation.
 [u16 token_len][token]
 ```
 
-- **Identity.** The new token must belong to the same credential and environment as the session; otherwise the server sends `Error` 118. An invalid token gets `Error` 105.
+- **Identity.** The new token must belong to the same credential and environment as the session; otherwise the server sends `Error` 118. An invalid token, or one without `flags:read`, gets `Error` 105.
 - **Success.** The server replies `Ack(REAUTH_OK)` with the new `token_ttl_s`.
 - **Scope changes** take effect immediately.
   - If the new token no longer carries `flags:definitions:read`, every definition subscription ends with a `Nack` 110 that references it. Later definition requests also get `Nack` 110.
   - Gaining a scope never upgrades the session: only a Handshake can grant `CAP_DEFINITIONS`.
-- **Timing.** The client re-authenticates before `token_ttl_s` runs out. It should start once less than 20% of the token's lifetime remains, and at the latest 60 seconds before expiry. The fresh token is obtained the same way as the first one, for example through the HTTP API's client-credentials endpoint.
+- **Timing.** The client re-authenticates before `token_ttl_s` runs out. It should start at the earlier of two moments: when less than 20% of the token's lifetime remains, or 60 seconds before expiry. Both are measured from the first `token_ttl_s` received for that token (in `SESSION_READY` or `REAUTH_OK`). The fresh token is obtained the same way as the first one, for example through the HTTP API's client-credentials endpoint.
 - **Expiry.** If the token expires first, the server sends `Error` 116 and closes the connection.
 
 ### 4.4 Ack (0x30) and credential checks
@@ -290,6 +295,7 @@ has one fixed layout.
 
 **Credential validity is checked from both sides.**
 
+- **Interval.** `credential_check_interval` is per session: the value agreed in the Handshake (§4.2).
 - **Server side.** The server re-validates a session's credential whenever the store reports a change to it, and in any case at least every `credential_check_interval`. A revoked or deactivated credential gets `Error` 106, and the connection is closed. This also covers sessions that only receive pushes.
 - **Client side.**
   - The client may send `Ack(CHECK)` at any time. The server re-validates immediately and replies `Ack(CHECK_OK)` or `Error` 106.
@@ -313,7 +319,7 @@ has one fixed layout.
 [u8 0x40]
 ```
 
-- **When to send.** Either peer sends a Heartbeat once it has sent nothing for `heartbeat_interval_s`. No reply is needed.
+- **When to send.** Either peer sends a Heartbeat once it has sent nothing for `heartbeat_interval_s`. No reply is needed. Heartbeats are valid in every session state (§4.1), including while the client waits for `SESSION_READY`.
 - **Dead peers.** A peer that has received no frame for 3 × `heartbeat_interval_s` considers the connection dead and closes it. The server first tries, best-effort, to send `Error` 119.
 - **Scope.** Heartbeats only prove that the connection is alive. Credential validity and server health are checked with Ack (§4.4).
 
@@ -334,7 +340,9 @@ minor differences within one major version must stay compatible.
 ## 5. Consumption modes
 
 A connection only ever sees one environment: the one its credential is scoped
-to. Environment is therefore never a rule attribute.
+to. FQDP accepts only application-credential service tokens (§4.2), and each
+is scoped to exactly one environment. Environment is therefore never a rule
+attribute.
 
 | | Value mode (server-evaluated) | Definition mode (client-evaluated) |
 | --- | --- | --- |
@@ -471,6 +479,8 @@ These semantics are normative and identical in every evaluator:
 - **List attributes.** If the context attribute is a list, the condition matches when any element matches.
 - **Missing or mismatched attributes.** If the attribute is missing, or its kind does not fit the operator, the condition is **false**, and `negate` is **not** applied. A missing attribute never widens a rule's audience.
 - **`negate`.** When the attribute is present and kind-compatible, `negate: true` inverts the result.
+- **`inSegment`.** It has no attribute and always counts as present, so `negate: true` inverts it: `{inSegment beta, negate}` matches every context that is not a member of `beta`.
+- **Numbers.** NaN and ±Inf are never valid values, in conditions or in contexts (§9.1). `-0` and `0` compare equal.
 - **Strings.** String comparisons are case-sensitive and byte-exact on UTF-8, with no Unicode normalization.
 
 Regex, semver and date operators are not part of evaluator level 1. Regex in
@@ -520,7 +530,7 @@ both, or with neither, is invalid.
 ```
 
 - **Weights.** Non-negative integers that sum to exactly **100000**. Each variation appears at most once.
-- **`bucketBy`.** Defaults to `key`. It must name a string attribute or an integer-valued number attribute. A number is converted to its plain decimal form, such as `42`, with no exponent and no `.0`.
+- **`bucketBy`.** Defaults to `key`. It must name a string attribute or an integer-valued number attribute. A number is converted to its plain decimal form, such as `42`, with no exponent and no `.0`. `-0` is written as `0`.
 
 **Bucketing (normative)**
 
@@ -532,7 +542,7 @@ bucket = n mod 100000                      // 0 ≤ bucket < 100000
 ```
 
 - **Choosing the variation.** The context gets the first variation, in array order, whose cumulative weight is greater than `bucket`.
-- **Missing `bucketBy` attribute.** If it is missing or unusable, `bucket = 0`. This can only happen with a custom `bucketBy`, since every context has a `key`.
+- **Missing `bucketBy` attribute.** If it is missing or unusable, `bucket = 0`. This can only happen with a custom `bucketBy`, since every context has a non-empty `key` (§6.6).
 
 **Vectors.** These use `salt = "checkout.new-flow"` and the 50/50 rollout above,
 so `control` covers buckets [0, 50000) and `treatment` covers [50000, 100000):
@@ -549,7 +559,7 @@ so `control` covers buckets [0, 50000) and `treatment` covers [50000, 100000):
 { "key": "user-123", "attributes": { "country": "NL", "plan": "pro", "beta": true, "groups": ["a", "b"] } }
 ```
 
-- **`key`.** Required.
+- **`key`.** Required, 1–256 bytes. There is no empty or keyless context.
 - **Attribute names.** Unique within the context. The name `key` is reserved and cannot be used for an attribute.
 - **Attribute values.** A string, a number, a boolean, or a flat list of a single one of those kinds.
 - **Kind.** A context has a single kind. Multi-kind contexts are not defined.
@@ -564,6 +574,7 @@ so `control` covers buckets [0, 50000) and `treatment` covers [50000, 100000):
 Given a flag definition `F` (or none) and a context `C`, evaluation takes the
 first step that applies:
 
+0. **`C` is invalid** (SDK-local only). Return the caller's default, with reason `error` and `errorKind: invalid_context`. A server never reaches this step: it rejects an invalid context with `Nack` 111.
 1. **`F` is missing.** Return the caller's default, with reason `flag_not_found`.
 2. **`F` is malformed.** Return the caller's default, with reason `error` and `errorKind: malformed_flag`. Malformed means failed decoding, an unknown `schema_version`, a dangling variation or segment reference, or bad weights.
 3. **`F.enabled == false`.** Return `offVariation`, with reason `flag_disabled`.
@@ -585,7 +596,7 @@ first step that applies:
 | --- | --- | --- |
 | none | 0 | — |
 | `malformed_flag` | 1 | The definition failed decoding or validation. |
-| `invalid_context` | 2 | The context failed validation. |
+| `invalid_context` | — | SDK-local only: the context failed validation (§7.1 step 0). |
 | `wrong_type` | — | SDK-local only: a typed accessor was called on a flag of another type. |
 | `client_not_ready` | — | SDK-local only: no snapshot received yet. |
 
@@ -599,8 +610,8 @@ first step that applies:
 
 ```
 [u8 0x10]
-[u32 query_id]                // client-chosen; echoed in the response
-[u32 context_len]             // 0 = evaluate with an empty context
+[u32 query_id]                // client-chosen; never reused in the session
+[u32 context_len]             // > 0
 [context_len bytes context]   // §9.5
 [u16 key_count]               // ≥ 1
 repeated: [u16 key_len][key]
@@ -611,20 +622,23 @@ repeated: [u16 key_len][key]
 ```
 [u8 0x11]
 [u32 query_id]
+[u8 response_flags]           // bit0 MORE: further frames for this query_id follow
 [u16 item_count]
 repeated:
   [u16 key_len][key]
   [u8 reason]
   [u8 error_kind]
   [u8 value_type]             // 0xFF = none
-  [u32 value_len][value]      // §9.1 value encoding; len 0 with 0xFF
+  [value]                     // §9.1 value encoding for value_type; absent with 0xFF
   [u8 variation_id_len][variation_id]
   [u8 rule_id_len][rule_id]   // 0 unless reason = rule_match
-  [u64 version]               // 0 when reason = flag_not_found
+  [u64 version]               // §8.3 effective version; 0 when reason = flag_not_found
 ```
 
-- **Empty context.** With an empty context, every attribute-dependent rule fails. A thin client that only wants a flag's default state can send `context_len = 0`.
+- **Context.** A Query always carries a context with a key (§6.6). `context_len = 0` gets `Nack` 111.
 - **Concurrent queries.** Several queries may be in flight at once. Responses are matched by `query_id`.
+- **Query ids.** A `query_id` is never reused within a session. Query and DefinitionQuery share one id space, since a Nack refers to either with `ref_kind 0`. A reused id gets `Nack` 122.
+- **Size.** A response that would exceed `MaximumFrameSize` is split across frames with `MORE`, in request order. The last frame has `MORE` clear.
 - **Rejection.** An invalid Query gets a Nack (111 or 122), not a QueryResponse.
 
 ### 8.2 Subscribe and Unsubscribe
@@ -633,20 +647,20 @@ repeated:
 
 ```
 [u8 0x20]
-[u32 subscription_id]        // client-chosen; unique among active subscriptions
+[u32 subscription_id]        // client-chosen; never reused in the session
 [u8 mode]                    // 0 value, 1 definition
-[u32 context_len][context]   // value mode only; must be 0 in definition mode
+[u32 context_len][context]   // value mode: > 0; definition mode: must be 0
 [u16 criteria_count]         // ≥ 1
 repeated: [u16 len][criterion]   // §8.4
 ```
 
-- **Confirmation.** There is no separate acknowledgement. The first Update or DefinitionUpdate (the snapshot, §8.6) confirms the subscription.
+- **Confirmation.** There is no separate acknowledgement. The snapshot (§8.6) confirms the subscription. It is always sent, and always ends with a `SNAPSHOT_END` frame, even when nothing matches.
 - **Rejection.** The server answers with a Nack carrying one of these codes:
   - 110: definition mode not granted.
   - 111: invalid context.
   - 112: invalid criteria.
   - 113: unknown mode.
-  - 114: duplicate `subscription_id`.
+  - 114: `subscription_id` already used in this session.
   - 123: subscription limit reached.
 
 **Unsubscribe (0x21)**
@@ -657,31 +671,33 @@ repeated: [u16 len][criterion]   // §8.4
 ```
 
 There is no reply, and an unknown id is ignored. Frames already in flight may
-still arrive; the client discards them. The id may be reused afterwards.
+still arrive; the client discards them. The id stays used: a later Subscribe
+with the same id gets `Nack` 114.
 
 ### 8.3 Update (value mode)
 
 ```
 [u8 0x22]
 [u32 subscription_id]
-[u64 sequence]               // per subscription, strictly increasing from 1
+[u64 sequence]               // per subscription: 1, then +1 per frame
 [u8 update_flags]
 [u16 change_count]
 repeated:
   [u8 change_kind]
   [u16 key_len][key]
-  [u64 version]
+  [u64 version]              // effective version, see below
   if upsert:
     [u8 reason]
     [u8 error_kind]
     [u8 value_type]
-    [u32 value_len][value]
+    [value]                  // §9.1 value encoding for value_type; absent with 0xFF
     [u8 variation_id_len][variation_id]
     [u8 rule_id_len][rule_id]
 ```
 
 - **Re-evaluation.** The server re-evaluates the subscription's context whenever a matched flag, or a segment it references, changes.
-- **When an Update is sent.** Only when the result (variation, reason or ruleId) or the version changes.
+- **Effective version.** The `version` of a value-mode item (Update, QueryResponse) is the highest of the flag's version and the versions of the segments it references. A segment edit therefore raises the version of every flag that depends on it, so the client's version check (§8.6) accepts the new result.
+- **When an Update is sent.** Only when the result (variation, reason or ruleId) or the effective version changes.
 
 ### 8.4 Criteria
 
@@ -698,7 +714,7 @@ processes.
 
 ```
 [u8 0x12]
-[u32 query_id]
+[u32 query_id]               // shares the §8.1 id space; never reused
 [u16 criteria_count]         // ≥ 1
 repeated: [u16 len][criterion]
 ```
@@ -713,7 +729,7 @@ repeated: [u16 len][criterion]
 repeated:
   [u8 item_kind]             // 0 flag (§9.3), 1 segment (§9.4), 2 server-evaluated flag (§8.8)
   [u16 key_len][key]
-  [u64 version]
+  [u64 version]              // item_kind 2: effective version (§8.3)
   [u32 def_len][definition]  // 0 ⇒ exact-key criterion not found; always 0 for item_kind 2
 ```
 
@@ -729,7 +745,7 @@ repeated:
   [u8 change_kind]
   [u8 item_kind]
   [u16 key_len][key]
-  [u64 version]
+  [u64 version]              // item_kind 2: effective version (§8.3)
   [u32 def_len][definition]  // 0 on delete and for item_kind 2
 ```
 
@@ -741,17 +757,21 @@ repeated:
   - A segment upsert precedes any flag upsert that references it. This holds within a frame and across the frames of one snapshot.
   - A flag that stops referencing a segment is sent before that segment's delete.
   - A client that applies changes in order therefore never holds a dangling reference.
-- **Size.** A response or snapshot that would exceed `MaximumFrameSize` is split across frames, using `MORE`, or `SNAPSHOT` / `SNAPSHOT_END`.
+- **Size.** A response or snapshot that would exceed `MaximumFrameSize` is split across frames, using `MORE` (QueryResponse, DefinitionResponse), or `SNAPSHOT` / `SNAPSHOT_END`.
 - **Readiness.** An SDK reports ready once `SNAPSHOT_END` has arrived for every initial subscription.
 
 ### 8.6 Snapshots, reconnect and versions
 
 - **Snapshots.** Every Subscribe, in either mode, begins with a snapshot of everything that matches.
   - Every snapshot frame carries `SNAPSHOT`, and the last one also carries `SNAPSHOT_END`.
+  - A snapshot always has at least one frame. When nothing matches, it is a single `SNAPSHOT|SNAPSHOT_END` frame with `change_count = 0`.
+  - An exact-key criterion that matches no flag is left out of the snapshot. The SDK reports such a key as `flag_not_found` locally. (A one-shot DefinitionResponse still reports it with `def_len 0`.)
   - Deltas follow the snapshot.
 - **Reconnect.** The client performs a new Handshake, re-subscribes, and receives a fresh snapshot. Any key it held that is absent when `SNAPSHOT_END` arrives is deleted. There is no backfill across sessions.
-- **Versions.** A client applies an upsert only if its `version` is greater than the version it holds for that key. Versions are Raft log indexes, so they can be compared across server nodes.
-- **Sequences.** Sequence numbers are per subscription and strictly increasing. TCP preserves order, so a gap or regression is a protocol violation, and the client closes the connection.
+- **Versions.**
+  - A snapshot replaces the client's state for that subscription unconditionally, whatever versions it held before, including a persisted last-known-good cache. This keeps clients correct after versions restart low, for example after a Raft data-directory wipe or a backup restore (§13).
+  - Within a session, a client applies a delta upsert only if its `version` is greater than the version it holds for that key. Versions are Raft log indexes, so they can be compared across server nodes of one cluster.
+- **Sequences.** Sequence numbers are per subscription. They start at 1 and go up by exactly 1 per frame. TCP preserves order, so a gap or regression is a protocol violation, and the client closes the connection.
 
 ### 8.7 Flag message lifecycle summary
 
@@ -774,10 +794,10 @@ are already deployed.
 - **Recorded levels.** Each flag and segment records the minimum level needed to evaluate it. The server computes it on write and stores it in the definition header. A flag's **effective level** is the highest of its own level and the levels of the segments it references.
 - **Server behaviour.** If a flag's effective level is higher than the session's `EVAL_LEVEL`, the server sends it as `item_kind 2` (*server-evaluated*): key and version only. It also withholds referenced segments that the client cannot evaluate.
 - **SDK behaviour.** The SDK evaluates a server-evaluated flag through a value-mode Query on the same connection, using the caller's context.
-  - It may cache results per `(flag version, context)`.
+  - It may cache results per `(version, context)`, where `version` is the item's effective version (§8.3), so segment changes invalidate the cache.
   - Results stay correct; only local evaluation is lost, and only for that flag.
   - The SDK must make this visible, through a log line or metric.
-- **Level changes.** When a write changes a flag's effective level relative to a session, the next DefinitionUpdate switches the item between kind 0 and kind 2.
+- **Level changes.** When a write changes a flag's effective level relative to a session, the next DefinitionUpdate switches the item between kind 0 and kind 2. That write (to the flag or to a segment it references) raises the item's version, so the switch passes the client's version check.
 
 ### 8.9 Error and Nack
 
@@ -795,7 +815,7 @@ subscriptions stay open.
 
 ```
 [u8 0x31]
-[u8 ref_kind]               // 0 query_id, 1 subscription_id
+[u8 ref_kind]               // 0 query_id (Query or DefinitionQuery), 1 subscription_id
 [u32 ref_id]
 [u16 code]
 [u16 msg_len][msg]
@@ -814,7 +834,7 @@ All codes are listed in §2.5.
   - Adding, removing or reordering fields bumps `schema_version`. There are no optional or extension fields within a version.
 - **Integer widths follow the limits** in §2.2.
 - **References are indexes.** Variations are referenced by their `u8` index into the flag's variation table. Segments are referenced by key.
-- **Value encoding.** Flag values are encoded by flag type. The same encoding is used for the `value` field of QueryResponse and Update:
+- **Value encoding.** Flag values are encoded by flag type. The same encoding is used for the `value` field of QueryResponse and Update, where `value_type` selects it and no extra length prefix is added:
   - `bool`: 1 byte (`00` or `01`).
   - `int`: 8 bytes, two's-complement int64.
   - `string`: `[u32 len][UTF-8]`.
@@ -830,7 +850,8 @@ All codes are listed in §2.5.
 - **Strict decoding.** A decoder:
   - checks every length against the bytes remaining;
   - never reads past `def_len` or `context_len`;
-  - rejects unknown enum values, out-of-range indexes and trailing bytes.
+  - rejects unknown enum values, out-of-range indexes and trailing bytes;
+  - rejects float64 values that are NaN or ±Inf.
 
   A definition that fails these checks is reported as `malformed_flag`. A context the server receives that fails them gets `Nack` 111.
 
@@ -918,9 +939,9 @@ repeated attribute:
 ### 9.6 Worked example: the §6.1 flag
 
 The flag in §6.1 encodes to **125 bytes**. The same content as minified JSON,
-without the fields the envelope carries, is 571 bytes. For comparison:
+without the fields the envelope carries (`key`, `environmentId`, `version`) and the human-only fields (rule `description`, segment `name`), is 589 bytes. For comparison:
 
-- the §6.2 segment is 64 bytes, against 172 as JSON;
+- the §6.2 segment is 64 bytes, against 190 as JSON;
 - the §6.6 context is 58 bytes, against 92 as JSON.
 
 ```
@@ -957,26 +978,27 @@ Every example below is a complete frame: the length prefix followed by the
 payload.
 
 **Handshake.** Version 0.1; `CAP_DEFINITIONS` with `EVAL_LEVEL` 1
-(capabilities `0x0101`); token `tok-ABC`; no client id.
+(capabilities `0x0101`); server-default credential check interval; token
+`tok-ABC`; no client id.
 
 ```
-00 00 00 10                 length 16
+00 00 00 12                 length 18
 01                          Handshake
 00 01                       version 0.1
 01 01                       capabilities: EVAL_LEVEL=1, CAP_DEFINITIONS
+00 00                       credential_check_interval_s = server default
 00 07 74 6f 6b 2d 41 42 43  token "tok-ABC"
 00 00                       no client id
 ```
 
 **HandshakeAck.** Session id `00..0f`; definitions granted; heartbeat every 15
-seconds; no welcome message.
+seconds.
 
 ```
-00 00 00 18  02  00 01
+00 00 00 16  02  00 01
 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f
 01           server_flags: CAP_DEFINITIONS granted
 00 0f        heartbeat_interval_s = 15
-00 00        no welcome message
 ```
 
 **Ack(SESSION_READY).** Healthy; the token is valid for 3,600 seconds.
@@ -1010,12 +1032,12 @@ seconds.
 ```
 
 **QueryResponse.** `f.a` is boolean `true` via `fallthrough` at version 5;
-`f.b` was not found.
+`f.b` was not found. A single frame (`MORE` clear).
 
 ```
-00 00 00 38  11  00 00 00 07  00 02
-00 03 66 2e 61  02 00  00  00 00 00 01 01  04 74 72 75 65  00  00 00 00 00 00 00 00 05
-00 03 66 2e 62  03 00  ff  00 00 00 00     00              00  00 00 00 00 00 00 00 00
+00 00 00 31  11  00 00 00 07  00  00 02
+00 03 66 2e 61  02 00  00  01  04 74 72 75 65  00  00 00 00 00 00 00 00 05
+00 03 66 2e 62  03 00  ff      00              00  00 00 00 00 00 00 00 00
 ```
 
 **Subscribe.** Definition mode; `subscription_id` 1; criterion `checkout.*`.
@@ -1028,9 +1050,9 @@ seconds.
 with one upsert.
 
 ```
-00 00 00 2c  22  00 00 00 02  00 00 00 00 00 00 00 01  03  00 01
+00 00 00 28  22  00 00 00 02  00 00 00 00 00 00 00 01  03  00 01
 00  00 03 66 2e 61  00 00 00 00 00 00 00 05
-02 00 00  00 00 00 01 01  04 74 72 75 65  00
+02 00 00  01  04 74 72 75 65  00
 ```
 
 **DefinitionUpdate.** `subscription_id` 1; a single-frame snapshot carrying the
@@ -1077,6 +1099,8 @@ case:
 - **Evaluation cases.** Each case is a flag or segment plus one or more contexts, given both as JSON and as expected binary hex, together with the expected `{variationId, reason, ruleId, errorKind}`. Together the cases cover:
   - every operator;
   - `negate` with missing attributes;
+  - `negate` on `inSegment` (matches non-members);
+  - `bucketBy` on a number attribute of `-0` (bucketed as `"0"`);
   - list attributes;
   - segment precedence;
   - `all` and `any`;
@@ -1088,11 +1112,12 @@ case:
   - a bad index;
   - an unknown op;
   - trailing bytes;
-  - a nested group at level 1.
+  - a nested group at level 1;
+  - a NaN or ±Inf condition value.
 - **Frame cases.** The frames in §10, plus a level-2 flag offered to a level-1 session, which must arrive as `item_kind 2`.
-- **Lifecycle cases.** Each of these must produce the code shown:
+- **Lifecycle cases.** Each of these must produce the result shown:
 
-  | Case | Code |
+  | Case | Result |
   | --- | --- |
   | Request before `SESSION_READY` | 109 |
   | Second Handshake | 121 |
@@ -1101,6 +1126,9 @@ case:
   | Revocation found by the server-side check | 106 |
   | Revocation found by `Ack(CHECK)` | 106 |
   | Unknown `ack_kind` | 115 |
+  | Heartbeat before `SESSION_READY` | accepted, no error |
+  | Reauthenticate with a token without `flags:read` | 105 |
+  | Subscribe that matches nothing | one `SNAPSHOT\|SNAPSHOT_END` frame, `change_count = 0` |
   | Reauthenticate that drops `flags:definitions:read` | `Nack` 110 for every definition subscription |
 
 The Go server (evaluator and codec) and every SDK run the same vectors. That is
@@ -1111,11 +1139,11 @@ byte-compatible.
 
 ## 12. Security considerations
 
-- **Tokens.** The Handshake token is a short-lived bearer token. For application credentials, it is the service token from the HTTP API's OAuth2 client-credentials endpoint.
+- **Tokens.** The Handshake token is a short-lived bearer token: the service token from the HTTP API's OAuth2 client-credentials endpoint. Human login tokens are not accepted (`Error` 105), because they can span several environments.
   - Scopes decide what the session may do: `flags:read` for value mode, and `flags:definitions:read` as well for definition mode.
   - The credential's environment decides which flags the session sees.
 - **Token lifetime.** A session outlives its token only through Reauthenticate (§4.3). An expired token gets `Error` 116.
-- **Revocation.** Revocation takes effect through the two-sided check (§4.4): no later than `credential_check_interval` after the change, even on a push-only session. The server sends `Error` 106 and closes the connection.
+- **Revocation.** Revocation takes effect through the two-sided check (§4.4): no later than `credential_check_interval` after the change, even on a push-only session. A client can shorten that interval in the Handshake but never lengthen it past the server's maximum. The server sends `Error` 106 and closes the connection.
 - **Definition exposure.** Definition mode exposes every rule and every segment member list in the environment. Do not give `flags:definitions:read` to less-trusted clients.
 - **TLS.** Strongly recommended in production. Servers may present certificates from a public CA, a private CA, or **self-signed** certificates. Clients and SDKs must support both:
   - **Custom trust roots:** a configurable CA bundle, used instead of or alongside the system roots.
