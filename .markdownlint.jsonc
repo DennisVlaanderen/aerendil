@@ -1,0 +1,6 @@
+{
+  // Tables and byte dumps can't wrap; prose wraps at 80.
+  "MD013": { "tables": false, "code_blocks": false },
+  // The README logo needs HTML for its dark-mode variant.
+  "MD033": { "allowed_elements": ["p", "picture", "source", "img"] }
+}
