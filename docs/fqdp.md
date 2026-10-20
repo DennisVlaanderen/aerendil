@@ -106,7 +106,7 @@ flag queries, subscriptions and definition delivery.
 | Group depth (evaluator level 1) | 1 | — |
 | Values per condition | 1–1,000 | `u16` count |
 | Segment rules | 0–100 | `u8` count |
-| Segment `included` + `excluded` targeting keys | 10,000 total | `u16` counts |
+| Segment `included` + `excluded` targeting keys | 6,000 total | `u16` counts |
 | Encoded definition (flag or segment) | 256 KiB | `u32` length |
 | Integer variation values | ±(2^53−1) | `i64` |
 | Context `targetingKey` | 1–256 bytes UTF-8 | `u16` length |
@@ -114,6 +114,10 @@ flag queries, subscriptions and definition delivery.
 | Encoded context | 64 KiB | `u32` length |
 | Keys per Query | 1–1,000 | `u16` count |
 | Criteria per Subscribe or DefinitionQuery | 1–1,000 | `u16` count |
+
+The 256 KiB definition cap also applies to segments: 6,000 UUID-length
+targeting keys (about 228 KB) fit, but longer keys reach the byte cap first.
+The HTTP API rejects a segment that breaks either limit.
 
 ### 2.3 Message types
 
@@ -182,11 +186,11 @@ reserved.
 | 108 | `ErrFrameTooLarge` | Error | A C→S frame's `length` exceeds `MaximumClientFrameSize` (§3). Sent before the payload is read. |
 | 109 | `ErrSessionNotEstablished` | Error | A request arrived before `Control(SESSION_ESTABLISHED)` (§4.1). |
 | 110 | `ErrDefinitionsNotPermitted` | Reject | A definition-mode request without the granted capability. Also sent for each definition subscription that ends because the credential lost `flags:definitions:read` (§4.3, §4.4). |
-| 111 | `ErrInvalidContext` | Reject | The context does not decode, has no `targetingKey`, has a bad attribute name, or exceeds limits. |
+| 111 | `ErrInvalidContext` | Reject | The context does not decode, has no `targetingKey`, has a bad attribute name, or exceeds limits; a value-mode Subscribe or Query with `context_len = 0`; or a definition-mode Subscribe with `context_len ≠ 0`. |
 | 112 | `ErrInvalidCriteria` | Reject | The criteria list is empty, or a criterion is not a valid key, prefix or `*`. |
 | 113 | `ErrUnknownMode` | Reject | The Subscribe `mode` is neither 0 nor 1. |
 | 114 | `ErrDuplicateSubscription` | Reject | The `subscription_id` is not higher than the last one used in the session (§8.2). |
-| 115 | `ErrMalformedMessage` | Error | A known message type whose body does not decode: truncated, trailing bytes, an unknown enum value (including `control_kind`), an S→C `control_kind` sent by a client, or a reserved bit or must-be-0 field that is set (§9.1). |
+| 115 | `ErrMalformedMessage` | Error | A known message type whose body does not decode: truncated, trailing bytes, an unknown enum value (including `control_kind`), an S→C `control_kind` sent by a client, or a reserved bit or must-be-0 field that is set (§9.1). Exceptions: an unknown Subscribe `mode` gets `Reject` 113, and a definition-mode Subscribe with `context_len ≠ 0` gets `Reject` 111. |
 | 116 | `ErrTokenExpired` | Error | The token expired before a successful Reauthenticate. |
 | 117 | `ErrServerUnavailable` | Error | The node cannot get in sync within its sync timeout, so it cannot establish the session. The client should try another node. |
 | 118 | `ErrIdentityMismatch` | Error | A Reauthenticate token belongs to a different credential or environment than the session. |
@@ -816,7 +820,8 @@ repeated:
   space, since a Reject refers to either with `ref_kind 0`. An id that is not
   higher gets `Reject` 122. A client that runs out of ids reconnects.
 - **Size.** A response that would exceed `MaximumFrameSize` is split across
-  frames with `MORE`, in request order. The last frame has `MORE` clear.
+  frames with `MORE`, in request order. The last frame has `MORE` clear. All
+  frames of one response reflect one Raft log index.
 - **Rejection.** An invalid Query gets a Reject (111 or 122), not a
   QueryResponse.
 
@@ -840,12 +845,16 @@ repeated: [u16 len][criterion]   // §8.4
   `SNAPSHOT_END` frame, even when nothing matches.
 - **Rejection.** The server answers with a Reject carrying one of these codes:
   - 110: definition mode not granted.
-  - 111: invalid context.
+  - 111: invalid context, a missing context in value mode, or a context in
+    definition mode.
   - 112: invalid criteria.
   - 113: unknown mode.
   - 114: `subscription_id` not higher than the last one used in this session.
   - 122: more criteria than §2.2 allows.
   - 123: subscription limit reached.
+
+  Both modes share one layout, so the server decodes the whole body first. A
+  body that does not decode is still `Error` 115.
 
 #### Unsubscribe (0x21)
 
@@ -962,7 +971,8 @@ repeated:
   segment references per subscription.
 - **Size.** A response or snapshot that would exceed `MaximumFrameSize` is split
   across frames, using `MORE` (QueryResponse, DefinitionResponse), or `SNAPSHOT`
-  / `SNAPSHOT_END`.
+  / `SNAPSHOT_END`. All frames of one response or snapshot reflect one Raft log
+  index (§8.6).
 - **Readiness.** An SDK reports ready once `SNAPSHOT_END` has arrived for every
   initial subscription.
 
@@ -977,7 +987,10 @@ repeated:
   - An exact-key criterion that matches no flag is left out of the snapshot. The
     SDK reports such a key as `flag_not_found` locally. (A one-shot
     DefinitionResponse still reports it with `def_len 0`.)
-  - Deltas follow the snapshot.
+  - A snapshot reflects the store at one Raft log index, even when it spans
+    several frames.
+  - Deltas follow the snapshot. They cover every write after the snapshot's
+    index, and no write is skipped or sent twice.
 - **Reconnect.** The client performs a new Handshake, re-subscribes, and
   receives a fresh snapshot. Any key it held that is absent when `SNAPSHOT_END`
   arrives is dropped. There is no backfill across sessions.
@@ -1025,6 +1038,8 @@ are already deployed.
   value-mode Query on the same connection, using the caller's context.
   - It may cache results per `(revision, context)`, where `revision` is the
     item's effective revision (§8.3), so segment changes invalidate the cache.
+    The cache lives for one session: the SDK clears it when a new session is
+    established, since revisions can restart low (§8.6, §13).
   - Results stay correct; only local evaluation is lost, and only for that flag.
   - The SDK must make this visible, through a log line or metric.
 - **After `Reject` 110.** When a definition subscription ends because the
@@ -1033,7 +1048,8 @@ are already deployed.
     persisted last-known-good copy, since the operator has withdrawn access to
     them;
   - treats every flag that subscription covered as server-evaluated, through the
-    same Query path as above;
+    same Query path as above, but does not cache those results, since no later
+    revisions arrive for those flags;
   - stays ready, and makes the switch visible through a log line or metric.
 - **Level changes.** When a write changes a flag's effective level relative to a
   session, the next DefinitionUpdate switches the item between `item_kind` 0 and
@@ -1145,7 +1161,7 @@ All codes are listed in §2.5.
   A definition that fails these checks is reported as `malformed_flag`. A
   context the server receives that fails them gets `Reject` 111. Any other
   message the server receives that fails them gets `Error` 115 (101 for the
-  Handshake). A client that receives such a message closes the connection.
+  Handshake), except the two Subscribe cases listed under 115 in §2.5. A client that receives such a message closes the connection.
 
 ### 9.2 Message items
 
@@ -1447,6 +1463,8 @@ of case:
   | Revocation found by the server-side check | 106 |
   | Revocation found by `Control(CHECK)` | 106 |
   | Unknown `control_kind` | 115 |
+  | Subscribe with `mode` 2 | `Reject` 113 |
+  | Definition-mode Subscribe with `context_len > 0` | `Reject` 111 |
   | Heartbeat before `SESSION_ESTABLISHED` | accepted; no Error sent |
   | Reauthenticate with a token without `flags:read` | 105 |
   | Subscribe that matches nothing | one `SNAPSHOT\|SNAPSHOT_END` frame, `change_count = 0` |
@@ -1520,6 +1538,9 @@ These notes are not normative.
 - **Encode once.** The server encodes each flag and segment once per write, and
   caches the result by `(environment, key, revision)`, so fan-out to subscribers
   is a plain copy.
+- **Consistent snapshots.** Build a snapshot from one store view, and register
+  the subscription for deltas at that same index before releasing the view
+  (§8.6).
 - **HTTP API.**
   - Flags are read and written as the §6.1 JSON document.
   - A full-definition `PUT` carries the `revision` it was based on and gets
@@ -1635,7 +1656,7 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | Index | A position in a table, counting from 0. Variations are referenced by index instead of by id. | §9.1 |
 | Enum value | A number that stands for one of a fixed set of choices, such as `mode` 0 = value, 1 = definition. Unlisted numbers are invalid. | §2.4 |
 | Reserved | A bit, value or code that has no meaning yet but may get one later. Senders set reserved bits to 0, and receivers reject a set one. | §2.4, §9.1 |
-| Must be 0 | A field that has to hold 0 in this case, such as `context_len` in a definition-mode Subscribe. | §8.2, §9.1 |
+| Must be 0 | A field that has to hold 0 in this case, such as `server_status` in a C→S Control. | §4.4, §9.1 |
 | Truncated | The data ends before a field the layout promises. | §9.1 |
 | Trailing bytes | Bytes left over after the last field the layout describes. Rejected. | §9.1 |
 | Encoder, decoder, codec | Code that turns a model into bytes (encoder), bytes back into a model (decoder), or both (codec). | §9 |
