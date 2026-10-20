@@ -85,8 +85,7 @@ flag queries, subscriptions and definition delivery.
 | Sync timeout | deployment-configured | §4.1 |
 | `heartbeat_interval_s` | announced by the server in the HandshakeAck | §4.6 |
 | Dead-peer timeout | 3 × `heartbeat_interval_s` | §4.6 |
-| `credential_check_interval` | 30 s recommended; client-chosen in the Handshake, clamped by the server, announced in the HandshakeAck | §4.2, §4.4 |
-| Credential check interval minimum | 5 s recommended (configurable) | §4.2 |
+| `credential_check_interval` | 30 s recommended (server-configured), announced in the HandshakeAck | §4.2, §4.4 |
 | Re-authentication window | the earlier of 20% of the token lifetime remaining or 60 s before expiry | §4.3 |
 | Max active subscriptions per session | 256 recommended (configurable) | §8.2 |
 | Rollout buckets | 100,000 (weights sum to 100000) | §6.5 |
@@ -170,15 +169,15 @@ DefinitionUpdate, Reject, Error) also sends `Error` 100.
 ### 2.5 Error codes
 
 An **Error** ends the connection: the server closes it after sending. A
-**Reject** rejects one request, and the connection stays open. Codes 125–199 are
-reserved.
+**Reject** rejects one request, and the connection stays open. Codes 102, 103
+and 125–199 are reserved.
 
 | Code | Name | Sent as | When |
 | --- | --- | --- | --- |
 | 100 | `ErrUnsupportedMessageType` | Error | Unassigned or unknown message type. |
-| 101 | `ErrInvalidHandshakePayload` | Error | The Handshake body does not decode. |
-| 102 | `ErrHandshakeTokenTruncated` | Error | `token_len` runs past the payload. |
-| 103 | `ErrHandshakeNotImplemented` | Error | Stub server only. Retired once the Handshake is implemented. |
+| 101 | `ErrInvalidHandshakePayload` | Error | The Handshake body does not decode, including a `token_len` that runs past the payload. |
+| 102 | — | — | Retired (was `ErrHandshakeTokenTruncated`, now part of 101). Not sent. |
+| 103 | — | — | Retired (was `ErrHandshakeNotImplemented`, stub only). Not sent. |
 | 104 | `ErrUnsupportedVersion` | Error | The version is not implemented (§4.7). Checked before the rest of the Handshake body is decoded. The message names the supported versions. |
 | 105 | `ErrAuthenticationFailed` | Error | Invalid token; not an application-credential service token; unknown or inactive credential; a credential without `flags:read`, at Handshake or Reauthenticate. |
 | 106 | `ErrCredentialRevoked` | Error | The session's credential was revoked or deactivated, or lost `flags:read`. Either side of the credential check (§4.4) can detect this. |
@@ -187,7 +186,7 @@ reserved.
 | 109 | `ErrSessionNotEstablished` | Error | A request arrived before `Control(SESSION_ESTABLISHED)` (§4.1). |
 | 110 | `ErrDefinitionsNotPermitted` | Reject | A definition-mode request without the granted capability. Also sent for each definition subscription that ends because the credential lost `flags:definitions:read` (§4.3, §4.4). |
 | 111 | `ErrInvalidContext` | Reject | The context does not decode, has no `targetingKey`, has a bad attribute name, or exceeds limits; a value-mode Subscribe or Query with `context_len = 0`; or a definition-mode Subscribe with `context_len ≠ 0`. |
-| 112 | `ErrInvalidCriteria` | Reject | The criteria list is empty, or a criterion is not a valid key, prefix or `*`. |
+| 112 | `ErrInvalidCriteria` | Reject | The criteria list is empty or longer than §2.2 allows, or a criterion is not a valid key, prefix or `*`. |
 | 113 | `ErrUnknownMode` | Reject | The Subscribe `mode` is neither 0 nor 1. |
 | 114 | `ErrDuplicateSubscription` | Reject | The `subscription_id` is not higher than the last one used in the session (§8.2). |
 | 115 | `ErrMalformedMessage` | Error | A known message type whose body does not decode: truncated, trailing bytes, an unknown enum value (including `control_kind`), an S→C `control_kind` sent by a client, or a reserved bit or must-be-0 field that is set (§9.1). Exceptions: an unknown Subscribe `mode` gets `Reject` 113, and a definition-mode Subscribe with `context_len ≠ 0` gets `Reject` 111. |
@@ -197,7 +196,7 @@ reserved.
 | 119 | `ErrHeartbeatTimeout` | Error | No bytes from the client for 3 × `heartbeat_interval_s`. Sent best-effort. |
 | 120 | `ErrHandshakeTimeout` | Error | No Handshake arrived within the handshake timeout. |
 | 121 | `ErrAlreadyAuthenticated` | Error | A second Handshake on the connection, in any state. Reauthenticate is the way to replace a token. |
-| 122 | `ErrInvalidRequest` | Reject | An empty key list, an invalid flag key, a `query_id` not higher than the last one used (§8.1), more keys or criteria than §2.2 allows, or another per-request limit exceeded. |
+| 122 | `ErrInvalidRequest` | Reject | An empty key list, an invalid flag key, a `query_id` not higher than the last one used (§8.1), more keys than §2.2 allows, or another per-request limit exceeded. |
 | 123 | `ErrSubscriptionLimit` | Reject | The session already has the maximum number of active subscriptions. |
 | 124 | `ErrServerShuttingDown` | Error | The node is draining or shutting down. The client should reconnect, ideally to another node. |
 
@@ -266,17 +265,10 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Control(SESSION_ESTABLISH
 [u8 ver_major]                  // 0
 [u8 ver_minor]                  // 1
 [u16 client_capabilities]
-[u16 credential_check_interval_s]  // 0 = server default
 [u16 token_len][token]          // UTF-8
 [u16 client_id_len][client_id]  // optional, 0 if absent
 ```
 
-- **`credential_check_interval_s`.** A client-side setting (SDK default 30 s)
-  that the client announces here. The server clamps it to its own range and uses
-  `clamp(client value, server minimum, server maximum)` as this session's
-  `credential_check_interval` (§4.4). A client can therefore shorten the time to
-  detect a revocation, but never lengthen it past the maximum (§12) or push the
-  server's check load past the minimum.
 - **`client_id`.** A free-form label for the client (for example
   `checkout-service@1.4.2`). It has no protocol meaning; the server records it
   in session logs and the session registry (§13) to help operators identify
@@ -303,14 +295,13 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Control(SESSION_ESTABLISH
 [16 bytes session_id]             // opaque, e.g. a UUID
 [u8 server_flags]                 // capability bits 0–7 that were granted
 [u16 heartbeat_interval_s]         // ≥ 1
-[u16 credential_check_interval_s]  // the agreed value
+[u16 credential_check_interval_s]  // server-configured
 ```
 
 - **`heartbeat_interval_s`.** Must be at least 1. A client that receives 0
   treats the HandshakeAck as malformed and closes the connection.
-- **`credential_check_interval_s`.** The session's `credential_check_interval`:
-  `clamp(client value, server minimum, server maximum)`, or the server default
-  when the client sent 0. The client uses it to pace its `CHECK`s (§4.4).
+- **`credential_check_interval_s`.** The session's `credential_check_interval`,
+  set by the server. The client uses it to pace its `CHECK`s (§4.4).
 - **Failure.** The server reads `ver_major` and `ver_minor` first. A version it
   doesn't implement gets `Error` 104 before the rest of the body is decoded
   (§4.7). A token that fails validation gets `Error` 105.
@@ -364,8 +355,8 @@ directions and has one fixed layout.
 [u8 control_kind]      // §2.4
 [u32 ref_id]           // CHECK: client-chosen; CHECK_OK echoes it; otherwise 0
 [u8 server_status]     // S→C: 0 normal, 1 degraded; C→S: 0
-[u32 token_ttl_s]      // S→C: seconds until the session's token expires,
-                       //      0xFFFFFFFF = no expiry; C→S: 0
+[u32 token_ttl_s]      // S→C: seconds until the session's token expires;
+                       // C→S: 0
 ```
 
 | `control_kind` | Direction | Meaning |
@@ -378,8 +369,8 @@ directions and has one fixed layout.
 
 **Credential validity is checked from both sides.**
 
-- **Interval.** `credential_check_interval` is per session: the value agreed in
-  the Handshake and announced in the HandshakeAck (§4.2).
+- **Interval.** `credential_check_interval` is the value the server announced
+  in the HandshakeAck (§4.2).
 - **Server side.** The server re-validates a session's credential, its active
   state and its scopes, whenever the store reports a change to it, and in any
   case at least every `credential_check_interval`. This also covers sessions
@@ -802,14 +793,16 @@ It contains one item per requested key, in request order.
 [u16 item_count]
 repeated:
   [u16 key_len][key]
+  [u64 revision]              // §8.3 effective revision; 0 when reason = flag_not_found
   [u8 reason]
   [u8 error_kind]
   [u8 value_type]             // 0xFF = none
   [value]                     // §9.1 value encoding for value_type; absent with 0xFF
   [u8 variation_id_len][variation_id]
   [u8 rule_id_len][rule_id]   // 0 unless reason = rule_match
-  [u64 revision]              // §8.3 effective revision; 0 when reason = flag_not_found
 ```
+
+The item uses the same field order as an Update upsert (§8.3).
 
 - **Context.** A Query always carries a context with a targeting key (§6.6).
   `context_len = 0` gets `Reject` 111.
@@ -850,7 +843,6 @@ repeated: [u16 len][criterion]   // §8.4
   - 112: invalid criteria.
   - 113: unknown mode.
   - 114: `subscription_id` not higher than the last one used in this session.
-  - 122: more criteria than §2.2 allows.
   - 123: subscription limit reached.
 
   Both modes share one layout, so the server decodes the whole body first. A
@@ -897,8 +889,10 @@ repeated:
   segment's own revision. A segment edit therefore raises the revision of every
   flag that depends on it, so the client's revision check (§8.6) accepts the new
   result.
-- **When an Update is sent.** Only when the result (variation, reason or ruleId)
-  or the effective revision changes.
+- **When an Update is sent.** Only when the served value, variation id, reason
+  or ruleId changes. A write that leaves this context's result unchanged sends
+  nothing, even though it raises the effective revision. Revisions only go up,
+  so the next Update still passes the client's revision check (§8.6).
 
 ### 8.4 Criteria
 
@@ -934,6 +928,9 @@ repeated:
   [u64 revision]             // flags: effective revision (§8.3); segments: own revision
   [u32 def_len][definition]  // 0 ⇒ exact-key criterion not found; always 0 for item_kind 2
 ```
+
+An exact key that is not found is sent as `item_kind 0`, `revision 0`,
+`def_len 0`.
 
 #### DefinitionUpdate (0x23)
 
@@ -1113,9 +1110,13 @@ All codes are listed in §2.5.
   - `string`: `[u32 len][UTF-8]`.
   - `json`: `[u32 len][UTF-8 JSON text]`. The content is opaque application
     data, in **normal form**: minified, member names sorted ascending by UTF-8
-    bytes, no duplicate member names, and numbers kept exactly as written. The
-    server normalizes a value on write and stores and sends only that form. SDKs
-    never re-encode it, and the conformance vectors (§11) pin the exact bytes.
+    bytes, no duplicate member names, numbers kept exactly as written, and no
+    trailing newline. Strings are escaped as Go's `encoding/json` writes them
+    with HTML escaping off: `\"`, `\\`, `\b`, `\f`, `\n`, `\r` and `\t`; other
+    characters below U+0020 as `\u00xx` (lowercase hex); U+2028 and U+2029 as
+    ` ` and ` `; everything else as raw UTF-8. The server normalizes
+    a value on write and stores and sends only that form. SDKs never re-encode
+    it, and the conformance vectors (§11) pin the exact bytes.
 - **Condition value kinds.**
   - `0`: bool, 1 byte.
   - `1`: number, IEEE-754 float64, 8 bytes.
@@ -1161,7 +1162,8 @@ All codes are listed in §2.5.
   A definition that fails these checks is reported as `malformed_flag`. A
   context the server receives that fails them gets `Reject` 111. Any other
   message the server receives that fails them gets `Error` 115 (101 for the
-  Handshake), except the two Subscribe cases listed under 115 in §2.5. A client that receives such a message closes the connection.
+  Handshake), except the two Subscribe cases listed under 115 in §2.5. A
+  client that receives such a message closes the connection.
 
 ### 9.2 Message items
 
@@ -1291,15 +1293,13 @@ Every example below is a complete frame: the length prefix followed by the
 payload.
 
 **Handshake.** Version 0.1; `CAP_DEFINITIONS` with `EVAL_LEVEL` 1
-(capabilities `0x0101`); server-default credential check interval; token
-`tok-ABC`; no client id.
+(capabilities `0x0101`); token `tok-ABC`; no client id.
 
 ```text
-00 00 00 12                 length 18
+00 00 00 10                 length 16
 01                          Handshake
 00 01                       version 0.1
 01 01                       capabilities: EVAL_LEVEL=1, CAP_DEFINITIONS
-00 00                       credential_check_interval_s = server default
 00 07 74 6f 6b 2d 41 42 43  token "tok-ABC"
 00 00                       no client id
 ```
@@ -1351,8 +1351,8 @@ seconds.
 
 ```text
 00 00 00 31  11  00 00 00 07  00  00 02
-00 03 66 2e 61  02 00  00  01  04 74 72 75 65  00  00 00 00 00 00 00 00 05
-00 03 66 2e 62  03 00  ff      00              00  00 00 00 00 00 00 00 00
+00 03 66 2e 61  00 00 00 00 00 00 00 05  02 00  00  01  04 74 72 75 65  00
+00 03 66 2e 62  00 00 00 00 00 00 00 00  03 00  ff      00              00
 ```
 
 **Subscribe.** Definition mode; `subscription_id` 1; criterion `checkout.*`.
@@ -1429,7 +1429,9 @@ of case:
   - `all` and `any`;
   - rule order;
   - the kill switch;
-  - the bucketing vectors (§6.5).
+  - the bucketing vectors (§6.5);
+  - a `json` variation containing `<`, a tab and U+2028, with its exact
+    normal-form bytes (§9.1).
 - **Malformed binary cases.** Each of these must decode as `malformed_flag`:
   - truncated lengths;
   - a bad index;
@@ -1494,8 +1496,7 @@ byte-compatible.
   until it expires.
 - **Revocation and scope removal.** Both take effect through the two-sided check
   (§4.4): no later than `credential_check_interval` after the change, even on a
-  push-only session. A client can shorten that interval in the Handshake but
-  never lengthen it past the server's maximum. Revocation, or losing
+  push-only session. Revocation, or losing
   `flags:read`, gets `Error` 106 and the connection is closed. Losing
   `flags:definitions:read` ends definition subscriptions with `Reject` 110.
 - **Definition exposure.** Definition mode exposes every rule and every segment
@@ -1550,7 +1551,8 @@ These notes are not normative.
 - **JSON normal form in Go.** To produce the §9.1 normal form, decode with
   `json.Decoder.UseNumber` (so large integers keep every digit) and encode with
   `SetEscapeHTML(false)` (so `<`, `>` and `&` are not rewritten). Go's encoder
-  already writes a map's members sorted by name bytes.
+  already writes a map's members sorted by name bytes. `Encoder.Encode`
+  appends a newline; strip it.
 - **Audit.** Audit before/after values are whole definitions, which gives diffs
   and reverts a natural unit.
 - **Store migration.** The model changes break the store's command and Raft
@@ -1572,6 +1574,7 @@ These notes are not normative.
   Admin message type (`0xF0`), and still names 0x30 and 0x31 `MessageTypeAck`
   and `MessageTypeNack`. The Admin type should be removed, and the other two
   renamed to Control and Reject, when the protocol is implemented.
+  `backend/internal/fqdp/errors.go` still defines the retired codes 102 and 103.
 
 ---
 
@@ -1719,11 +1722,10 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | Client-credentials (OAuth2) | The standard flow where an application trades its credential for a short-lived token. | §4.3, §12 |
 | Scope | A permission held by a credential. `flags:read` allows value mode; `flags:definitions:read` also allows definition mode. | §4.2, §12 |
 | Token rotation, Reauthenticate | Replacing a session's token with a fresh one without reconnecting. | §4.3 |
-| `token_ttl_s` | Seconds until the session's current token expires; `0xFFFFFFFF` means never. | §4.4 |
+| `token_ttl_s` | Seconds until the session's current token expires. | §4.4 |
 | Credential check | Re-validating that the session's credential still exists, is active, and holds its scopes. Done by both sides. | §4.4 |
 | `CHECK`, `CHECK_OK` | The client's request for a credential check, and the server's "still valid" reply. | §4.4 |
-| `credential_check_interval` | How often a session's credential is re-checked. Agreed in the Handshake. | §4.2, §4.4 |
-| Clamp | Limit a value to a range: `clamp(x, min, max)` is `min` if `x` is lower, `max` if higher, else `x`. | §4.2 |
+| `credential_check_interval` | How often a session's credential is re-checked. Set by the server and announced in the HandshakeAck. | §4.2, §4.4 |
 | Revocation | An admin disabling a credential, or removing its scopes. | §4.4, §12 |
 | Capability | An optional feature the client asks for in the Handshake and the server grants or refuses (`CAP_DEFINITIONS`). | §4.2 |
 | Granted | A capability the server accepted, shown by its bit in `server_flags`. | §4.2 |
