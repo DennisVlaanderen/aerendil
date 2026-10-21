@@ -82,10 +82,10 @@ flag queries, subscriptions and definition delivery.
 | `MaximumFrameSize` | 10 MiB (payload), S→C frames | §3 |
 | `MaximumClientFrameSize` | 256 KiB (payload), C→S frames, in every state | §3 |
 | Handshake timeout | 10 s recommended (configurable) | §4.1 |
-| Sync timeout | deployment-configured | §4.1 |
-| `heartbeat_interval_s` | announced by the server in the HandshakeAck | §4.6 |
+| `sync_timeout_s` | ≥ 1, server-configured, announced in the HandshakeAccept | §4.1, §4.2 |
+| `heartbeat_interval_s` | announced by the server in the HandshakeAccept | §4.6 |
 | Dead-peer timeout | 3 × `heartbeat_interval_s` | §4.6 |
-| `credential_check_interval` | 30 s recommended (server-configured), announced in the HandshakeAck | §4.2, §4.4 |
+| `credential_check_interval` | ≥ 1 s, 30 s recommended (server-configured), announced in the HandshakeAccept | §4.2, §4.4 |
 | Re-authentication window | the earlier of 20% of the token lifetime remaining or 60 s before expiry | §4.3 |
 | Max active subscriptions per session | 256 recommended (configurable) | §8.2 |
 | Rollout buckets | 100,000 (weights sum to 100000) | §6.5 |
@@ -123,7 +123,7 @@ The HTTP API rejects a segment that breaks either limit.
 | Type | Name | Direction | Purpose | Section |
 | --- | --- | --- | --- | --- |
 | 0x01 | Handshake | C→S | Open a session: version, capabilities, token | §4.2 |
-| 0x02 | HandshakeAck | S→C | Token accepted: session id, granted capabilities, heartbeat interval | §4.2 |
+| 0x02 | HandshakeAccept | S→C | Token accepted: session id, granted capabilities, heartbeat interval | §4.2 |
 | 0x03 | Reauthenticate | C→S | Replace the session's token | §4.3 |
 | 0x10 | Query | C→S | Evaluate flags against a context (value mode) | §8.1 |
 | 0x11 | QueryResponse | S→C | Evaluation results | §8.1 |
@@ -139,15 +139,15 @@ The HTTP API rejects a segment that breaks either limit.
 | 0x50 | Error | S→C | Connection-level failure, then close | §8.9 |
 
 All other type values are unassigned and get `Error` 100. A server that
-receives an S→C type (HandshakeAck, QueryResponse, DefinitionResponse, Update,
+receives an S→C type (HandshakeAccept, QueryResponse, DefinitionResponse, Update,
 DefinitionUpdate, Reject, Error) also sends `Error` 100.
 
 ### 2.4 Enumerations
 
 | Field | Values |
 | --- | --- |
-| Handshake `client_capabilities` (u16) | bit 0 `CAP_DEFINITIONS`; bits 8–11 `EVAL_LEVEL` (0 means 1); others 0 |
-| HandshakeAck `server_flags` (u8) | Granted capability bits 0–7 |
+| Handshake `client_capabilities` (u16) | bit 0 `CAP_DEFINITIONS`; bits 8–11 `EVAL_LEVEL` (1–15 with bit 0 set, else 0); others 0 |
+| HandshakeAccept `server_flags` (u8) | Granted capability bits 0–7 |
 | `control_kind` (u8) | 0 `SESSION_ESTABLISHED` (S→C), 1 `CHECK` (C→S), 2 `CHECK_OK` (S→C), 3 `REAUTH_OK` (S→C), 4 `STATUS` (S→C) |
 | `server_status` (u8) | 0 `normal`, 1 `degraded` |
 | Subscribe `mode` (u8) | 0 value, 1 definition |
@@ -166,7 +166,7 @@ DefinitionUpdate, Reject, Error) also sends `Error` 100.
 | Condition `value_kind` (u8) | 0 bool, 1 number (float64), 2 string; a context attribute's value kind sets bit 7 for a list |
 | `serve_kind` (u8) | 0 variation, 1 rollout |
 
-### 2.5 Error codes
+### 2.5 Error and Reject codes
 
 An **Error** ends the connection: the server closes it after sending. A
 **Reject** rejects one request, and the connection stays open. Codes 102, 103
@@ -184,11 +184,11 @@ and 125–199 are reserved.
 | 107 | `ErrRateLimited` | Error | A connection or request rate limit was exceeded (§12). |
 | 108 | `ErrFrameTooLarge` | Error | A C→S frame's `length` exceeds `MaximumClientFrameSize` (§3). Sent before the payload is read. |
 | 109 | `ErrSessionNotEstablished` | Error | A request arrived before `Control(SESSION_ESTABLISHED)` (§4.1). |
-| 110 | `ErrDefinitionsNotPermitted` | Reject | A definition-mode request without the granted capability. Also sent for each definition subscription that ends because the credential lost `flags:definitions:read` (§4.3, §4.4). |
-| 111 | `ErrInvalidContext` | Reject | The context does not decode, has no `targetingKey`, has a bad attribute name, or exceeds limits; a value-mode Subscribe or Query with `context_len = 0`; or a definition-mode Subscribe with `context_len ≠ 0`. |
-| 112 | `ErrInvalidCriteria` | Reject | The criteria list is empty or longer than §2.2 allows, or a criterion is not a valid key, prefix or `*`. |
-| 113 | `ErrUnknownMode` | Reject | The Subscribe `mode` is neither 0 nor 1. |
-| 114 | `ErrDuplicateSubscription` | Reject | The `subscription_id` is not higher than the last one used in the session (§8.2). |
+| 110 | `RejDefinitionsNotPermitted` | Reject | A definition-mode request without the granted capability. Also sent for each definition subscription that ends because the credential lost `flags:definitions:read` (§4.3, §4.4). |
+| 111 | `RejInvalidContext` | Reject | The context does not decode, has no `targetingKey`, has a bad attribute name, or exceeds limits; a value-mode Subscribe or Query with `context_len = 0`; or a definition-mode Subscribe with `context_len ≠ 0`. |
+| 112 | `RejInvalidCriteria` | Reject | The criteria list is empty or longer than §2.2 allows, or a criterion is not a valid key, prefix or `*`. |
+| 113 | `RejUnknownMode` | Reject | The Subscribe `mode` is neither 0 nor 1. |
+| 114 | `RejDuplicateSubscription` | Reject | The `subscription_id` is not higher than the last one used in the session (§8.2). |
 | 115 | `ErrMalformedMessage` | Error | A known message type whose body does not decode: truncated, trailing bytes, an unknown enum value (including `control_kind`), an S→C `control_kind` sent by a client, or a reserved bit or must-be-0 field that is set (§9.1). Exceptions: an unknown Subscribe `mode` gets `Reject` 113, and a definition-mode Subscribe with `context_len ≠ 0` gets `Reject` 111. |
 | 116 | `ErrTokenExpired` | Error | The token expired before a successful Reauthenticate. |
 | 117 | `ErrServerUnavailable` | Error | The node cannot get in sync within its sync timeout, so it cannot establish the session. The client should try another node. |
@@ -196,8 +196,8 @@ and 125–199 are reserved.
 | 119 | `ErrHeartbeatTimeout` | Error | No bytes from the client for 3 × `heartbeat_interval_s`. Sent best-effort. |
 | 120 | `ErrHandshakeTimeout` | Error | No Handshake arrived within the handshake timeout. |
 | 121 | `ErrAlreadyAuthenticated` | Error | A second Handshake on the connection, in any state. Reauthenticate is the way to replace a token. |
-| 122 | `ErrInvalidRequest` | Reject | An empty key list, an invalid flag key, a `query_id` not higher than the last one used (§8.1), more keys than §2.2 allows, or another per-request limit exceeded. |
-| 123 | `ErrSubscriptionLimit` | Reject | The session already has the maximum number of active subscriptions. |
+| 122 | `RejInvalidRequest` | Reject | An empty key list, an invalid flag key, a `query_id` not higher than the last one used (§8.1), more keys than §2.2 allows, or another per-request limit exceeded. |
+| 123 | `RejSubscriptionLimit` | Reject | The session already has the maximum number of active subscriptions. |
 | 124 | `ErrServerShuttingDown` | Error | The node is draining or shutting down. The client should reconnect, ideally to another node. |
 
 ---
@@ -216,7 +216,7 @@ and 125–199 are reserved.
   - A zero-length frame is ignored.
   - **Size limits differ by direction.** No C→S message needs more than
     `MaximumClientFrameSize` (256 KiB): the largest Handshake is about 128 KiB,
-    and the largest Query about 195 KiB. The server checks `length` against this
+    and the largest Query about 191 KiB. The server checks `length` against this
     limit before it reads or allocates the payload, in every session state, and
     sends `Error` 108 if it is exceeded.
   - S→C frames may be up to `MaximumFrameSize` (10 MiB). A client that receives
@@ -234,7 +234,7 @@ and 125–199 are reserved.
 
 ```text
 CONNECTED ──Handshake──▶ AUTHENTICATED ──Control(SESSION_ESTABLISHED)──▶ ESTABLISHED ──▶ CLOSED
-   │  (HandshakeAck sent)     │                                            │ ▲
+   │  (HandshakeAccept sent)     │                                            │ ▲
    │                          └──Error 117 (not in sync in time)           │ │ Reauthenticate → Control(REAUTH_OK)
    └──Error 120 (no Handshake in time)                                     └─┘ Control(CHECK) → Control(CHECK_OK)
 ```
@@ -247,16 +247,17 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Control(SESSION_ESTABLISH
   Heartbeats): any other known message gets `Error` 109. If no Handshake arrives
   within the handshake timeout, the server sends `Error` 120.
 - **AUTHENTICATED.** The server has validated the token and sent the
-  HandshakeAck. It now finishes setting up the session: registering it, and
+  HandshakeAccept. It now finishes setting up the session: registering it, and
   making sure the node is in sync: that it has caught up with the cluster
   leader, so it serves consistent data. A request in this state gets `Error`
-  109; Heartbeats keep flowing as usual.
+  109; Heartbeats keep flowing as usual. The client waits at most
+  `sync_timeout_s` plus `heartbeat_interval_s` (§4.2) in this state.
 - **ESTABLISHED.** The server has sent `Control(SESSION_ESTABLISHED)`. The
   client may now send requests.
   - If the node cannot get in sync within its sync timeout, it sends `Error` 117
     instead, so the client can try another node.
 
-### 4.2 Handshake and HandshakeAck
+### 4.2 Handshake and HandshakeAccept
 
 #### Handshake (0x01)
 
@@ -283,10 +284,10 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Control(SESSION_ESTABLISH
 | --- | --- | --- |
 | 0 | `CAP_DEFINITIONS` | The client wants definition mode. The server grants it only if the credential holds `flags:definitions:read`. |
 | 1–7 | reserved | Must be 0. |
-| 8–11 | `EVAL_LEVEL` | A 4-bit unsigned value: the highest evaluator level the client implements (§8.8). `0` means 1. Ignored when bit 0 is clear. |
+| 8–11 | `EVAL_LEVEL` | A 4-bit unsigned value: the highest evaluator level the client implements (§8.8). 1–15 when bit 0 is set; must be 0 when bit 0 is clear. |
 | 12–15 | reserved | Must be 0. |
 
-#### HandshakeAck (0x02)
+#### HandshakeAccept (0x02)
 
 ```text
 [u8 0x02]
@@ -295,17 +296,26 @@ CONNECTED ──Handshake──▶ AUTHENTICATED ──Control(SESSION_ESTABLISH
 [16 bytes session_id]             // opaque, e.g. a UUID
 [u8 server_flags]                 // capability bits 0–7 that were granted
 [u16 heartbeat_interval_s]         // ≥ 1
-[u16 credential_check_interval_s]  // server-configured
+[u16 credential_check_interval_s]  // ≥ 1, server-configured
+[u16 sync_timeout_s]               // ≥ 1, server-configured
 ```
 
 - **`heartbeat_interval_s`.** Must be at least 1. A client that receives 0
-  treats the HandshakeAck as malformed and closes the connection.
+  treats the HandshakeAccept as malformed and closes the connection.
 - **`credential_check_interval_s`.** The session's `credential_check_interval`,
-  set by the server. The client uses it to pace its `CHECK`s (§4.4).
+  set by the server. The client uses it to pace its `CHECK`s (§4.4). Must be
+  at least 1. A client that receives 0 treats the HandshakeAccept as malformed
+  and closes the connection.
+- **`sync_timeout_s`.** The node's sync timeout (§4.1). If neither
+  `Control(SESSION_ESTABLISHED)` nor `Error` 117 has arrived within
+  `sync_timeout_s` plus `heartbeat_interval_s` after the HandshakeAccept, the
+  client closes the connection and tries another node. Must be at least 1. A
+  client that receives 0 treats the HandshakeAccept as malformed and closes the
+  connection.
 - **Failure.** The server reads `ver_major` and `ver_minor` first. A version it
   doesn't implement gets `Error` 104 before the rest of the body is decoded
   (§4.7). A token that fails validation gets `Error` 105.
-- **Success.** The server sends the HandshakeAck, then
+- **Success.** The server sends the HandshakeAccept, then
   `Control(SESSION_ESTABLISHED)` once the session is established.
 - **Definitions refused.** If the client asked for definition mode but
   `server_flags` bit 0 is clear, the request was refused. The session then works
@@ -361,7 +371,7 @@ directions and has one fixed layout.
 
 | `control_kind` | Direction | Meaning |
 | --- | --- | --- |
-| 0 `SESSION_ESTABLISHED` | S→C | Sent exactly once, after the HandshakeAck. The session is established. |
+| 0 `SESSION_ESTABLISHED` | S→C | Sent exactly once, after the HandshakeAccept. The session is established. |
 | 1 `CHECK` | C→S | Ask the server to re-validate the credential and report the server status. |
 | 2 `CHECK_OK` | S→C | Reply to `CHECK`: the credential is still valid. If it was revoked, the server sends `Error` 106 instead. |
 | 3 `REAUTH_OK` | S→C | Reply to a successful Reauthenticate. |
@@ -370,7 +380,7 @@ directions and has one fixed layout.
 **Credential validity is checked from both sides.**
 
 - **Interval.** `credential_check_interval` is the value the server announced
-  in the HandshakeAck (§4.2).
+  in the HandshakeAccept (§4.2).
 - **Server side.** The server re-validates a session's credential, its active
   state and its scopes, whenever the store reports a change to it, and in any
   case at least every `credential_check_interval`. This also covers sessions
@@ -401,12 +411,11 @@ directions and has one fixed layout.
 - **Session health.** A session is **healthy** when all of these hold:
   - it is ESTABLISHED;
   - its token has not expired;
-  - its credential passed the last check;
-  - the server has received bytes from the client within 3 ×
-    `heartbeat_interval_s`.
+  - its credential passed the last check.
 
-  The server tracks healthy, expiring and total sessions as part of its own
-  health reporting (§13).
+  A session is **expiring** when it is ESTABLISHED and inside its
+  re-authentication window (§4.3). The server tracks healthy, expiring and
+  total sessions as part of its own health reporting (§13).
 
 ### 4.6 Heartbeat (0x40)
 
@@ -597,8 +606,9 @@ These semantics are normative and identical in every evaluator:
 - **`values`.** All values in one condition are of one value kind: all strings,
   all numbers or all booleans.
 - **List attributes.** If the context attribute is a list, the condition matches
-  when any element matches. An empty list counts as a missing attribute, since
-  it has no value kind.
+  when any element matches. `negate` inverts that overall result, not each
+  element: `{groups in ["a"], negate}` is false for `["a", "b"]`. An empty list
+  counts as a missing attribute, since it has no value kind.
 - **Missing or mismatched attributes.** If the attribute is missing, or its
   value kind does not fit the operator, the condition is **false**, and `negate`
   is **not** applied. A missing attribute never widens a rule's audience.
@@ -668,7 +678,7 @@ both, or with neither, is invalid.
 }
 ```
 
-- **Weights.** Non-negative integers that sum to exactly **100000**. Each
+- **Weights.** Integers from 0 to 100000 that sum to exactly **100000**. Each
   variation appears at most once.
 - **`bucketBy`.** Defaults to `targetingKey`. It names the attribute whose value
   is hashed.
@@ -755,7 +765,7 @@ passes in, to be returned when evaluation cannot produce one.
 | `fallthrough` | 2 | No rule matched; served `fallthrough`. |
 | `flag_not_found` | 3 | No such flag in this environment. |
 | `evaluation_error` | 4 | See `errorKind`. |
-| `default_fallback` | — | SDK-local only: no data yet (`client_not_ready`), or disconnected with no last-known-good copy. |
+| `not_ready_fallback` | — | SDK-local only: no data yet (`client_not_ready`), or disconnected with no last-known-good copy. |
 
 | Error kind | u8 | Meaning |
 | --- | --- | --- |
@@ -999,6 +1009,9 @@ repeated:
   - Within a session, a client applies a delta upsert only if its `revision` is
     greater than the revision it holds for that key. Revisions are Raft log
     indexes, so they can be compared across server nodes of one cluster.
+  - A remove drops the key and the revision held for it, so a later upsert of
+    the same key is always applied. A segment that leaves a subscription's view
+    and comes back carries its unchanged own revision.
 - **Sequences.** Sequence numbers are per subscription. They start at 1 and go
   up by exactly 1 per frame. TCP preserves order, so a gap or regression is a
   protocol violation, and the client closes the connection.
@@ -1037,6 +1050,8 @@ are already deployed.
     item's effective revision (§8.3), so segment changes invalidate the cache.
     The cache lives for one session: the SDK clears it when a new session is
     established, since revisions can restart low (§8.6, §13).
+  - The cache must be bounded (for example an LRU, which drops the least
+    recently used entry); its size is SDK-configurable.
   - Results stay correct; only local evaluation is lost, and only for that flag.
   - The SDK must make this visible, through a log line or metric.
 - **After `Reject` 110.** When a definition subscription ends because the
@@ -1045,8 +1060,9 @@ are already deployed.
     persisted last-known-good copy, since the operator has withdrawn access to
     them;
   - treats every flag that subscription covered as server-evaluated, through the
-    same Query path as above, but does not cache those results, since no later
-    revisions arrive for those flags;
+    same Query path as above. No later revisions arrive for those flags, so it
+    caches each result per context for at most `credential_check_interval`,
+    in the bounded cache above;
   - stays ready, and makes the switch visible through a log line or metric.
 - **Level changes.** When a write changes a flag's effective level relative to a
   session, the next DefinitionUpdate switches the item between `item_kind` 0 and
@@ -1114,7 +1130,7 @@ All codes are listed in §2.5.
     trailing newline. Strings are escaped as Go's `encoding/json` writes them
     with HTML escaping off: `\"`, `\\`, `\b`, `\f`, `\n`, `\r` and `\t`; other
     characters below U+0020 as `\u00xx` (lowercase hex); U+2028 and U+2029 as
-    ` ` and ` `; everything else as raw UTF-8. The server normalizes
+    `\u2028` and `\u2029`; everything else as raw UTF-8. The server normalizes
     a value on write and stores and sends only that form. SDKs never re-encode
     it, and the conformance vectors (§11) pin the exact bytes.
 - **Condition value kinds.**
@@ -1144,6 +1160,8 @@ All codes are listed in §2.5.
   - rejects strings that are not valid UTF-8;
   - rejects lists that break the canonical form: unsorted or duplicate context
     attribute names, or `included` / `excluded` entries;
+  - rejects an explicit `salt` equal to the flag key, whose canonical form is
+    `salt_len = 0` (the key comes from the item envelope, §9.2);
   - rejects anything that breaks a §2.2 limit or a §6 rule. Evaluators must not
     try to make sense of such input. In particular, a definition is invalid if
     it has:
@@ -1304,15 +1322,16 @@ payload.
 00 00                       no client id
 ```
 
-**HandshakeAck.** Session id `00..0f`; definitions granted; heartbeat every 15
-seconds; credential check every 30 seconds.
+**HandshakeAccept.** Session id `00..0f`; definitions granted; heartbeat every 15
+seconds; credential check every 30 seconds; sync timeout 30 seconds.
 
 ```text
-00 00 00 18  02  00 01
+00 00 00 1a  02  00 01
 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f
 01           server_flags: CAP_DEFINITIONS granted
 00 0f        heartbeat_interval_s = 15
 00 1e        credential_check_interval_s = 30
+00 1e        sync_timeout_s = 30
 ```
 
 **Control(SESSION_ESTABLISHED).** Normal status; the token is valid for 3,600
@@ -1386,7 +1405,7 @@ with one upsert.
 00 00 00 05  21  00 00 00 01
 ```
 
-**Reject.** Subscription 1 rejected with `ErrInvalidCriteria` (112).
+**Reject.** Subscription 1 rejected with `RejInvalidCriteria` (112).
 
 ```text
 00 00 00 1a  31  01  00 00 00 01  00 70  00 10 69 6e 76 61 6c 69 64 20 63 72 69 74 65 72 69 61
@@ -1424,12 +1443,16 @@ of case:
   - a segment whose `included` keys mix a character from U+E000 upward with a
     character outside the Basic Multilingual Plane (byte-order binary search,
     §9.4);
-  - list attributes, including an empty list with `negate` (counts as missing);
+  - list attributes, including an empty list with `negate` (counts as missing)
+    and a non-empty list with `negate` (inverts the overall result);
   - segment precedence;
   - `all` and `any`;
   - rule order;
   - the kill switch;
   - the bucketing vectors (§6.5);
+  - a bucket exactly on a cumulative weight boundary (it gets the next
+    variation);
+  - a rollout with a zero-weight variation (never served);
   - a `json` variation containing `<`, a tab and U+2028, with its exact
     normal-form bytes (§9.1).
 - **Malformed binary cases.** Each of these must decode as `malformed_flag`:
@@ -1445,7 +1468,11 @@ of case:
   - `lt` with string values;
   - a condition with zero values;
   - a group with zero children;
-  - a rollout with `bucket_by_len 0`.
+  - a rollout with `bucket_by_len 0`;
+  - rollout weights that sum to something other than 100000;
+  - a weight above 100000 whose `u32` sum wraps to 100000 (`4294967295` and
+    `100001`);
+  - an explicit salt equal to the flag key.
 - **Frame cases.** The frames in §10, plus a level-2 flag offered to a level-1
   session, which must arrive as `item_kind 2`.
 - **Lifecycle cases.** Each of these must produce the result shown:
@@ -1473,6 +1500,10 @@ of case:
   | Reauthenticate that drops `flags:definitions:read` | `Reject` 110 for every definition subscription |
   | `flags:definitions:read` removed from the credential in the store | `Reject` 110 for every definition subscription |
   | `flags:read` removed from the credential in the store | 106 |
+  | Handshake with `CAP_DEFINITIONS` and `EVAL_LEVEL` 0 | 101 |
+  | HandshakeAccept with `credential_check_interval_s` or `sync_timeout_s` 0 | client closes the connection |
+  | No `SESSION_ESTABLISHED` or 117 within `sync_timeout_s` + `heartbeat_interval_s` | client closes the connection |
+  | A flag stops, then resumes, referencing a segment whose revision is unchanged | the segment upsert is applied |
 
 The Go server (evaluator and codec) and every SDK run the same vectors. That is
 the guarantee that both modes give identical answers and that every encoder is
@@ -1507,8 +1538,8 @@ byte-compatible.
   SDKs must support both:
   - **Custom trust roots:** a configurable CA bundle, used instead of or
     alongside the system roots.
-  - **Certificate pinning:** trusting a specific server certificate or public
-    key by its SHA-256 fingerprint.
+  - **Certificate pinning:** trusting a specific server certificate or server
+    public key (SPKI) by its SHA-256 fingerprint.
 
   Turning verification off entirely may be offered for local development only,
   and SDKs must log a warning when it is used. SDKs must log the same warning
@@ -1516,6 +1547,8 @@ byte-compatible.
 - **Abuse limits.**
   - Rate-limit new and unauthenticated connections per IP, and requests per
     session (including `Control(CHECK)`). The response is `Error` 107.
+    Per-session request limits must leave room for the Queries SDKs send for
+    server-evaluated flags (§8.8).
   - Enforce `MaximumClientFrameSize` before reading a payload, so a peer that
     hasn't authenticated cannot make the server hold large buffers (`Error`
     108).
@@ -1575,6 +1608,8 @@ These notes are not normative.
   and `MessageTypeNack`. The Admin type should be removed, and the other two
   renamed to Control and Reject, when the protocol is implemented.
   `backend/internal/fqdp/errors.go` still defines the retired codes 102 and 103.
+  `MessageTypeHandshakeAck` should be renamed `MessageTypeHandshakeAccept`, and
+  the constants for Reject codes use the `Rej` prefix (§2.5).
 
 ---
 
@@ -1697,7 +1732,7 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | Plaintext connection | A connection without TLS; the token can be read by anyone on the network path. | §12 |
 | CA, trust roots, CA bundle | Certificate authorities a client trusts to vouch for a server certificate, and the file listing them. | §12 |
 | Self-signed certificate | A certificate no CA vouches for. Trusted only through a custom bundle or pinning. | §12 |
-| Certificate pinning, fingerprint | Trusting one exact certificate or public key, identified by its SHA-256 hash (the fingerprint). | §12 |
+| Certificate pinning, fingerprint | Trusting one exact certificate or server public key (SPKI), identified by its SHA-256 hash (the fingerprint). | §12 |
 | Port 9001 | The default TCP port. | §3 |
 
 ### A.4 Sessions and authentication
@@ -1706,13 +1741,13 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | --- | --- | --- |
 | Connection | One TCP (and TLS) link between a client and a server node. | §3 |
 | Session | The server-side state for one connection: its token, ids, subscriptions and checks. One per connection. | §3, §4 |
-| Session id | A 16-byte opaque id the server assigns in the HandshakeAck, mainly for logs. | §4.2 |
-| Session states | CONNECTED (TCP up, no Handshake yet), AUTHENTICATED (token accepted, HandshakeAck sent, node not yet confirmed in sync), ESTABLISHED (`SESSION_ESTABLISHED` sent; requests allowed), CLOSED. | §4.1 |
-| Handshake, HandshakeAck | The client's first message (version, capabilities, token) and the server's acceptance reply. | §4.2 |
+| Session id | A 16-byte opaque id the server assigns in the HandshakeAccept, mainly for logs. | §4.2 |
+| Session states | CONNECTED (TCP up, no Handshake yet), AUTHENTICATED (token accepted, HandshakeAccept sent, node not yet confirmed in sync), ESTABLISHED (`SESSION_ESTABLISHED` sent; requests allowed), CLOSED. | §4.1 |
+| Handshake, HandshakeAccept | The client's first message (version, capabilities, token) and the server's acceptance reply. | §4.2 |
 | `SESSION_ESTABLISHED` | The Control message that moves a session to ESTABLISHED. Only after it may the client send requests. | §4.1, §4.4 |
 | Request | Any C→S message other than Handshake and Heartbeat: Query, DefinitionQuery, Subscribe, Unsubscribe, Reauthenticate, `Control(CHECK)`. Only allowed once the session is ESTABLISHED. | §4.1 |
 | Handshake timeout | How long the server waits for a Handshake after the connection opens. | §4.1 |
-| Sync timeout | How long a node may take to get in sync before it sends `Error` 117. | §4.1 |
+| Sync timeout, `sync_timeout_s` | How long a node may take to get in sync before it sends `Error` 117. Announced in the HandshakeAccept, so the client knows how long to wait. | §4.1, §4.2 |
 | In sync | A node that has caught up with the cluster leader, so it serves consistent data. | §4.1, §13 |
 | Ready | An SDK that has received `SNAPSHOT_END` for every initial subscription. Only SDKs are "ready". | §8.5 |
 | Token | The string the client presents to prove who it is. | §4.2, §12 |
@@ -1725,7 +1760,7 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | `token_ttl_s` | Seconds until the session's current token expires. | §4.4 |
 | Credential check | Re-validating that the session's credential still exists, is active, and holds its scopes. Done by both sides. | §4.4 |
 | `CHECK`, `CHECK_OK` | The client's request for a credential check, and the server's "still valid" reply. | §4.4 |
-| `credential_check_interval` | How often a session's credential is re-checked. Set by the server and announced in the HandshakeAck. | §4.2, §4.4 |
+| `credential_check_interval` | How often a session's credential is re-checked. Set by the server and announced in the HandshakeAccept. | §4.2, §4.4 |
 | Revocation | An admin disabling a credential, or removing its scopes. | §4.4, §12 |
 | Capability | An optional feature the client asks for in the Handshake and the server grants or refuses (`CAP_DEFINITIONS`). | §4.2 |
 | Granted | A capability the server accepted, shown by its bit in `server_flags`. | §4.2 |
@@ -1735,7 +1770,8 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | Dead peer | A peer from which no bytes have arrived for 3 × `heartbeat_interval_s`. The connection is closed. | §4.6 |
 | Peer | Either end of the connection, client or server. | §4.6 |
 | Server status | `normal`, or `degraded`: still serving but possibly with stale data. Sent in Control. | §4.5 |
-| Session health | Whether a session is **healthy**: ESTABLISHED, has an unexpired token, passed its last check, and is hearing from the client. | §4.5 |
+| Session health | Whether a session is **healthy**: ESTABLISHED, has an unexpired token, and passed its last check. | §4.5 |
+| Expiring session | An ESTABLISHED session inside its re-authentication window. | §4.3, §4.5 |
 | Draining | A node that is shutting down and asks clients to go elsewhere (`Error` 124). | §13 |
 | Rate limit | A cap on how many connections or requests are allowed per time unit. | §12 |
 
@@ -1877,3 +1913,7 @@ uses the old names:
 | context kind, multi-kind | one subject, composite context | "Kind" alone means only a value kind. |
 | store snapshot | Raft snapshot | "Snapshot" means only a subscription snapshot. |
 | JSON object keys | member names | Same reason as `targetingKey`. |
+| HandshakeAck (0x02) | HandshakeAccept | Same reason as Control. |
+| `default_fallback` | `not_ready_fallback` | Same reason as fallback value. |
+| `Err` prefix on Reject codes | `Rej` prefix | A Reject is not an Error. |
+| public key (pinning) | server public key (SPKI) | Same reason as `targetingKey`. |
