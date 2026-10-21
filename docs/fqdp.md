@@ -22,6 +22,8 @@ description of current behavior.
 
 [Appendix A. Glossary](#appendix-a-glossary)
 
+[Appendix B. Example session](#appendix-b-example-session)
+
 ---
 
 ## 1. Overview
@@ -1475,6 +1477,9 @@ of case:
   - an explicit salt equal to the flag key.
 - **Frame cases.** The frames in §10, plus a level-2 flag offered to a level-1
   session, which must arrive as `item_kind 2`.
+- **Session case.** The Appendix B session, replayed in order: a server must
+  send exactly the S→C frames shown, and an SDK must reach the evaluation
+  results shown.
 - **Lifecycle cases.** Each of these must produce the result shown:
 
   | Case | Result |
@@ -1917,3 +1922,188 @@ uses the old names:
 | `default_fallback` | `not_ready_fallback` | Same reason as fallback value. |
 | `Err` prefix on Reject codes | `Rej` prefix | A Reject is not an Error. |
 | public key (pinning) | server public key (SPKI) | Same reason as `targetingKey`. |
+
+---
+
+## Appendix B. Example session
+
+This appendix is not normative. It follows one definition-mode SDK through a
+whole session, from TCP connect to close, as complete frames. It reuses the
+§6.1 flag, the §6.2 segment and the §10 frames, so every byte can be checked
+against the rest of the spec; if they ever disagree, the spec wins.
+
+### B.1 Setup
+
+- **Credential.** Holds `flags:read` and `flags:definitions:read` in `prod`. The
+  SDK obtained service token `tok-ABC` (valid 3,600 s) from the HTTP API.
+- **Store.** Segment `beta` (§6.2) at revision 1038, and flag
+  `checkout.new-flow` (§6.1) at revision 1042. Its effective revision is
+  max(1042, 1038) = 1042 (§8.3).
+- **Server.** `heartbeat_interval_s` 15, `credential_check_interval` 30 s,
+  `sync_timeout_s` 30.
+- **SDK.** Implements evaluator level 1; subscribes to `checkout.*`.
+
+### B.2 Timeline
+
+| # | t (s) | Dir | Frame | Session effect |
+| --- | --- | --- | --- | --- |
+| 1 | 0 | C→S | Handshake | CONNECTED; the token is checked |
+| 2 | 0 | S→C | HandshakeAccept | AUTHENTICATED; definitions granted |
+| 3 | 0 | S→C | Control(`SESSION_ESTABLISHED`) | ESTABLISHED; token TTL 3,600 s |
+| 4 | 0 | C→S | Subscribe (definition, id 1) | — |
+| 5 | 0 | S→C | DefinitionUpdate (snapshot) | SDK is ready |
+| 6 | 0 | — | *local evaluation* | `user-123` → `treatment` |
+| 7 | 0 | C→S | Query (id 1) | — |
+| 8 | 0 | S→C | QueryResponse | `user-456` → `control` |
+| 9 | 15 | both | Heartbeat | repeats whenever a peer has been silent 15 s |
+| 10 | 30 | C→S | Control(`CHECK`, ref 1) | — |
+| 11 | 30 | S→C | Control(`CHECK_OK`, ref 1) | token TTL 3,570 s; repeats every 30 s with ref 2, 3, … |
+| 12 | 95 | S→C | DefinitionUpdate (delta) | an admin turned the kill switch off |
+| 13 | 95 | — | *local evaluation* | `user-123` → `control`, `flag_disabled` |
+| 14 | 2880 | C→S | Reauthenticate | re-authentication window opens (§4.3) |
+| 15 | 2880 | S→C | Control(`REAUTH_OK`) | token TTL 3,600 s |
+| 16 | 2900 | C→S | Unsubscribe (id 1) | — |
+| 17 | 2900 | — | TCP close | CLOSED; FQDP has no goodbye message |
+
+### B.3 Frames
+
+**1. Handshake.** As in §10, plus `client_id`.
+
+```text
+00 00 00 26                 length 38
+01                          Handshake
+00 01                       version 0.1
+01 01                       capabilities: EVAL_LEVEL=1, CAP_DEFINITIONS
+00 07 74 6f 6b 2d 41 42 43  token "tok-ABC"
+00 16 63 68 65 63 6b 6f 75 74 2d 73 65 72 76 69 63 65 40 31 2e 34 2e 32
+                            client_id "checkout-service@1.4.2"
+```
+
+**2. HandshakeAccept** and **3. Control(SESSION_ESTABLISHED).** Identical to
+§10.
+
+```text
+00 00 00 1a  02  00 01  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  01  00 0f  00 1e  00 1e
+00 00 00 0b  30  00  00 00 00 00  00  00 00 0e 10
+```
+
+**4. Subscribe.** Identical to §10: definition mode, `subscription_id` 1,
+criterion `checkout.*`.
+
+```text
+00 00 00 18  20  00 00 00 01  01  00 00 00 00  00 01  00 0a 63 68 65 63 6b 6f 75 74 2e 2a
+```
+
+**5. DefinitionUpdate, snapshot.** The §10 frame, written out. The segment
+comes before the flag that references it (§8.5). This single frame carries
+`SNAPSHOT|SNAPSHOT_END`, so the SDK is now ready.
+
+```text
+00 00 01 0b  23  00 00 00 01  00 00 00 00 00 00 00 01  03  00 02
+                                     length 267; sub 1; seq 1; SNAPSHOT|SNAPSHOT_END; 2 changes
+00 01  00 04 62 65 74 61             upsert, segment "beta"
+00 00 00 00 00 00 04 0e  00 00 00 40 revision 1038; 64 bytes:
+01 01                                  schema_version 1, eval_level 1
+00 02  00 06 75 73 65 72 2d 31  00 06 75 73 65 72 2d 32   included ["user-1","user-2"]
+00 01  00 06 75 73 65 72 2d 39         excluded ["user-9"]
+01  05 73 74 61 66 66  80 01           1 rule "staff": group all, 1 child
+03 00 05 65 6d 61 69 6c  02 00 01  00 0c 40 65 78 61 6d 70 6c 65 2e 63 6f 6d
+                                       endsWith "email", strings ["@example.com"]
+00 00  00 11 63 68 65 63 6b 6f 75 74 2e 6e 65 77 2d 66 6c 6f 77
+                                     upsert, flag "checkout.new-flow"
+00 00 00 00 00 00 04 12  00 00 00 86 revision 1042; 134 bytes:
+<the 134 bytes of §9.6>
+```
+
+**6. Local evaluation.** The SDK evaluates `checkout.new-flow` for
+`{targetingKey:"user-123", attributes:{country:"NL"}}` with no network traffic
+(§7.1):
+
+1. The flag is present, well-formed and enabled.
+2. Rule `beta-testers`: `user-123` is in neither `included` nor `excluded`, and
+   rule `staff` is false because `email` is missing. Not a member, so no match.
+3. Rule `benelux-50`: `country` `NL` is in the list, so the rule matches. Its
+   rollout hashes `checkout.new-flow.user-123` to bucket 74356 (§6.5), which is
+   `treatment`.
+
+Result: value `"v2"`, variation `treatment`, reason `rule_match`, ruleId
+`benelux-50`.
+
+**7. Query.** The application also asks the server directly, for `user-456` in
+`BE`, and includes a key that does not exist.
+
+```text
+00 00 00 48  10  00 00 00 01         length 72; Query; query_id 1
+00 00 00 18                          context_len 24
+00 08 75 73 65 72 2d 34 35 36        targeting key "user-456"
+01  07 63 6f 75 6e 74 72 79  02  00 02 42 45   1 attribute: country = "BE"
+00 02                                2 flag keys
+00 11 63 68 65 63 6b 6f 75 74 2e 6e 65 77 2d 66 6c 6f 77   "checkout.new-flow"
+00 10 63 68 65 63 6b 6f 75 74 2e 6d 69 73 73 69 6e 67      "checkout.missing"
+```
+
+**8. QueryResponse.** `user-456` matches `benelux-50` and lands in bucket 49880
+(§6.5), which is `control`. The missing key gets `flag_not_found`.
+
+```text
+00 00 00 5e  11  00 00 00 01  00  00 02   length 94; query_id 1; MORE clear; 2 items
+00 11 63 68 65 63 6b 6f 75 74 2e 6e 65 77 2d 66 6c 6f 77   "checkout.new-flow"
+00 00 00 00 00 00 04 12              effective revision 1042
+01  00  02  00 00 00 02 76 31        rule_match; no error; string "v1"
+07 63 6f 6e 74 72 6f 6c              variation "control"
+0a 62 65 6e 65 6c 75 78 2d 35 30     rule "benelux-50"
+00 10 63 68 65 63 6b 6f 75 74 2e 6d 69 73 73 69 6e 67      "checkout.missing"
+00 00 00 00 00 00 00 00              revision 0
+03  00  ff  00  00                   flag_not_found; no error; no value; no variation; no rule
+```
+
+**9. Heartbeat.** Each peer sends one after 15 s without sending anything.
+
+```text
+00 00 00 01  40
+```
+
+**10–11. Control(CHECK) and Control(CHECK_OK).** `ref_id` 1; status normal;
+3,570 s left on the token.
+
+```text
+00 00 00 0b  30  01  00 00 00 01  00  00 00 00 00
+00 00 00 0b  30  02  00 00 00 01  00  00 00 0d f2
+```
+
+**12. DefinitionUpdate, delta.** An admin disables the flag; the write is Raft
+log index 1051. The segment did not change, so only the flag is sent. Its
+definition is the §9.6 bytes with `flag_bits` (byte 4) changed from `01` to
+`00`.
+
+```text
+00 00 00 b7  23  00 00 00 01  00 00 00 00 00 00 00 02  00  00 01
+                                     length 183; sub 1; seq 2; no snapshot bits; 1 change
+00 00  00 11 63 68 65 63 6b 6f 75 74 2e 6e 65 77 2d 66 6c 6f 77
+                                     upsert, flag "checkout.new-flow"
+00 00 00 00 00 00 04 1b  00 00 00 86 revision 1051; 134 bytes:
+01 01 02 00                            schema_version 1; eval_level 1; string; disabled
+<the remaining 130 bytes of §9.6, from salt_len on>
+```
+
+The SDK accepts it: the sequence is the next one (2), and 1051 is higher than
+the 1042 it holds (§8.6).
+
+**13. Local evaluation.** The same `user-123` context now stops at step 3 of
+§7.1: value `"v1"`, variation `control`, reason `flag_disabled`.
+
+**14–15. Reauthenticate and Control(REAUTH_OK).** At t = 2880, 720 s (20%) of
+the token's lifetime remains. That is earlier than 60 s before expiry, so the
+SDK rotates now (§4.3). Identical to §10.
+
+```text
+00 00 00 0a  03  00 07 74 6f 6b 2d 58 59 5a
+00 00 00 0b  30  03  00 00 00 00  00  00 00 0e 10
+```
+
+**16. Unsubscribe.** Identical to §10. No reply follows; the SDK then closes the
+TCP connection.
+
+```text
+00 00 00 05  21  00 00 00 01
+```
