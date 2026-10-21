@@ -1429,8 +1429,8 @@ with one upsert.
 
 ## 11. Conformance
 
-A language-neutral vector set under `docs/fqdp-vectors/` holds four categories
-of case:
+A language-neutral vector set under `docs/fqdp-vectors/`, together with the
+Appendix B session, holds five categories of case:
 
 - **Evaluation cases.** Each case is a flag or segment plus one or more
   contexts, given both as JSON and as expected binary hex, together with the
@@ -1477,9 +1477,12 @@ of case:
   - an explicit salt equal to the flag key.
 - **Frame cases.** The frames in §10, plus a level-2 flag offered to a level-1
   session, which must arrive as `item_kind 2`.
-- **Session case.** The Appendix B session, replayed in order: a server must
-  send exactly the S→C frames shown, and an SDK must reach the evaluation
-  results shown.
+- **Session case.** The Appendix B session, replayed in order.
+  - An SDK harness plays the server side byte for byte, and checks the SDK's
+    C→S frames and evaluation results.
+  - A server harness checks the S→C frames, ignoring `session_id`, absolute
+    `revision` values (only their order and the effective-revision rule of
+    §8.3 matter), `token_ttl_s` and timing.
 - **Lifecycle cases.** Each of these must produce the result shown:
 
   | Case | Result |
@@ -1928,9 +1931,9 @@ uses the old names:
 ## Appendix B. Example session
 
 This appendix is not normative. It follows one definition-mode SDK through a
-whole session, from TCP connect to close, as complete frames. It reuses the
-§6.1 flag, the §6.2 segment and the §10 frames, so every byte can be checked
-against the rest of the spec; if they ever disagree, the spec wins.
+whole session, from TCP connect to close. It reuses the §6.1 flag, the §6.2
+segment and the §10 frames; frames that match §10 are referenced, not
+repeated. If this appendix and the spec ever disagree, the spec wins.
 
 ### B.1 Setup
 
@@ -1979,20 +1982,11 @@ against the rest of the spec; if they ever disagree, the spec wins.
                             client_id "checkout-service@1.4.2"
 ```
 
-**2. HandshakeAccept** and **3. Control(SESSION_ESTABLISHED).** Identical to
-§10.
+**2. HandshakeAccept** and **3. Control(SESSION_ESTABLISHED).** The §10
+frames.
 
-```text
-00 00 00 1a  02  00 01  00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f  01  00 0f  00 1e  00 1e
-00 00 00 0b  30  00  00 00 00 00  00  00 00 0e 10
-```
-
-**4. Subscribe.** Identical to §10: definition mode, `subscription_id` 1,
+**4. Subscribe.** The §10 frame: definition mode, `subscription_id` 1,
 criterion `checkout.*`.
-
-```text
-00 00 00 18  20  00 00 00 01  01  00 00 00 00  00 01  00 0a 63 68 65 63 6b 6f 75 74 2e 2a
-```
 
 **5. DefinitionUpdate, snapshot.** The §10 frame, written out. The segment
 comes before the flag that references it (§8.5). This single frame carries
@@ -2094,16 +2088,7 @@ the 1042 it holds (§8.6).
 
 **14–15. Reauthenticate and Control(REAUTH_OK).** At t = 2880, 720 s (20%) of
 the token's lifetime remains. That is earlier than 60 s before expiry, so the
-SDK rotates now (§4.3). Identical to §10.
+SDK rotates now (§4.3). The §10 frames.
 
-```text
-00 00 00 0a  03  00 07 74 6f 6b 2d 58 59 5a
-00 00 00 0b  30  03  00 00 00 00  00  00 00 0e 10
-```
-
-**16. Unsubscribe.** Identical to §10. No reply follows; the SDK then closes the
+**16. Unsubscribe.** The §10 frame. No reply follows; the SDK then closes the
 TCP connection.
-
-```text
-00 00 00 05  21  00 00 00 01
-```
