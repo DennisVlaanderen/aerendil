@@ -1,0 +1,159 @@
+# Deletes branches whose pull request has been merged, and reports (or,
+# when asked, deletes) branches that have gone stale with no commits for a
+# while. Complements stale.yml, which handles inactive *pull requests* --
+# this handles the branches left behind once there's no PR to look at.
+#
+# A branch counts as merged only when a pull request from it into this repo
+# was merged AND the branch still points at that PR's head commit. Checking
+# the PR rather than git ancestry is what makes squash and rebase merges
+# (whose commits never land on main verbatim) detectable, and requiring the
+# head SHA to match means a branch that got new commits pushed after its PR
+# merged is left alone rather than deleted along with unmerged work.
+#
+# Never touched, whatever their state:
+#   - the default branch and any branch with branch protection enabled
+#   - branches with an open pull request
+#   - branches matching EXEMPT_PATTERN below
+#
+# Scheduled runs delete merged branches and only *report* stale ones in the
+# job summary. Stale branches are deleted only from a manual run with
+# `delete-stale` ticked; `dry-run` reports everything without deleting.
+#
+# Tip: enabling "Automatically delete head branches" (Settings > General)
+# makes GitHub delete most merged branches at merge time; this workflow
+# then mostly catches the ones that setting misses (branches merged before
+# it was enabled, or restored after the fact).
+
+name: Branch Cleanup
+
+on:
+  schedule:
+    - cron: "45 2 * * 1" # weekly, Monday 02:45 UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Only report what would be deleted"
+        type: boolean
+        default: true
+      delete-stale:
+        description: "Also delete stale (unmerged, inactive) branches"
+        type: boolean
+        default: false
+      stale-days:
+        description: "Days without commits before a branch counts as stale"
+        type: number
+        default: 90
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: branch-cleanup-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Find and delete merged / stale branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # `inputs.*` is empty on scheduled runs, hence the fallbacks:
+          # scheduled runs are live (not dry-run) but never delete stale
+          # branches.
+          DRY_RUN: ${{ inputs.dry-run || 'false' }}
+          DELETE_STALE: ${{ inputs.delete-stale || 'false' }}
+          STALE_DAYS: ${{ inputs.stale-days || 90 }}
+          # Extended regex of branch names that are never deleted.
+          EXEMPT_PATTERN: '^(main|master|develop|gh-pages|release/.+)$'
+        run: |
+          set -euo pipefail
+
+          default_branch=$(gh api "repos/$REPO" --jq '.default_branch')
+          now=$(date -u +%s)
+          stale_cutoff=$(( now - STALE_DAYS * 86400 ))
+
+          # Head refs of open PRs from this repo (forks' branches aren't ours
+          # to delete, and can share names with ours).
+          open_heads=$(gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq ".[] | select(.head.repo.full_name == \"$REPO\") | .head.ref" | sort -u)
+
+          # "<ref> <sha> <number>" for every merged PR from this repo.
+          merged_prs=$(gh api --paginate "repos/$REPO/pulls?state=closed&per_page=100" \
+            --jq ".[] | select(.merged_at != null and .head.repo.full_name == \"$REPO\")
+                  | \"\(.head.ref) \(.head.sha) \(.number)\"")
+
+          deleted=() would_delete=() stale=() skipped=()
+
+          delete_branch() {
+            if [[ "$DRY_RUN" == "true" ]]; then
+              would_delete+=("$1|$2")
+            elif gh api -X DELETE "repos/$REPO/git/refs/heads/$1" >/dev/null; then
+              deleted+=("$1|$2")
+            else
+              echo "::warning::Failed to delete branch $1"
+            fi
+          }
+
+          while IFS=$'\t' read -r branch sha protected; do
+            [[ -z "$branch" ]] && continue
+            if [[ "$branch" == "$default_branch" || "$protected" == "true" ]] \
+                || [[ "$branch" =~ $EXEMPT_PATTERN ]]; then
+              skipped+=("$branch|protected or exempt")
+              continue
+            fi
+            if grep -qxF -- "$branch" <<<"$open_heads"; then
+              skipped+=("$branch|has an open pull request")
+              continue
+            fi
+
+            pr=$(awk -v ref="$branch" -v sha="$sha" '$1 == ref && $2 == sha { print $3; exit }' <<<"$merged_prs")
+            if [[ -n "$pr" ]]; then
+              delete_branch "$branch" "merged in #$pr"
+              continue
+            fi
+
+            committed=$(gh api "repos/$REPO/commits/$sha" --jq '.commit.committer.date')
+            committed_s=$(date -u -d "$committed" +%s)
+            if (( committed_s < stale_cutoff )); then
+              age="no commits for $(( (now - committed_s) / 86400 )) days"
+              if [[ "$DELETE_STALE" == "true" ]]; then
+                delete_branch "$branch" "stale, $age"
+              else
+                stale+=("$branch|$age")
+              fi
+            fi
+          done < <(gh api --paginate "repos/$REPO/branches?per_page=100" \
+            --jq '.[] | [.name, .commit.sha, (.protected | tostring)] | @tsv')
+
+          section() {
+            local title=$1; shift
+            echo "### $title ($#)"
+            if (( $# == 0 )); then echo "_None._"; echo; return; fi
+            echo "| Branch | Reason |"
+            echo "| --- | --- |"
+            local entry
+            for entry in "$@"; do echo "| \`${entry%%|*}\` | ${entry#*|} |"; done
+            echo
+          }
+
+          {
+            echo "## Branch cleanup"
+            echo
+            echo "Dry run: \`$DRY_RUN\` · delete stale: \`$DELETE_STALE\` · stale after: $STALE_DAYS days"
+            echo
+            if [[ "$DRY_RUN" == "true" ]]; then
+              section "Would delete" "${would_delete[@]}"
+            else
+              section "Deleted" "${deleted[@]}"
+            fi
+            section "Stale (not deleted)" "${stale[@]}"
+            section "Skipped" "${skipped[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if (( ${#stale[@]} > 0 )); then
+            echo "::notice::${#stale[@]} stale branch(es) found -- see the job summary. Re-run manually with delete-stale to remove them."
+          fi
