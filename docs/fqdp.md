@@ -225,8 +225,20 @@ and 125–199 are reserved.
     a larger `length` closes the connection.
 - **Integers and strings.** All integers are big-endian. A string is written
   `[uN len][UTF-8 bytes]`, where N is given at each field.
-- **Partial I/O.** Implementations must handle partial reads and writes on the
-  TCP stream.
+- **Reading frames.** Frames follow each other on the stream with no delimiter.
+  One read can return part of a frame, or the end of one frame and the start of
+  the next. A receiver:
+  1. reads exactly 4 bytes for `length`, across as many reads as it takes;
+  2. checks `length` against the limit for its direction (above), before it
+     reads or allocates the payload;
+  3. reads exactly `length` bytes, keeping any further bytes as the start of
+     the next frame;
+  4. decodes the payload only once it is complete.
+- **End of stream.** If the connection closes partway through a frame, the
+  partial frame is discarded and never decoded.
+- **Writing frames.** A write can send only part of a buffer, so the sender
+  keeps writing until the whole frame is sent. The bytes of two frames are
+  never interleaved, even when several subscriptions push at once.
 
 ---
 
@@ -1081,9 +1093,13 @@ after sending it.
 
 ```text
 [u8 0x50]
-[u16 code]
-[u16 msg_len][msg]
+[u16 code]                  // §2.5
+[u16 msg_len][msg]          // UTF-8; may be empty (msg_len 0)
 ```
+
+- **`msg`.** Human-readable detail, for logs. Clients act on `code` only and
+  never parse `msg`. It never contains a token (§12). The same rules apply to
+  the Reject `msg` below.
 
 #### Reject (0x31)
 
@@ -1094,8 +1110,8 @@ subscriptions stay open.
 [u8 0x31]
 [u8 ref_kind]               // 0 query_id (Query or DefinitionQuery), 1 subscription_id
 [u32 ref_id]
-[u16 code]
-[u16 msg_len][msg]
+[u16 code]                  // §2.5
+[u16 msg_len][msg]          // UTF-8; may be empty (msg_len 0)
 ```
 
 - **Ending a subscription.** Only code 110 ends an active subscription. Any
@@ -1328,8 +1344,11 @@ payload.
 seconds; credential check every 30 seconds; sync timeout 30 seconds.
 
 ```text
-00 00 00 1a  02  00 01
+00 00 00 1a  length 26
+02           HandshakeAccept
+00 01        version 0.1
 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f
+             session_id
 01           server_flags: CAP_DEFINITIONS granted
 00 0f        heartbeat_interval_s = 15
 00 1e        credential_check_interval_s = 30
@@ -1340,23 +1359,29 @@ seconds; credential check every 30 seconds; sync timeout 30 seconds.
 seconds.
 
 ```text
-00 00 00 0b  30  00  00 00 00 00  00  00 00 0e 10
+00 00 00 0b  length 11
+30           Control
+00           control_kind SESSION_ESTABLISHED
+00 00 00 00  ref_id 0
+00           server_status normal
+00 00 0e 10  token_ttl_s = 3600
 ```
 
 **Control(CHECK) and Control(CHECK_OK).** The client sends `ref_id` 7. The
-server replies degraded, with 1,200 seconds left on the token.
+server replies degraded, with 1,200 seconds left on the token. Fields as in
+`SESSION_ESTABLISHED` above.
 
 ```text
-00 00 00 0b  30  01  00 00 00 07  00  00 00 00 00
-00 00 00 0b  30  02  00 00 00 07  01  00 00 04 b0
+00 00 00 0b  30  01  00 00 00 07  00  00 00 00 00   CHECK, ref_id 7; status and ttl 0 (C→S)
+00 00 00 0b  30  02  00 00 00 07  01  00 00 04 b0   CHECK_OK, ref_id 7; degraded; ttl 1200
 ```
 
 **Reauthenticate and Control(REAUTH_OK).** New token `tok-XYZ`, valid for 3,600
 seconds.
 
 ```text
-00 00 00 0a  03  00 07 74 6f 6b 2d 58 59 5a
-00 00 00 0b  30  03  00 00 00 00  00  00 00 0e 10
+00 00 00 0a  03  00 07 74 6f 6b 2d 58 59 5a         Reauthenticate, token "tok-XYZ"
+00 00 00 0b  30  03  00 00 00 00  00  00 00 0e 10   REAUTH_OK, ref_id 0; normal; ttl 3600
 ```
 
 **Query.** `query_id` 7; context `{targetingKey:"u1"}`; flag key `f.a`.
@@ -1410,7 +1435,13 @@ with one upsert.
 **Reject.** Subscription 1 rejected with `RejInvalidCriteria` (112).
 
 ```text
-00 00 00 1a  31  01  00 00 00 01  00 70  00 10 69 6e 76 61 6c 69 64 20 63 72 69 74 65 72 69 61
+00 00 00 1a  length 26
+31           Reject
+01           ref_kind subscription_id
+00 00 00 01  ref_id 1
+00 70        code 112
+00 10 69 6e 76 61 6c 69 64 20 63 72 69 74 65 72 69 61
+             msg "invalid criteria"
 ```
 
 **Heartbeat.**
@@ -1422,7 +1453,11 @@ with one upsert.
 **Error.** `ErrAuthenticationFailed` (105).
 
 ```text
-00 00 00 1a  50  00 69  00 15 61 75 74 68 65 6e 74 69 63 61 74 69 6f 6e 20 66 61 69 6c 65 64
+00 00 00 1a  length 26
+50           Error
+00 69        code 105
+00 15 61 75 74 68 65 6e 74 69 63 61 74 69 6f 6e 20 66 61 69 6c 65 64
+             msg "authentication failed"
 ```
 
 ---
