@@ -1121,6 +1121,48 @@ subscriptions stay open.
 
 All codes are listed in §2.5.
 
+#### Error or Reject: decision table
+
+The rule: if the server cannot decode a message's body, it sends an Error and
+closes the connection. If the body decodes but the request asks for something
+invalid, it sends a Reject, and the connection stays open.
+
+The server checks every C→S frame in this order, and the first check that fails
+decides the outcome:
+
+| # | Check | On failure |
+| --- | --- | --- |
+| 1 | `length` is within `MaximumClientFrameSize` (§3) | `Error` 108, before the payload is read |
+| 2 | The message type is assigned and C→S (§2.3) | `Error` 100 |
+| 3 | It is not a second Handshake | `Error` 121 |
+| 4 | The session state allows it (§4.1) | `Error` 109 |
+| 5 | Handshake: the version is implemented (§4.7) | `Error` 104 |
+| 6 | The body decodes: every length fits, there are no trailing bytes, every enum value is known, and reserved bits and must-be-0 fields are 0 (§9.1). An embedded context is not decoded at this step | `Error` 101 for a Handshake; otherwise `Error` 115, except an unknown Subscribe `mode` (`Reject` 113) and a definition-mode Subscribe with `context_len ≠ 0` (`Reject` 111) |
+| 7 | Handshake, Reauthenticate: the token and credential are valid (§4.2, §4.3) | `Error` 105 or 118 |
+| 8 | The request's content is valid (below) | `Reject`; the connection stays open |
+
+Step 8, by request:
+
+| Content failure | Reject |
+| --- | --- |
+| A definition-mode request without `CAP_DEFINITIONS` granted | 110 |
+| Query or value-mode Subscribe with `context_len = 0`; a context that fails §9.1 or §6.6 | 111 |
+| `criteria_count` of 0 or above 1,000; a criterion that is not a valid key, prefix or `*` | 112 |
+| A `subscription_id` not higher than the last one | 114 |
+| A `query_id` not higher than the last one; `key_count` of 0 or above 1,000; a key that does not match the flag-key pattern, including one that is not valid UTF-8 | 122 |
+| The session is at its subscription limit | 123 |
+
+If several step-8 failures apply, the server sends one Reject for the request.
+Which one it sends is not specified, and conformance cases test one failure at a
+time.
+
+A client applies the same split to what it receives:
+
+| S→C input | Client action |
+| --- | --- |
+| `length` above `MaximumFrameSize`; an unassigned or C→S message type; a body that fails step 6; a sequence gap or regression (§8.6); a HandshakeAccept with an interval of 0 (§4.2) | Close the connection |
+| A definition inside `def_len` that fails §9.1 | Keep the connection. The key evaluates as `malformed_flag`. A malformed segment is not stored, so flags that reference it evaluate as `malformed_flag` too (§7.1) |
+
 ---
 
 ## 9. Binary encoding
@@ -1196,10 +1238,9 @@ All codes are listed in §2.5.
       (§6.1).
 
   A definition that fails these checks is reported as `malformed_flag`. A
-  context the server receives that fails them gets `Reject` 111. Any other
-  message the server receives that fails them gets `Error` 115 (101 for the
-  Handshake), except the two Subscribe cases listed under 115 in §2.5. A
-  client that receives such a message closes the connection.
+  context the server receives that fails them gets `Reject` 111. For every
+  other message, the decision table in §8.9 says whether a failure gets an
+  Error or a Reject.
 
 ### 9.2 Message items
 
@@ -1547,6 +1588,16 @@ Appendix B session, holds five categories of case:
   | HandshakeAccept with `credential_check_interval_s` or `sync_timeout_s` 0 | client closes the connection |
   | No `SESSION_ESTABLISHED` or 117 within `sync_timeout_s` + `heartbeat_interval_s` | client closes the connection |
   | A flag stops, then resumes, referencing a segment whose revision is unchanged | the segment upsert is applied |
+  | Frame with the unassigned message type `0x7F` | 100 |
+  | Malformed request body before `SESSION_ESTABLISHED` | 109 (state is checked before the body) |
+  | Query body truncated inside a key | 115 |
+  | Heartbeat with one trailing byte | 115 |
+  | Query with `context_len = 0` | `Reject` 111 |
+  | Query whose context lists attribute names out of order | `Reject` 111 |
+  | Query with `key_count` 1,001 | `Reject` 122 |
+  | Subscribe that reuses an active `subscription_id` | `Reject` 114; the active subscription keeps running |
+  | DefinitionUpdate whose definition is truncated inside `def_len` | client keeps the connection; the key evaluates as `malformed_flag` |
+  | DefinitionUpdate whose sequence skips a number | client closes the connection |
 
 The Go server (evaluator and codec) and every SDK run the same vectors. That is
 the guarantee that both modes give identical answers and that every encoder is
