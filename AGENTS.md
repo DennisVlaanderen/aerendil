@@ -7,7 +7,7 @@ Instructions for AI coding agents working in this repository.
 Aerendil is a distributed feature flagging toolkit. It is a work in progress, not
 yet a working product. See [README.md](./README.md), [IDEA.md](./IDEA.md), and
 [docs/premise.md](./docs/premise.md) for the project's goals, and
-[docs/fqdp.md](./docs/fqdp.md) for the custom Layer 4 TCP protocol (FQDP) it
+[docs/fqdp.md](./docs/fqdp.md) for the custom binary protocol over TCP (FQDP) it
 implements alongside its HTTP API.
 
 The repo has three main parts:
@@ -200,7 +200,7 @@ never directly from the browser.
 - Backend Go code follows the existing package layout under
   `backend/internal/*` — keep new code inside the appropriate package rather
   than adding new top-level packages unless a new concern truly warrants one.
-- Backend Go comments follow https://go.dev/doc/comment: package and
+- Backend Go comments follow <https://go.dev/doc/comment>: package and
   exported-identifier doc comments start with their own name. Keep
   comments short — explain *why*, not what, and skip anything the code
   already says.
