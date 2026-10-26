@@ -279,3 +279,26 @@ func TestApplyUserAllowsUpdatingSameUserWithSameUsername(t *testing.T) {
 		t.Fatalf("expected the update to be applied, got %+v", updated)
 	}
 }
+
+// The API pre-check alone races two concurrent creates; Apply must reject
+// a batch whose key already exists in any target environment.
+func TestFSMApplyFlagSetBatchRejectsExistingKeyWithNoPartialWrites(t *testing.T) {
+	f := newFSM()
+	f.environments["a"] = Environment{ID: "a", Name: "A"}
+	f.environments["b"] = Environment{ID: "b", Name: "B"}
+	f.flags[flagMapKey("a", "checkout")] = Flag{EnvironmentID: "a", Key: "checkout", Enabled: true, Value: "on", Version: 1}
+
+	resp := f.applyFlag(2, command{Op: opSetBatch, Entity: entityFlag, Flags: []Flag{
+		{EnvironmentID: "a", Key: "checkout", Enabled: false, Value: "off"},
+		{EnvironmentID: "b", Key: "checkout", Enabled: false, Value: "off"},
+	}})
+	if _, ok := resp.(error); !ok {
+		t.Fatalf("expected applyFlag to reject a batch with an existing key, got %+v", resp)
+	}
+	if got := f.flags[flagMapKey("a", "checkout")]; !got.Enabled || got.Value != "on" || got.Version != 1 {
+		t.Fatalf("expected the existing flag to be unchanged, got %+v", got)
+	}
+	if got, found := f.flags[flagMapKey("b", "checkout")]; found {
+		t.Fatalf("expected no partial write to environment b, got %+v", got)
+	}
+}

@@ -12,9 +12,8 @@ import (
 )
 
 // auditConfig describes one mutating route's audit metadata. Before is nil
-// for pure-create routes (POST -- ID is fresh, no prior state) and set for
-// routes that can overwrite an existing record: PUT/DELETE by path {id},
-// and flags POST, an upsert-by-key identified by the body's key/environmentIds.
+// for pure-create routes (POST -- no prior state) and set for routes that
+// can overwrite an existing record: PUT/DELETE by path {id}.
 type auditConfig struct {
 	Action     string
 	TargetType string

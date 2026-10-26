@@ -69,6 +69,7 @@ const (
 
 	// CF -- conflict (409), one group per domain.
 	CodeConflictUsernameTaken = "CF01-0001"
+	CodeConflictFlagExists    = "CF02-0001" // POST /api/flags: key already exists in a target environment
 
 	// MN01 -- method not allowed (405).
 	CodeMethodNotAllowed = "MN01-0001"

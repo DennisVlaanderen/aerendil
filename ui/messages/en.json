@@ -234,6 +234,7 @@
 	"error_application_credential_not_found": "That application credential no longer exists.",
 	"error_audit_not_found": "That audit entry doesn't exist.",
 	"error_username_taken": "That username is already taken.",
+	"error_flag_exists": "A flag with this key already exists in one of the selected environments.",
 	"error_method_not_allowed": "That action isn't supported.",
 	"toast_route_not_found": "That page doesn't exist, so we brought you back to the dashboard.",
 	"toast_dismiss": "Dismiss",

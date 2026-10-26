@@ -37,7 +37,7 @@ func run() error {
 	defer flagStore.Close()
 
 	go func() {
-		if err := fqdp.StartTCPServer(ctx, ":9000"); err != nil {
+		if err := fqdp.StartTCPServer(ctx, fqdp.DefaultFQDPAddr); err != nil {
 			log.Printf("fqdp server stopped: %v", err)
 		}
 	}()

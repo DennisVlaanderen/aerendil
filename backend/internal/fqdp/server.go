@@ -101,7 +101,7 @@ func readFrame(reader *bufio.Reader) ([]byte, error) {
 }
 
 func handleHandshake(conn net.Conn, payload []byte) {
-	if len(payload) < 6 {
+	if len(payload) < 8 {
 		sendError(conn, uint16(ErrInvalidHandshakePayload), "invalid handshake payload")
 		return
 	}
@@ -111,13 +111,13 @@ func handleHandshake(conn net.Conn, payload []byte) {
 	_ = versionMajor
 	_ = versionMinor
 
-	tokenLen := binary.BigEndian.Uint16(payload[4:6])
-	if len(payload) < int(6+tokenLen) {
+	tokenLen := binary.BigEndian.Uint16(payload[6:8])
+	if len(payload) < 8+int(tokenLen) {
 		sendError(conn, uint16(ErrHandshakeTokenTruncated), "handshake token truncated")
 		return
 	}
 
-	token := string(payload[6 : 6+tokenLen])
+	token := string(payload[8 : 8+int(tokenLen)])
 	log.Printf("handshake token received: %s", token)
 
 	response := []byte{byte(MessageTypeError)}

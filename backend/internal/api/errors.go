@@ -51,6 +51,8 @@ func storeErrorToAPIError(err error) *apiError {
 	switch {
 	case errors.Is(err, store.ErrUsernameTaken):
 		return &apiError{http.StatusConflict, CodeConflictUsernameTaken, MsgConflictUsernameTaken}
+	case errors.Is(err, store.ErrFlagExists):
+		return &apiError{http.StatusConflict, CodeConflictFlagExists, err.Error()}
 	case errors.Is(err, store.ErrLastAdmin):
 		return &apiError{http.StatusForbidden, CodeBusinessLastAdmin, err.Error()}
 	case errors.Is(err, store.ErrProtectedSystemGroup):
