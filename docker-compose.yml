@@ -15,7 +15,7 @@ services:
       - aerendil-raft-data:/data
     expose:
       - "8080"
-      - "9000"
+      - "9001"
 
   ui:
     build:
