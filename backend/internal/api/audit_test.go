@@ -167,7 +167,7 @@ func TestAuditRecordsFlagUpdateBeforeState(t *testing.T) {
 	}
 
 	secondBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
-	req = httptest.NewRequest(http.MethodPut, "/api/flags/"+key+"?environmentId="+envID, bytes.NewReader(secondBody))
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/"+key+"?environmentId="+envID, bytes.NewReader(secondBody))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
