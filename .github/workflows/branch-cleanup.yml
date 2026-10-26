@@ -68,7 +68,7 @@ jobs:
           DELETE_STALE: ${{ inputs.delete-stale || 'false' }}
           STALE_DAYS: ${{ inputs.stale-days || 90 }}
           # Extended regex of branch names that are never deleted.
-          EXEMPT_PATTERN: '^(main|master|develop|gh-pages|release/.+)$'
+          EXEMPT_PATTERN: '^(main|master|develop|gh-pages|cla-signatures|release/.+)$'
         run: |
           set -euo pipefail
 

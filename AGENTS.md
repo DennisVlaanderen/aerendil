@@ -5,10 +5,9 @@ Instructions for AI coding agents working in this repository.
 ## Project overview
 
 Aerendil is a distributed feature flagging toolkit. It is a work in progress, not
-yet a working product. See [README.md](./README.md), [IDEA.md](./IDEA.md), and
-[docs/premise.md](./docs/premise.md) for the project's goals, and
-[docs/fqdp.md](./docs/fqdp.md) for the custom binary protocol over TCP (FQDP) it
-implements alongside its HTTP API.
+yet a working product. See [README.md](./README.md) for the project's goals,
+and [docs/fqdp.md](./docs/fqdp.md) for the custom binary protocol over TCP
+(FQDP) it implements alongside its HTTP API.
 
 The repo has three main parts:
 
@@ -47,7 +46,11 @@ CI mirrors these exactly and is path-filtered per side —
 `backend/**`, [.github/workflows/node.js.yml](./.github/workflows/node.js.yml)
 (`pnpm run check`/`lint`/build/test) only on `ui/**`. **Only run the suite
 for the side you actually touched** unless the change is cross-cutting.
-Two more workflows scan the whole repo instead of being path-filtered:
+[.github/workflows/cla.yml](./.github/workflows/cla.yml) posts a `CLA`
+status on every PR: outside contributors sign [CLA.md](./CLA.md) by
+commenting on the PR (see [CONTRIBUTING.md](./CONTRIBUTING.md)), and their
+signatures are recorded on the `cla-signatures` branch, which must not be
+deleted. Two more workflows scan the whole repo instead of being path-filtered:
 [.github/workflows/codeql.yml](./.github/workflows/codeql.yml) (CodeQL, on
 every PR plus weekly) and
 [.github/workflows/docker.yml](./.github/workflows/docker.yml) (build-
@@ -94,9 +97,8 @@ store.
     on `Store`.
   - `flag.go` defines `Flag{Key, Enabled, Value, Version}`; `environment.go`
     defines `Environment{ID, Name, Order, Version}` (the deployment targets
-    flags/permissions will be scoped to — see Epic 6 in
-    `docs/user-stories.md`). `Version` on every entity is set from the Raft
-    log index on apply, not a separately tracked counter.
+    flags/permissions will be scoped to). `Version` on every entity is set
+    from the Raft log index on apply, not a separately tracked counter.
 
 - **`api/`** — `net/http` (stdlib `ServeMux` with Go 1.22+ method patterns,
   e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires routes for
@@ -140,8 +142,7 @@ store.
   `flags:read`/`flags:write` only) rather than anything resolved through
   group membership — see `authenticateServicePrincipal`. There is no
   `RoleAdmin`/`RoleUser` constant anywhere in the codebase; don't assume
-  that model (see Epic 7 in `docs/user-stories.md` for where identity is
-  headed next).
+  that model.
 
 - **`fqdp/`** — the FQDP binary protocol server described in
   `docs/fqdp.md`. **Currently a stub**: `server.go` implements the

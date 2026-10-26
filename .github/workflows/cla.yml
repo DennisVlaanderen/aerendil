@@ -1,0 +1,55 @@
+# Checks that everyone contributing to a pull request has signed the
+# Contributor License Agreement in CLA.md, and records new signatures.
+# Contributors sign by commenting the phrase the bot asks for; the logic
+# lives in .github/scripts/cla-check.js.
+#
+# Posts a `CLA` commit status on the PR head. Add it to the required status
+# checks on `main` to block merging until everyone has signed.
+#
+# Runs as `pull_request_target` (not `pull_request`) so that PRs from forks
+# still get a token that can comment, set a status, and record signatures.
+# That is safe here because the checkout below always takes the default
+# branch, never the PR's code, and the script only talks to the GitHub API.
+#
+# Signatures are committed to the `cla-signatures` branch, which the script
+# creates on the first signature. Keep that branch unprotected (the
+# workflow's GITHUB_TOKEN must be able to push to it) and never delete it;
+# branch-cleanup.yml already exempts it.
+
+name: CLA
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    # Comments only matter when they're on a PR and could be a signature or
+    # a recheck request; the script does the exact matching.
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request &&
+        (contains(github.event.comment.body, 'I have read the CLA') ||
+         contains(github.event.comment.body, 'recheck')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Check CLA signatures
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const run = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/cla-check.js`);
+            await run({ github, context, core });

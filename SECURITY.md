@@ -6,7 +6,7 @@ want to know about security issues as soon as possible.
 ## Reporting a Vulnerability
 
 Please report suspected vulnerabilities privately using
-[GitHub's private vulnerability reporting](https://github.com/DennisVlaanderen/toggly/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/DennisVlaanderen/aerendil/security/advisories/new)
 for this repository, rather than opening a public issue. If that's not
 enabled yet, open a regular issue asking for a private channel and we'll
 follow up.
