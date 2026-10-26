@@ -198,10 +198,11 @@ Markdown is linted with markdownlint (see
    - **Node.js CI**: type-check, lint, build, and tests (UI changes only).
    - **Docker**: builds the affected image and scans it with Trivy.
    - **CodeQL**: static analysis across the whole repo.
-5. Respond to review feedback by pushing new commits. To bring in changes
-   from `main`, merge it into your branch rather than rebasing once a
-   review has started, so reviewers can see what changed since they last
-   looked.
+5. To bring in changes from `main` before a review has started, either
+   rebase your branch onto `main` or merge `main` into it, whichever you
+   prefer. Once a review has started, respond to feedback by pushing new
+   commits and merge `main` instead of rebasing, so reviewers can see what
+   changed since they last looked.
 
 Use a draft PR for work in progress. Open PRs with no activity for 30 days
 are marked stale and closed 7 days later; drafts are exempt, and any push
