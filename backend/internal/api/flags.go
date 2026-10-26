@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -13,29 +12,10 @@ import (
 func registerFlagRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flags", requirePermission(auth.PermFlagsRead, handleErrors(flagsGetHandler)))
 	mux.HandleFunc("GET /api/flags/{key}", requirePermission(auth.PermFlagsRead, handleErrors(flagsGetByKeyHandler)))
+	// Create-only (ErrFlagExists -> 409), so there's never a Before state.
 	mux.HandleFunc("POST /api/flags", requirePermission(auth.PermFlagsWrite, withAudit(auditConfig{
 		Action:     "flag.set",
 		TargetType: "flag",
-		Before: func(_ *http.Request, body []byte) (any, bool) {
-			var probe struct {
-				Key            string   `json:"key"`
-				EnvironmentIDs []string `json:"environmentIds"`
-			}
-			if err := json.Unmarshal(body, &probe); err != nil || probe.Key == "" || len(probe.EnvironmentIDs) == 0 {
-				return nil, false
-			}
-			// Before-state is needed for every environment, not just the first.
-			before := make([]store.Flag, 0, len(probe.EnvironmentIDs))
-			for _, envID := range probe.EnvironmentIDs {
-				if flag, ok := dataStore.Flags().Get(envID, probe.Key); ok {
-					before = append(before, flag)
-				}
-			}
-			if len(before) == 0 {
-				return nil, false
-			}
-			return before, true
-		},
 	}, handleErrors(flagsPostHandler))))
 	mux.HandleFunc("PUT /api/flags/{key}", requirePermission(auth.PermFlagsUpdate, withAudit(auditConfig{
 		Action:     "flag.update",
@@ -118,8 +98,7 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		if !principal.hasEnvironmentAccess(envID) {
 			return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 		}
-	}
-	for _, envID := range payload.EnvironmentIDs {
+
 		if _, exists := dataStore.Environments().Get(envID); !exists {
 			return badRequest(CodeBadRequestEnvironmentUnknown, fmt.Sprintf("unknown environment: %q", envID))
 		}

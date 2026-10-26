@@ -9,6 +9,10 @@ import (
 // ErrUnknownEnvironment means a flag's EnvironmentID names no Environment.
 var ErrUnknownEnvironment = errors.New("environment does not exist")
 
+// ErrFlagExists means SetMany targeted a key that already exists in an
+// environment; creating must never overwrite (that's Set, via PUT).
+var ErrFlagExists = errors.New("flag already exists")
+
 // Flag is a feature flag in one Environment; the same Key in another
 // environment is a separate record (see flagMapKey).
 type Flag struct {
@@ -34,10 +38,15 @@ func (f *fsm) applyFlag(index uint64, cmd command) any {
 		f.flags[flagMapKey(cmd.Flag.EnvironmentID, cmd.Flag.Key)] = *cmd.Flag
 		return *cmd.Flag
 	case opSetBatch:
-		// Validate all environments first so a bad ID rejects the whole batch.
+		// Validate the whole batch first so one bad entry rejects all of it.
+		// The existence check lives here, not only in the API, so two
+		// concurrent creates can't both pass a pre-check and overwrite.
 		for _, flag := range cmd.Flags {
 			if _, ok := f.environments[flag.EnvironmentID]; !ok {
 				return fmt.Errorf("%w: %q", ErrUnknownEnvironment, flag.EnvironmentID)
+			}
+			if _, ok := f.flags[flagMapKey(flag.EnvironmentID, flag.Key)]; ok {
+				return fmt.Errorf("%w: %q in environment %q", ErrFlagExists, flag.Key, flag.EnvironmentID)
 			}
 		}
 		applied := make([]Flag, len(cmd.Flags))
@@ -125,8 +134,9 @@ func (r FlagRepository) Set(flag Flag) (Flag, error) {
 	}
 }
 
-// SetMany writes one key/enabled/value to every listed environment
-// atomically (ErrUnknownEnvironment if any ID is unknown). Discrete fields,
+// SetMany creates one key/enabled/value in every listed environment
+// atomically (ErrUnknownEnvironment if any ID is unknown, ErrFlagExists if
+// the key already exists in any of them). Discrete fields,
 // not []Flag, so values can't diverge per environment.
 func (r FlagRepository) SetMany(key string, enabled bool, value string, environmentIDs []string) ([]Flag, error) {
 	flags := make([]Flag, len(environmentIDs))

@@ -14,7 +14,7 @@ import (
 func TestFlagsFullLifecycle(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
-	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate)
 
 	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
@@ -42,9 +42,9 @@ func TestFlagsFullLifecycle(t *testing.T) {
 		t.Fatalf("unexpected listed flags: %+v", listed.Flags)
 	}
 
-	// Overwrite via a second POST (upsert-by-key).
-	updateBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": false, "value": "off", "environmentIds": []string{envID}})
-	updateReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(updateBody))
+	// POST is create-only; changing an existing flag goes through PUT.
+	updateBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
+	updateReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(updateBody))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
 	updateRec := httptest.NewRecorder()
 	mux.ServeHTTP(updateRec, updateReq)
@@ -63,7 +63,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 		t.Fatalf("decode verify response: %v", err)
 	}
 	if len(updated.Flags) != 1 || updated.Flags[0].Enabled {
-		t.Fatalf("expected the later Set to win, got %+v", updated.Flags)
+		t.Fatalf("expected the update to apply, got %+v", updated.Flags)
 	}
 }
 
@@ -519,5 +519,49 @@ func TestFlagsDeleteRequiresPermFlagsDeleteNotJustWrite(t *testing.T) {
 	mux.ServeHTTP(deleteRec, deleteReq)
 	if deleteRec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 deleting a flag with only flags:write (no flags:delete), got %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+}
+
+// POST /api/flags is create-only: flags:write must not be able to overwrite
+// a flag that only flags:update may change (PUT /api/flags/{key}).
+func TestFlagsPostRejectsExistingKeyWithoutOverwriting(t *testing.T) {
+	tests := []struct {
+		name  string
+		token func(t *testing.T, envIDs []string) string
+	}{
+		{"flags:write only", func(t *testing.T, envIDs []string) string {
+			return tokenForWithEnvironments(t, envIDs, auth.PermFlagsWrite)
+		}},
+		{"admin", func(t *testing.T, _ []string) string { return adminToken(t) }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := newTestMux(t)
+			existingEnv := seedEnvironmentForTest(t, "Production")
+			freshEnv := seedEnvironmentForTest(t, "Staging")
+			if _, err := dataStore.Flags().Set(store.Flag{EnvironmentID: existingEnv, Key: "checkout", Enabled: true, Value: "on"}); err != nil {
+				t.Fatalf("seed flag: %v", err)
+			}
+			token := tt.token(t, []string{existingEnv, freshEnv})
+
+			// The key exists in one of the two targets: the whole request
+			// must be rejected, not just that environment.
+			body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": false, "value": "off", "environmentIds": []string{existingEnv, freshEnv}})
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
+			req.Header.Set("Authorization", "Bearer "+token)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+			if rec.Code != http.StatusConflict {
+				t.Fatalf("expected 409 for an existing key, got %d: %s", rec.Code, rec.Body.String())
+			}
+
+			existing, _ := dataStore.Flags().Get(existingEnv, "checkout")
+			if !existing.Enabled || existing.Value != "on" {
+				t.Fatalf("expected the existing flag to be unchanged, got %+v", existing)
+			}
+			if fresh, found := dataStore.Flags().Get(freshEnv, "checkout"); found {
+				t.Fatalf("expected no partial write to the other environment, got %+v", fresh)
+			}
+		})
 	}
 }

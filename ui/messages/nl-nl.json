@@ -234,6 +234,7 @@
 	"error_application_credential_not_found": "Die applicatiereferentie bestaat niet meer.",
 	"error_audit_not_found": "Die auditregel bestaat niet.",
 	"error_username_taken": "Die gebruikersnaam is al in gebruik.",
+	"error_flag_exists": "Er bestaat al een flag met deze sleutel in een van de geselecteerde omgevingen.",
 	"error_method_not_allowed": "Die actie wordt niet ondersteund.",
 	"toast_route_not_found": "Die pagina bestaat niet, dus we hebben je teruggebracht naar het dashboard.",
 	"toast_dismiss": "Sluiten",

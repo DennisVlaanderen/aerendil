@@ -149,10 +149,10 @@ func TestAuditRecordsRejectedMutation(t *testing.T) {
 	}
 }
 
-func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
+func TestAuditRecordsFlagUpdateBeforeState(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
-	writeToken := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
+	writeToken := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite, auth.PermFlagsUpdate)
 	readToken := tokenFor(t, auth.PermAuditsRead)
 
 	key := fmt.Sprintf("flag-%s", store.NewID())
@@ -166,8 +166,8 @@ func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
 		t.Fatalf("expected 200 on first flag set, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	secondBody, _ := json.Marshal(map[string]any{"key": key, "enabled": false, "value": "off", "environmentIds": []string{envID}})
-	req = httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(secondBody))
+	secondBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
+	req = httptest.NewRequest(http.MethodPut, "/api/flags/"+key+"?environmentId="+envID, bytes.NewReader(secondBody))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -180,7 +180,7 @@ func TestAuditRecordsFlagUpsertBeforeState(t *testing.T) {
 		t.Fatalf("expected 2 audit entries for %q, got %d: %+v", key, len(entries), entries)
 	}
 
-	// Newest first: entries[0] is the second set, whose Before should
+	// Newest first: entries[0] is the update, whose Before should
 	// reflect the first flag's prior (enabled=true) state.
 	second := entries[0]
 	if len(second.Before) == 0 || !strings.Contains(string(second.Before), `"enabled":true`) {

@@ -70,6 +70,7 @@ export const ErrorCode = {
 
 	// CF -- conflict (409), one group per domain.
 	ConflictUsernameTaken: 'CF01-0001',
+	ConflictFlagExists: 'CF02-0001',
 
 	// MN01 -- method not allowed (405).
 	MethodNotAllowed: 'MN01-0001',
@@ -136,6 +137,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.NotFoundApplicationCredential]: m.error_application_credential_not_found,
 	[ErrorCode.NotFoundAudit]: m.error_audit_not_found,
 	[ErrorCode.ConflictUsernameTaken]: m.error_username_taken,
+	[ErrorCode.ConflictFlagExists]: m.error_flag_exists,
 	[ErrorCode.MethodNotAllowed]: m.error_method_not_allowed
 };
 
