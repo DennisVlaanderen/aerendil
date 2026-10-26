@@ -41,6 +41,11 @@ Aerendil exposes the FQDP (Feature Query & Definition Protocol) over TCP for
 efficient feature queries and subscriptions. See the FQDP specification for
 details: [docs/fqdp.md](./docs/fqdp.md).
 
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to
+set up a development environment and open a pull request.
+
 ## License
 
 This project is licensed under the AGPL-3.0 License - see the
