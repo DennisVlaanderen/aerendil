@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"maps"
@@ -31,7 +32,17 @@ type auditConfig struct {
 // response.
 func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
+		if err != nil {
+			var tooLarge *http.MaxBytesError
+			if errors.As(err, &tooLarge) {
+				writeError(w, http.StatusRequestEntityTooLarge, CodeBadRequestBody, "request body too large")
+			} else {
+				log.Printf("api: failed to read request body for %s on %s: %v", cfg.Action, cfg.TargetType, err)
+				writeError(w, http.StatusBadRequest, CodeBadRequestBody, MsgBadRequestBody)
+			}
+			return
+		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
 
 		var beforeJSON string
