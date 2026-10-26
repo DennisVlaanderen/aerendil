@@ -198,6 +198,8 @@ Markdown is linted with markdownlint (see
    - **Node.js CI**: type-check, lint, build, and tests (UI changes only).
    - **Docker**: builds the affected image and scans it with Trivy.
    - **CodeQL**: static analysis across the whole repo.
+   - **CLA**: checks that everyone on the PR has signed the
+     [Contributor License Agreement](#contributor-license-agreement).
 5. To bring in changes from `main` before a review has started, either
    rebase your branch onto `main` or merge `main` into it, whichever you
    prefer. Once a review has started, respond to feedback by pushing new
@@ -222,5 +224,32 @@ the checks above before asking for a review.
 
 ## License
 
-Aerendil is licensed under the [GNU AGPL-3.0](./LICENSE). By submitting a
-contribution, you agree that it is licensed under the same terms.
+Aerendil is licensed under the [GNU AGPL-3.0](./LICENSE).
+
+### Contributor License Agreement
+
+Before your first contribution can be merged, you need to sign the
+[Aerendil Contributor License Agreement](./CLA.md) (CLA). You keep the
+copyright in your work. The CLA gives the project a license to it that
+also allows distributing it under licenses other than the AGPL, such as a
+commercial license, so the project keeps that option open for the future.
+
+Signing takes one comment, and you only do it once:
+
+1. Open your pull request. If you haven't signed yet, a bot comments with
+   the agreement and lists everyone on the PR who still needs to sign.
+2. Read [CLA.md](./CLA.md), then comment on the pull request:
+
+   ```text
+   I have read the CLA and I agree to its terms.
+   ```
+
+3. The `CLA` check turns green once everyone listed has signed. Comment
+   `recheck` to run it again.
+
+Everyone who authored a commit on the PR signs, as does whoever opened it.
+The person who opens the PR also signs for commits that aren't linked to a
+GitHub account, and for commits made by AI coding agents on their behalf.
+Bots and the repository owner don't need to sign. If a commit should be
+yours but the bot doesn't recognize it, add its author email to your
+GitHub account.

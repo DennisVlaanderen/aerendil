@@ -46,7 +46,11 @@ CI mirrors these exactly and is path-filtered per side —
 `backend/**`, [.github/workflows/node.js.yml](./.github/workflows/node.js.yml)
 (`pnpm run check`/`lint`/build/test) only on `ui/**`. **Only run the suite
 for the side you actually touched** unless the change is cross-cutting.
-Two more workflows scan the whole repo instead of being path-filtered:
+[.github/workflows/cla.yml](./.github/workflows/cla.yml) posts a `CLA`
+status on every PR: outside contributors sign [CLA.md](./CLA.md) by
+commenting on the PR (see [CONTRIBUTING.md](./CONTRIBUTING.md)), and their
+signatures are recorded on the `cla-signatures` branch, which must not be
+deleted. Two more workflows scan the whole repo instead of being path-filtered:
 [.github/workflows/codeql.yml](./.github/workflows/codeql.yml) (CodeQL, on
 every PR plus weekly) and
 [.github/workflows/docker.yml](./.github/workflows/docker.yml) (build-
