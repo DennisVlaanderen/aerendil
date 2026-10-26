@@ -30,8 +30,6 @@ Aerendil provides a raw TCP-based feature flagging service using the FQDP
 protocol. Clients can connect to query and subscribe to feature flags in
 real-time.
 
-For a high-level project overview, see the [Aerendil premise document](./docs/premise.md).
-
 For detailed usage examples and API documentation, please refer to the
 [documentation](./docs/).
 
