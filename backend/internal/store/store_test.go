@@ -78,19 +78,19 @@ func TestStoreSetAndGet(t *testing.T) {
 	s := newTestStore(t)
 	envID := seedEnvironment(t, s, "Production")
 
-	applied, err := s.Flags().Set(Flag{EnvironmentID: envID, Key: "new-checkout", Enabled: true, Value: "on"})
+	applied, err := s.Flags().Set(stringFlag(envID, "new-checkout", true))
 	if err != nil {
 		t.Fatalf("expected set to succeed: %v", err)
 	}
-	if applied.Version == 0 {
-		t.Fatal("expected applied flag to have a non-zero version")
+	if applied.Revision == 0 {
+		t.Fatal("expected applied flag to have a non-zero revision")
 	}
 
 	got, ok := s.Flags().Get(envID, "new-checkout")
 	if !ok {
 		t.Fatal("expected flag to be present after set")
 	}
-	if !got.Enabled || got.Value != "on" {
+	if !got.Enabled {
 		t.Fatalf("unexpected flag state: %+v", got)
 	}
 
@@ -104,10 +104,10 @@ func TestStoreSetOverwritesExistingFlag(t *testing.T) {
 	s := newTestStore(t)
 	envID := seedEnvironment(t, s, "Production")
 
-	if _, err := s.Flags().Set(Flag{EnvironmentID: envID, Key: "checkout", Enabled: true}); err != nil {
+	if _, err := s.Flags().Set(stringFlag(envID, "checkout", true)); err != nil {
 		t.Fatalf("expected first set to succeed: %v", err)
 	}
-	if _, err := s.Flags().Set(Flag{EnvironmentID: envID, Key: "checkout", Enabled: false}); err != nil {
+	if _, err := s.Flags().Set(stringFlag(envID, "checkout", false)); err != nil {
 		t.Fatalf("expected second set to succeed: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func TestStoreSetOverwritesExistingFlag(t *testing.T) {
 func TestStoreSetFlagRejectsUnknownEnvironment(t *testing.T) {
 	s := newTestStore(t)
 
-	if _, err := s.Flags().Set(Flag{EnvironmentID: "does-not-exist", Key: "checkout", Enabled: true}); !errors.Is(err, ErrUnknownEnvironment) {
+	if _, err := s.Flags().Set(stringFlag("does-not-exist", "checkout", true)); !errors.Is(err, ErrUnknownEnvironment) {
 		t.Fatalf("expected ErrUnknownEnvironment, got %v", err)
 	}
 }
@@ -133,10 +133,10 @@ func TestStoreFlagsAreIsolatedPerEnvironment(t *testing.T) {
 	prodID := seedEnvironment(t, s, "Production")
 	stagingID := seedEnvironment(t, s, "Staging")
 
-	if _, err := s.Flags().Set(Flag{EnvironmentID: prodID, Key: "checkout", Enabled: true}); err != nil {
+	if _, err := s.Flags().Set(stringFlag(prodID, "checkout", true)); err != nil {
 		t.Fatalf("expected set in prod to succeed: %v", err)
 	}
-	if _, err := s.Flags().Set(Flag{EnvironmentID: stagingID, Key: "checkout", Enabled: false}); err != nil {
+	if _, err := s.Flags().Set(stringFlag(stagingID, "checkout", false)); err != nil {
 		t.Fatalf("expected set in staging to succeed: %v", err)
 	}
 
@@ -160,23 +160,23 @@ func TestStoreSetManyWritesAcrossEnvironmentsAtomically(t *testing.T) {
 	envB := seedEnvironment(t, s, "B")
 	envC := seedEnvironment(t, s, "C")
 
-	applied, err := s.Flags().SetMany("checkout", true, "on", []string{envA, envB, envC})
+	applied, err := s.Flags().SetMany(stringFlag("", "checkout", true), []string{envA, envB, envC})
 	if err != nil {
 		t.Fatalf("expected SetMany to succeed: %v", err)
 	}
 	if len(applied) != 3 {
 		t.Fatalf("expected 3 applied flags, got %d", len(applied))
 	}
-	version := applied[0].Version
+	revision := applied[0].Revision
 	for _, f := range applied {
-		if f.Version != version {
-			t.Fatalf("expected every flag in the batch to share the same Version, got %+v", applied)
+		if f.Revision != revision {
+			t.Fatalf("expected every flag in the batch to share the same Revision, got %+v", applied)
 		}
 	}
 
 	for _, envID := range []string{envA, envB, envC} {
 		got, ok := s.Flags().Get(envID, "checkout")
-		if !ok || !got.Enabled || got.Value != "on" {
+		if !ok || !got.Enabled {
 			t.Fatalf("expected checkout to exist in environment %q, got %+v (ok=%v)", envID, got, ok)
 		}
 	}
@@ -187,7 +187,7 @@ func TestStoreSetManyRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) 
 	envA := seedEnvironment(t, s, "A")
 	envB := seedEnvironment(t, s, "B")
 
-	_, err := s.Flags().SetMany("checkout", true, "on", []string{envA, "does-not-exist", envB})
+	_, err := s.Flags().SetMany(stringFlag("", "checkout", true), []string{envA, "does-not-exist", envB})
 	if !errors.Is(err, ErrUnknownEnvironment) {
 		t.Fatalf("expected ErrUnknownEnvironment, got %v", err)
 	}
@@ -207,7 +207,7 @@ func TestStoreDeleteEnvironmentRejectsWhenFlagsStillReferenceIt(t *testing.T) {
 	// from ErrLastEnvironment.
 	seedEnvironment(t, s, "Staging")
 
-	if _, err := s.Flags().Set(Flag{EnvironmentID: envID, Key: "checkout", Enabled: true}); err != nil {
+	if _, err := s.Flags().Set(stringFlag(envID, "checkout", true)); err != nil {
 		t.Fatalf("expected set to succeed: %v", err)
 	}
 
@@ -595,8 +595,8 @@ func (s *memSnapshotSink) reader() io.ReadCloser {
 
 func TestFSMSnapshotRestoreRoundTrip(t *testing.T) {
 	f := newFSM()
-	f.flags[flagMapKey("prod", "a")] = Flag{EnvironmentID: "prod", Key: "a", Enabled: true, Version: 1}
-	f.flags[flagMapKey("prod", "b")] = Flag{EnvironmentID: "prod", Key: "b", Enabled: false, Version: 2}
+	f.flags[flagMapKey("prod", "a")] = stringFlag("prod", "a", true)
+	f.flags[flagMapKey("prod", "b")] = stringFlag("prod", "b", false)
 
 	snap, err := f.Snapshot()
 	if err != nil {

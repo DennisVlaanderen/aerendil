@@ -95,10 +95,12 @@ store.
     repositories — `Store.Flags()`, `Store.Users()`, `Store.Groups()`,
     `Store.Audits()`, `Store.Environments()` — rather than living directly
     on `Store`.
-  - `flag.go` defines `Flag{Key, Enabled, Value, Version}`; `environment.go`
+  - `flag.go` defines `Flag`, the `docs/fqdp.md` §6.1 flag definition
+    (type, variations, rules, rollouts, fallthrough); `environment.go`
     defines `Environment{ID, Name, Order, Version}` (the deployment targets
-    flags/permissions will be scoped to). `Version` on every entity is set
-    from the Raft log index on apply, not a separately tracked counter.
+    flags/permissions will be scoped to). `Version` on every entity (a
+    flag's `Revision`) is set from the Raft log index on apply, not a
+    separately tracked counter.
 
 - **`api/`** — `net/http` (stdlib `ServeMux` with Go 1.22+ method patterns,
   e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires routes for

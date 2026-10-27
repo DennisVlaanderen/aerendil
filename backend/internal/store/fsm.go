@@ -171,6 +171,10 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		if flag.EnvironmentID == "" {
 			return fmt.Errorf("snapshot has pre-environment-scoped flags; wipe the raft data directory and restart so state rebuilds from a fresh snapshot")
 		}
+		// Same for the pre-definition {enabled, value} shape, which has no type.
+		if flag.Type == "" {
+			return fmt.Errorf("snapshot has pre-definition flags; wipe the raft data directory and restart so state rebuilds from a fresh snapshot")
+		}
 	}
 	if doc.Flags == nil {
 		doc.Flags = make(map[string]Flag)

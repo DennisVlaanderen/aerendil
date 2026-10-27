@@ -9,7 +9,7 @@ import (
 
 func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 	f := newFSM()
-	f.flags[flagMapKey("prod", "a")] = Flag{EnvironmentID: "prod", Key: "a", Enabled: true, Version: 1}
+	f.flags[flagMapKey("prod", "a")] = stringFlag("prod", "a", true)
 	f.users["u1"] = User{ID: "u1", Username: "alice", GroupIDs: []string{"editors"}, Active: true, Version: 2}
 	f.groups["editors"] = Group{ID: "editors", Name: "Editors", Permissions: []string{"flags:read"}, Version: 3}
 	f.groups[AdminGroupID] = Group{ID: AdminGroupID, Name: "Admin", System: true, Version: 4}
@@ -69,7 +69,7 @@ func TestFSMSnapshotRestoreRoundTripAllEntities(t *testing.T) {
 // ever exist).
 func TestFSMRestoreToleratesSnapshotWithoutEnvironmentsKey(t *testing.T) {
 	f := newFSM()
-	preEnvironmentSnapshot := `{"flags": {"legacy-env/a": {"environmentId": "legacy-env", "key": "a", "enabled": true, "version": 1}}, "users": {}, "groups": {}, "auditEntries": {}}`
+	preEnvironmentSnapshot := `{"flags": {"legacy-env/a": {"environmentId": "legacy-env", "key": "a", "type": "string", "enabled": true, "revision": 1}}, "users": {}, "groups": {}, "auditEntries": {}}`
 	if err := f.Restore(io.NopCloser(strings.NewReader(preEnvironmentSnapshot))); err != nil {
 		t.Fatalf("expected Restore to tolerate a snapshot without an environments key, got %v", err)
 	}
@@ -142,7 +142,7 @@ func TestFSMRestoreToleratesEmptySnapshot(t *testing.T) {
 }
 
 // TestApplyAuditEntrySetsIDFromLogIndex guards the Raft-determinism
-// requirement that ID (like Flag.Version) comes from the log index every
+// requirement that ID (like Flag.Revision) comes from the log index every
 // node applies identically, while Timestamp is passed through unchanged --
 // it must be assigned once by the leader-side AuditRepository.Append, never
 // inside applyAuditEntry (which every replica re-executes independently).
@@ -198,7 +198,7 @@ func TestFSMApplyRejectsAdminGroupMutationEvenIfSuccessfullyRaftCommitted(t *tes
 func TestFSMApplyFlagRejectsUnknownEnvironment(t *testing.T) {
 	f := newFSM()
 
-	resp := f.applyFlag(1, command{Op: opSet, Entity: entityFlag, Flag: &Flag{EnvironmentID: "does-not-exist", Key: "checkout", Enabled: true}})
+	resp := f.applyFlag(1, command{Op: opSet, Entity: entityFlag, Flag: new(stringFlag("does-not-exist", "checkout", true))})
 	respErr, ok := resp.(error)
 	if !ok {
 		t.Fatalf("expected applyFlag to return an error for an unknown environment, got %+v", resp)
@@ -214,9 +214,9 @@ func TestFSMApplyFlagSetBatchRejectsUnknownEnvironmentWithNoPartialWrites(t *tes
 	f.environments["b"] = Environment{ID: "b", Name: "B"}
 
 	resp := f.applyFlag(1, command{Op: opSetBatch, Entity: entityFlag, Flags: []Flag{
-		{EnvironmentID: "a", Key: "checkout", Enabled: true},
-		{EnvironmentID: "does-not-exist", Key: "checkout", Enabled: true},
-		{EnvironmentID: "b", Key: "checkout", Enabled: true},
+		stringFlag("a", "checkout", true),
+		stringFlag("does-not-exist", "checkout", true),
+		stringFlag("b", "checkout", true),
 	}})
 	respErr, ok := resp.(error)
 	if !ok {
@@ -234,7 +234,7 @@ func TestFSMApplyEnvironmentRejectsDeletingEnvironmentWithFlags(t *testing.T) {
 	f := newFSM()
 	f.environments["prod"] = Environment{ID: "prod", Name: "Production"}
 	f.environments["staging"] = Environment{ID: "staging", Name: "Staging"}
-	f.flags[flagMapKey("prod", "checkout")] = Flag{EnvironmentID: "prod", Key: "checkout", Enabled: true}
+	f.flags[flagMapKey("prod", "checkout")] = stringFlag("prod", "checkout", true)
 
 	resp := f.applyEnvironment(3, command{Op: opDelete, Entity: entityEnvironment, Key: "prod"})
 	respErr, ok := resp.(error)
@@ -286,16 +286,18 @@ func TestFSMApplyFlagSetBatchRejectsExistingKeyWithNoPartialWrites(t *testing.T)
 	f := newFSM()
 	f.environments["a"] = Environment{ID: "a", Name: "A"}
 	f.environments["b"] = Environment{ID: "b", Name: "B"}
-	f.flags[flagMapKey("a", "checkout")] = Flag{EnvironmentID: "a", Key: "checkout", Enabled: true, Value: "on", Version: 1}
+	existing := stringFlag("a", "checkout", true)
+	existing.Revision = 1
+	f.flags[flagMapKey("a", "checkout")] = existing
 
 	resp := f.applyFlag(2, command{Op: opSetBatch, Entity: entityFlag, Flags: []Flag{
-		{EnvironmentID: "a", Key: "checkout", Enabled: false, Value: "off"},
-		{EnvironmentID: "b", Key: "checkout", Enabled: false, Value: "off"},
+		stringFlag("a", "checkout", false),
+		stringFlag("b", "checkout", false),
 	}})
 	if _, ok := resp.(error); !ok {
 		t.Fatalf("expected applyFlag to reject a batch with an existing key, got %+v", resp)
 	}
-	if got := f.flags[flagMapKey("a", "checkout")]; !got.Enabled || got.Value != "on" || got.Version != 1 {
+	if got := f.flags[flagMapKey("a", "checkout")]; mustJSON(t, got) != mustJSON(t, existing) {
 		t.Fatalf("expected the existing flag to be unchanged, got %+v", got)
 	}
 	if got, found := f.flags[flagMapKey("b", "checkout")]; found {
