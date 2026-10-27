@@ -49,6 +49,9 @@ func Open(cfg Config) (*Store, error) {
 // Flags returns a repository for flag operations against the store.
 func (s *Store) Flags() FlagRepository { return FlagRepository{store: s} }
 
+// Segments returns a repository for segment operations against the store.
+func (s *Store) Segments() SegmentRepository { return SegmentRepository{store: s} }
+
 // Users returns a repository for user operations against the store.
 func (s *Store) Users() UserRepository { return UserRepository{store: s} }
 

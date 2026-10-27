@@ -21,6 +21,11 @@ var ErrEnvironmentHasFlags = errors.New("cannot delete an environment that still
 // tier as ErrEnvironmentHasFlags.
 var ErrEnvironmentHasCredentials = errors.New("cannot delete an environment that still has application credentials")
 
+// ErrEnvironmentHasSegments is returned when a segment is still scoped to
+// the target environment -- same referential-integrity tier as
+// ErrEnvironmentHasFlags.
+var ErrEnvironmentHasSegments = errors.New("cannot delete an environment that still has segments")
+
 // Environment is a named deployment target (e.g. "Production", "Staging")
 // flags and group permissions are scoped to. Order is stamped at creation
 // from the current count and is otherwise immutable for now.
@@ -48,6 +53,9 @@ func (f *fsm) applyEnvironment(logIndex uint64, raftCommand command) any {
 		}
 		if f.hasCredentialsInEnvironmentLocked(environmentID) {
 			return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, environmentID)
+		}
+		if f.hasSegmentsInEnvironmentLocked(environmentID) {
+			return fmt.Errorf("%w: %q", ErrEnvironmentHasSegments, environmentID)
 		}
 		delete(f.environments, environmentID)
 		return nil
@@ -115,7 +123,8 @@ func (r EnvironmentRepository) Set(environment Environment) (Environment, error)
 }
 
 // Delete removes an environment by ID. Fails with ErrLastEnvironment,
-// ErrEnvironmentHasFlags, or ErrEnvironmentHasCredentials -- fast
+// ErrEnvironmentHasFlags, ErrEnvironmentHasCredentials, or
+// ErrEnvironmentHasSegments -- fast
 // pre-checks here, fsm.applyEnvironment is the ultimate source of truth.
 func (r EnvironmentRepository) Delete(id string) error {
 	if _, exists := r.store.fsm.getEnvironment(id); exists && len(r.store.fsm.listEnvironments()) <= 1 {
@@ -126,6 +135,9 @@ func (r EnvironmentRepository) Delete(id string) error {
 	}
 	if r.store.fsm.hasCredentialsInEnvironment(id) {
 		return fmt.Errorf("%w: %q", ErrEnvironmentHasCredentials, id)
+	}
+	if r.store.fsm.hasSegmentsInEnvironment(id) {
+		return fmt.Errorf("%w: %q", ErrEnvironmentHasSegments, id)
 	}
 
 	applyResponse, applyErr := r.store.apply(command{Op: opDelete, Entity: entityEnvironment, Key: id})

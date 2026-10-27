@@ -22,6 +22,7 @@ type entity string
 
 const (
 	entityFlag                  entity = "flag"
+	entitySegment               entity = "segment"
 	entityUser                  entity = "user"
 	entityGroup                 entity = "group"
 	entityAudit                 entity = "audit"
@@ -38,6 +39,7 @@ type command struct {
 	Key                   string                 `json:"key,omitempty"`
 	Flag                  *Flag                  `json:"flag,omitempty"`
 	Flags                 []Flag                 `json:"flags,omitempty"`
+	Segment               *Segment               `json:"segment,omitempty"`
 	User                  *User                  `json:"user,omitempty"`
 	Group                 *Group                 `json:"group,omitempty"`
 	AuditEntry            *AuditEntry            `json:"audit,omitempty"`
@@ -49,11 +51,12 @@ type command struct {
 // durable via Raft's replicated log plus periodic snapshots.
 //
 // Each entity's apply logic and accessors live alongside its struct
-// definition (flag.go/user.go/group.go); this file only holds the shared
+// definition (flag.go/segment.go/user.go/group.go); this file only holds the shared
 // machinery -- the command envelope, Apply dispatch, and snapshot/restore.
 type fsm struct {
 	mu                     sync.RWMutex
 	flags                  map[string]Flag
+	segments               map[string]Segment
 	users                  map[string]User
 	groups                 map[string]Group
 	auditEntries           map[uint64]AuditEntry
@@ -64,6 +67,7 @@ type fsm struct {
 func newFSM() *fsm {
 	return &fsm{
 		flags:                  make(map[string]Flag),
+		segments:               make(map[string]Segment),
 		users:                  make(map[string]User),
 		groups:                 make(map[string]Group),
 		auditEntries:           make(map[uint64]AuditEntry),
@@ -87,6 +91,8 @@ func (f *fsm) Apply(log *raft.Log) any {
 	switch cmd.Entity {
 	case entityFlag:
 		return f.applyFlag(log.Index, cmd)
+	case entitySegment:
+		return f.applySegment(log.Index, cmd)
 	case entityUser:
 		return f.applyUser(log.Index, cmd)
 	case entityGroup:
@@ -106,6 +112,7 @@ func (f *fsm) Apply(log *raft.Log) any {
 // as -- one blob covering every entity, not per-entity files.
 type snapshotDoc struct {
 	Flags                  map[string]Flag                  `json:"flags"`
+	Segments               map[string]Segment               `json:"segments"`
 	Users                  map[string]User                  `json:"users"`
 	Groups                 map[string]Group                 `json:"groups"`
 	AuditEntries           map[uint64]AuditEntry            `json:"auditEntries"`
@@ -119,6 +126,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 	doc := snapshotDoc{
 		Flags:                  make(map[string]Flag, len(f.flags)),
+		Segments:               make(map[string]Segment, len(f.segments)),
 		Users:                  make(map[string]User, len(f.users)),
 		Groups:                 make(map[string]Group, len(f.groups)),
 		AuditEntries:           make(map[uint64]AuditEntry, len(f.auditEntries)),
@@ -126,6 +134,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		ApplicationCredentials: make(map[string]ApplicationCredential, len(f.applicationCredentials)),
 	}
 	maps.Copy(doc.Flags, f.flags)
+	maps.Copy(doc.Segments, f.segments)
 	maps.Copy(doc.Users, f.users)
 	maps.Copy(doc.Groups, f.groups)
 	maps.Copy(doc.AuditEntries, f.auditEntries)
@@ -179,6 +188,10 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	if doc.Flags == nil {
 		doc.Flags = make(map[string]Flag)
 	}
+	if doc.Segments == nil {
+		// Older snapshots predate segments -- default to empty.
+		doc.Segments = make(map[string]Segment)
+	}
 	if doc.Users == nil {
 		doc.Users = make(map[string]User)
 	}
@@ -201,6 +214,7 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.flags = doc.Flags
+	f.segments = doc.Segments
 	f.users = doc.Users
 	f.groups = doc.Groups
 	f.auditEntries = doc.AuditEntries
