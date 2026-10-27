@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"aerendil/backend/internal/auth"
-	"aerendil/backend/internal/store"
 )
 
 func TestFlagsFullLifecycle(t *testing.T) {
@@ -33,7 +32,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 		t.Fatalf("expected list to succeed, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 	var listed struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	if err := json.Unmarshal(getRec.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decode list response: %v", err)
@@ -57,7 +56,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
 	var updated struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	if err := json.Unmarshal(verifyRec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode verify response: %v", err)
@@ -96,7 +95,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	prodListRec := httptest.NewRecorder()
 	mux.ServeHTTP(prodListRec, prodListReq)
 	var prodListed struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	_ = json.Unmarshal(prodListRec.Body.Bytes(), &prodListed)
 	if len(prodListed.Flags) != 1 || !prodListed.Flags[0].Enabled {
@@ -108,7 +107,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	stagingListRec := httptest.NewRecorder()
 	mux.ServeHTTP(stagingListRec, stagingListReq)
 	var stagingListed struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	_ = json.Unmarshal(stagingListRec.Body.Bytes(), &stagingListed)
 	if len(stagingListed.Flags) != 1 || stagingListed.Flags[0].Enabled {
@@ -132,7 +131,7 @@ func TestFlagsPostMultiEnvironmentCreateIsAtomic(t *testing.T) {
 	}
 
 	var resp struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -169,7 +168,7 @@ func TestFlagsPostRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) {
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
 	var listed struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	_ = json.Unmarshal(verifyRec.Body.Bytes(), &listed)
 	if len(listed.Flags) != 0 {
@@ -224,7 +223,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	if putRec.Code != http.StatusOK {
 		t.Fatalf("expected update to succeed, got %d: %s", putRec.Code, putRec.Body.String())
 	}
-	var updated store.Flag
+	var updated legacyFlag
 	if err := json.Unmarshal(putRec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode update response: %v", err)
 	}
@@ -237,7 +236,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
 	var listed struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	_ = json.Unmarshal(getRec.Body.Bytes(), &listed)
 	if len(listed.Flags) != 1 || listed.Flags[0].Enabled || listed.Flags[0].Value != "off" {
@@ -283,7 +282,7 @@ func TestFlagsPutLeavesOmittedFieldsUnchanged(t *testing.T) {
 			if putRec.Code != http.StatusOK {
 				t.Fatalf("expected update to succeed, got %d: %s", putRec.Code, putRec.Body.String())
 			}
-			var updated store.Flag
+			var updated legacyFlag
 			if err := json.Unmarshal(putRec.Body.Bytes(), &updated); err != nil {
 				t.Fatalf("decode update response: %v", err)
 			}
@@ -295,7 +294,7 @@ func TestFlagsPutLeavesOmittedFieldsUnchanged(t *testing.T) {
 			if !exists {
 				t.Fatal("expected the flag to still exist")
 			}
-			if stored.Enabled != tc.wantEnabled || stored.Value != tc.wantValue {
+			if stored.Enabled != tc.wantEnabled || toLegacyFlag(stored).Value != tc.wantValue {
 				t.Fatalf("expected the store to hold enabled=%v value=%q, got %+v", tc.wantEnabled, tc.wantValue, stored)
 			}
 		})
@@ -353,7 +352,7 @@ func TestFlagsGetByKeyReturnsFlag(t *testing.T) {
 	if getRec.Code != http.StatusOK {
 		t.Fatalf("expected get to succeed, got %d: %s", getRec.Code, getRec.Body.String())
 	}
-	var got store.Flag
+	var got legacyFlag
 	if err := json.Unmarshal(getRec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode get response: %v", err)
 	}
@@ -469,7 +468,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
 	var listed struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	_ = json.Unmarshal(getRec.Body.Bytes(), &listed)
 	if len(listed.Flags) != 0 {
@@ -539,7 +538,7 @@ func TestFlagsPostRejectsExistingKeyWithoutOverwriting(t *testing.T) {
 			mux := newTestMux(t)
 			existingEnv := seedEnvironmentForTest(t, "Production")
 			freshEnv := seedEnvironmentForTest(t, "Staging")
-			if _, err := dataStore.Flags().Set(store.Flag{EnvironmentID: existingEnv, Key: "checkout", Enabled: true, Value: "on"}); err != nil {
+			if _, err := dataStore.Flags().Set(legacyDefinition(existingEnv, "checkout", true, "on")); err != nil {
 				t.Fatalf("seed flag: %v", err)
 			}
 			token := tt.token(t, []string{existingEnv, freshEnv})
@@ -556,7 +555,7 @@ func TestFlagsPostRejectsExistingKeyWithoutOverwriting(t *testing.T) {
 			}
 
 			existing, _ := dataStore.Flags().Get(existingEnv, "checkout")
-			if !existing.Enabled || existing.Value != "on" {
+			if !existing.Enabled || toLegacyFlag(existing).Value != "on" {
 				t.Fatalf("expected the existing flag to be unchanged, got %+v", existing)
 			}
 			if fresh, found := dataStore.Flags().Get(freshEnv, "checkout"); found {

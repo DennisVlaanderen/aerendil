@@ -234,7 +234,7 @@ func TestFlagsPostSucceedsWithWritePermission(t *testing.T) {
 	}
 
 	var resp struct {
-		Flags []store.Flag `json:"flags"`
+		Flags []legacyFlag `json:"flags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
