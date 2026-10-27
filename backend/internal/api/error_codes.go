@@ -23,6 +23,7 @@ const (
 	CodeBusinessAdminGroupChange          = "A03-0005" // only Admins change Admin membership
 	CodeBusinessAdminOnlyUserDelete       = "A03-0006" // only Admins delete users
 	CodeBusinessEnvironmentHasCredentials = "A03-0007" // environment still has credentials
+	CodeBusinessEnvironmentHasSegments    = "A03-0008" // environment still has segments
 
 	// BR01 -- bad request, general (400).
 	CodeBadRequestBody          = "BR01-0001" // undecodable JSON body

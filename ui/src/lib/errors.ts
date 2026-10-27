@@ -24,6 +24,7 @@ export const ErrorCode = {
 	BusinessAdminGroupChange: 'A03-0005',
 	BusinessAdminOnlyUserDelete: 'A03-0006',
 	BusinessEnvironmentHasCredentials: 'A03-0007',
+	BusinessEnvironmentHasSegments: 'A03-0008',
 
 	// BR01 -- bad request, general (400).
 	BadRequestBody: 'BR01-0001',
@@ -109,6 +110,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.BusinessAdminGroupChange]: m.error_admin_group_change_forbidden,
 	[ErrorCode.BusinessAdminOnlyUserDelete]: m.error_admin_only_user_delete,
 	[ErrorCode.BusinessEnvironmentHasCredentials]: m.error_environment_has_credentials,
+	[ErrorCode.BusinessEnvironmentHasSegments]: m.error_environment_has_segments,
 	[ErrorCode.BadRequestBody]: m.error_invalid_body,
 	[ErrorCode.BadRequestCursorInvalid]: m.error_cursor_invalid,
 	[ErrorCode.BadRequestFlagsEnvironmentIDRequired]: m.error_environment_id_required,

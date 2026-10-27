@@ -76,6 +76,9 @@ func TestFSMRestoreToleratesSnapshotWithoutEnvironmentsKey(t *testing.T) {
 	if f.environments == nil || len(f.environments) != 0 {
 		t.Fatalf("expected environments to default to an empty map, got %+v", f.environments)
 	}
+	if f.segments == nil {
+		t.Fatal("expected segments to default to an empty map, got nil")
+	}
 	if !f.flags[flagMapKey("legacy-env", "a")].Enabled {
 		t.Fatalf("expected pre-existing flags to still restore correctly, got %+v", f.flags)
 	}

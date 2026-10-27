@@ -22,6 +22,7 @@ func TestStoreErrorToAPIErrorCodesAreStructured(t *testing.T) {
 		store.ErrProtectedSystemGroup,
 		store.ErrLastEnvironment,
 		store.ErrEnvironmentHasFlags,
+		store.ErrEnvironmentHasSegments,
 		store.ErrUnknownEnvironment,
 	}
 
