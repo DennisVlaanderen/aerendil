@@ -246,9 +246,10 @@ func TestUsersPostRejectsOversizedBody(t *testing.T) {
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for an oversized request body, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for an oversized request body, got %d: %s", rec.Code, rec.Body.String())
 	}
+	assertErrorBody(t, rec, CodePayloadTooLarge)
 }
 
 // createUser POSTs a new user via the API and returns its ID.

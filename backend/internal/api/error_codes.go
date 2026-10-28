@@ -3,9 +3,9 @@ package api
 // Error codes are stable identifiers on every apiError so the UI can
 // translate failures. Format "<Category><Group>-<Sequence>": Category is the
 // constructor (A auth, BR badRequest, NF notFound, CF conflict, MN
-// methodNotAllowed, IE internal), Group (2 digits) the domain, Sequence (4
-// digits) the error. A code names what the user is told, so call sites
-// sharing a message share its code.
+// methodNotAllowed, PT payloadTooLarge, IE internal), Group (2 digits) the
+// domain, Sequence (4 digits) the error. A code names what the user is told,
+// so call sites sharing a message share its code.
 const (
 	// A01 -- authentication (401).
 	CodeAuthInvalidCredentials = "A01-0001" // bad username/password
@@ -81,4 +81,7 @@ const (
 	CodeInternalPasswordHash     = "IE01-0002" // failed to hash a password
 	CodeInternalAuditFailed      = "IE01-0003" // mutation applied, audit entry failed
 	CodeInternalClientSecretHash = "IE01-0004" // failed to generate/hash a client secret
+
+	// PT01 -- payload too large (413).
+	CodePayloadTooLarge = "PT01-0001" // request body exceeds maxRequestBodyBytes
 )

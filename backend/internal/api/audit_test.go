@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -526,4 +528,83 @@ func TestNestedJSON(t *testing.T) {
 			t.Errorf("nestedJSON(%q) = %s, want %s", in, got, want)
 		}
 	}
+}
+
+type failingReader struct {
+	prefix []byte
+	sent   bool
+}
+
+func (f *failingReader) Read(p []byte) (int, error) {
+	if !f.sent {
+		f.sent = true
+		n := copy(p, f.prefix)
+		return n, errors.New("simulated client disconnect")
+	}
+	return 0, errors.New("simulated client disconnect")
+}
+
+func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
+	t.Run("oversized body returns 413 without calling Before or handler", func(t *testing.T) {
+		beforeCalled := false
+		handlerCalled := false
+		h := withAudit(auditConfig{
+			Action:     "flag.set",
+			TargetType: "flag",
+			Before: func(_ *http.Request, _ []byte) (any, bool) {
+				beforeCalled = true
+				return nil, false
+			},
+		}, func(w http.ResponseWriter, _ *http.Request) {
+			handlerCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		oversized := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(oversized))
+		rec := httptest.NewRecorder()
+		h(rec, req)
+
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Fatalf("expected 413 for oversized body, got %d: %s", rec.Code, rec.Body.String())
+		}
+		assertErrorBody(t, rec, CodePayloadTooLarge)
+		if beforeCalled {
+			t.Fatal("expected Before not to be called on oversized body")
+		}
+		if handlerCalled {
+			t.Fatal("expected handler not to be called on oversized body")
+		}
+	})
+
+	t.Run("read failure returns 400 without calling Before or handler", func(t *testing.T) {
+		beforeCalled := false
+		handlerCalled := false
+		h := withAudit(auditConfig{
+			Action:     "flag.set",
+			TargetType: "flag",
+			Before: func(_ *http.Request, _ []byte) (any, bool) {
+				beforeCalled = true
+				return nil, false
+			},
+		}, func(w http.ResponseWriter, _ *http.Request) {
+			handlerCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", io.NopCloser(&failingReader{prefix: []byte(`{"key":"partial"`)}))
+		rec := httptest.NewRecorder()
+		h(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for failed body read, got %d: %s", rec.Code, rec.Body.String())
+		}
+		assertErrorBody(t, rec, CodeBadRequestBody)
+		if beforeCalled {
+			t.Fatal("expected Before not to be called on failed body read")
+		}
+		if handlerCalled {
+			t.Fatal("expected handler not to be called on failed body read")
+		}
+	})
 }
