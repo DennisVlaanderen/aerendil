@@ -34,13 +34,15 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
 		if err != nil {
+			rec := newAuditRecorder()
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
-				writeError(w, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "request body too large")
+				writeError(rec, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "request body too large")
 			} else {
 				log.Printf("api: failed to read request body for %s on %s: %v", cfg.Action, cfg.TargetType, err)
-				writeError(w, http.StatusBadRequest, CodeBadRequestBody, MsgBadRequestBody)
+				writeError(rec, http.StatusBadRequest, CodeBadRequestBody, MsgBadRequestBody)
 			}
+			recordAudit(w, r, cfg, "", rec)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
@@ -57,48 +59,57 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		rec := newAuditRecorder()
 		next(rec, r)
 
-		status := rec.status
-		if status == 0 {
-			status = http.StatusOK
-		}
-		success := status >= 200 && status < 300
+		recordAudit(w, r, cfg, beforeJSON, rec)
+	}
+}
 
-		principal, _ := principalFromContext(r)
-		actorID := ""
-		if principal.User != nil {
-			actorID = principal.User.ID
-		}
-		actorType := "user"
-		if principal.IsService {
-			actorType = "applicationCredential"
-		}
+// recordAudit persists an AuditEntry for the mutation (whether it succeeded,
+// failed in the handler, or failed during request body read) and copies the
+// buffered response to the client.
+func recordAudit(w http.ResponseWriter, r *http.Request, cfg auditConfig, beforeJSON string, rec *auditRecorder) {
+	status := rec.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	success := status >= 200 && status < 300
 
-		entry := store.AuditEntry{
-			ActorID:    actorID,
-			ActorType:  actorType,
-			Action:     cfg.Action,
-			TargetType: cfg.TargetType,
-			TargetID:   targetIDFrom(r, rec.body.Bytes()),
-			Before:     beforeJSON,
-			Success:    success,
-			StatusCode: status,
-		}
-		if success {
-			entry.After = redactSensitiveResponseFields(rec.body.Bytes())
-		} else {
-			entry.Error = extractErrorMessage(rec.body.Bytes())
-		}
+	principal, _ := principalFromContext(r)
+	actorID := ""
+	if principal.User != nil {
+		actorID = principal.User.ID
+	}
+	actorType := "user"
+	if principal.IsService {
+		actorType = "applicationCredential"
+	}
 
+	entry := store.AuditEntry{
+		ActorID:    actorID,
+		ActorType:  actorType,
+		Action:     cfg.Action,
+		TargetType: cfg.TargetType,
+		TargetID:   targetIDFrom(r, rec.body.Bytes()),
+		Before:     beforeJSON,
+		Success:    success,
+		StatusCode: status,
+	}
+	if success {
+		entry.After = redactSensitiveResponseFields(rec.body.Bytes())
+	} else {
+		entry.Error = extractErrorMessage(rec.body.Bytes())
+	}
+
+	if dataStore != nil {
 		if _, err := dataStore.Audits().Append(entry); err != nil {
 			log.Printf("api: failed to record audit entry for %s on %s (mutation status %d): %v", cfg.Action, cfg.TargetType, status, err)
 			writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, "the request may have been applied, but recording its audit trail failed; verify before retrying")
 			return
 		}
-
-		maps.Copy(w.Header(), rec.header)
-		w.WriteHeader(status)
-		_, _ = w.Write(rec.body.Bytes())
 	}
+
+	maps.Copy(w.Header(), rec.header)
+	w.WriteHeader(status)
+	_, _ = w.Write(rec.body.Bytes())
 }
 
 // auditRecorder buffers a handler's response instead of writing it straight

@@ -530,6 +530,7 @@ func TestNestedJSON(t *testing.T) {
 	}
 }
 
+
 type failingReader struct {
 	prefix []byte
 	sent   bool
@@ -545,9 +546,12 @@ func (f *failingReader) Read(p []byte) (int, error) {
 }
 
 func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
-	t.Run("oversized body returns 413 without calling Before or handler", func(t *testing.T) {
+	_ = newTestMux(t)
+
+	t.Run("oversized body returns 413 without calling Before or handler and records audit entry", func(t *testing.T) {
 		beforeCalled := false
 		handlerCalled := false
+		targetID := "flag-oversized-" + store.NewID()
 		h := withAudit(auditConfig{
 			Action:     "flag.set",
 			TargetType: "flag",
@@ -561,7 +565,8 @@ func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
 		})
 
 		oversized := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(oversized))
+		req := httptest.NewRequest(http.MethodPost, "/api/flags/"+targetID, bytes.NewReader(oversized))
+		req.SetPathValue("key", targetID)
 		rec := httptest.NewRecorder()
 		h(rec, req)
 
@@ -575,11 +580,36 @@ func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
 		if handlerCalled {
 			t.Fatal("expected handler not to be called on oversized body")
 		}
+
+		entries := dataStore.Audits().List(store.AuditFilter{TargetType: "flag"})
+		var matched *store.AuditEntry
+		for i := range entries {
+			if entries[i].Action == "flag.set" && entries[i].TargetID == targetID {
+				matched = &entries[i]
+				break
+			}
+		}
+		if matched == nil {
+			t.Fatalf("expected a recorded audit entry for oversized rejection on %s, got none", targetID)
+		}
+		if matched.Success {
+			t.Fatalf("expected failed audit entry, got success=true")
+		}
+		if matched.StatusCode != http.StatusRequestEntityTooLarge {
+			t.Fatalf("expected StatusCode 413, got %d", matched.StatusCode)
+		}
+		if matched.Error != "request body too large" {
+			t.Fatalf("expected error %q, got %q", "request body too large", matched.Error)
+		}
+		if matched.Before != "" {
+			t.Fatalf("expected empty Before, got %q", matched.Before)
+		}
 	})
 
-	t.Run("read failure returns 400 without calling Before or handler", func(t *testing.T) {
+	t.Run("read failure returns 400 without calling Before or handler and records audit entry", func(t *testing.T) {
 		beforeCalled := false
 		handlerCalled := false
+		targetID := "flag-readerr-" + store.NewID()
 		h := withAudit(auditConfig{
 			Action:     "flag.set",
 			TargetType: "flag",
@@ -592,7 +622,8 @@ func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", io.NopCloser(&failingReader{prefix: []byte(`{"key":"partial"`)}))
+		req := httptest.NewRequest(http.MethodPost, "/api/flags/"+targetID, io.NopCloser(&failingReader{prefix: []byte(`{"key":"partial"`)}))
+		req.SetPathValue("key", targetID)
 		rec := httptest.NewRecorder()
 		h(rec, req)
 
@@ -606,5 +637,70 @@ func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
 		if handlerCalled {
 			t.Fatal("expected handler not to be called on failed body read")
 		}
+
+		entries := dataStore.Audits().List(store.AuditFilter{TargetType: "flag"})
+		var matched *store.AuditEntry
+		for i := range entries {
+			if entries[i].Action == "flag.set" && entries[i].TargetID == targetID {
+				matched = &entries[i]
+				break
+			}
+		}
+		if matched == nil {
+			t.Fatalf("expected a recorded audit entry for read-failure rejection on %s, got none", targetID)
+		}
+		if matched.Success {
+			t.Fatalf("expected failed audit entry, got success=true")
+		}
+		if matched.StatusCode != http.StatusBadRequest {
+			t.Fatalf("expected StatusCode 400, got %d", matched.StatusCode)
+		}
+		if matched.Error != MsgBadRequestBody {
+			t.Fatalf("expected error %q, got %q", MsgBadRequestBody, matched.Error)
+		}
+		if matched.Before != "" {
+			t.Fatalf("expected empty Before, got %q", matched.Before)
+		}
 	})
+}
+
+func TestAuditRecordsOversizedBodyRejection(t *testing.T) {
+	mux := newTestMux(t)
+	writeToken := tokenFor(t, auth.PermUsersCreate)
+	readToken := tokenFor(t, auth.PermAuditsRead)
+
+	oversized := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
+	req := httptest.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(oversized))
+	req.Header.Set("Authorization", "Bearer "+writeToken)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for an oversized request body, got %d: %s", rec.Code, rec.Body.String())
+	}
+	assertErrorBody(t, rec, CodePayloadTooLarge)
+
+	entries := getAudits(t, mux, readToken, "?targetType=user")
+	var rejected *auditEntryView
+	for i := range entries {
+		if entries[i].Action == "user.create" && !entries[i].Success && entries[i].StatusCode == http.StatusRequestEntityTooLarge {
+			rejected = &entries[i]
+			break
+		}
+	}
+	if rejected == nil {
+		t.Fatalf("expected a rejected user.create audit entry with status 413, got %+v", entries)
+	}
+	if rejected.Error != "request body too large" {
+		t.Fatalf("expected error message %q on the rejected entry, got %q", "request body too large", rejected.Error)
+	}
+	if len(rejected.Before) != 0 || len(rejected.After) != 0 {
+		t.Fatalf("expected no Before or After state on an oversized body rejection, got %+v", rejected)
+	}
+	if rejected.ActorID == "" {
+		t.Fatalf("expected non-empty ActorID on rejected entry, got %+v", rejected)
+	}
+	if rejected.ActorType != "user" {
+		t.Fatalf("expected ActorType 'user', got %q", rejected.ActorType)
+	}
 }
