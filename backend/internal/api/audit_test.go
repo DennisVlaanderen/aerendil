@@ -568,7 +568,7 @@ func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
 		if rec.Code != http.StatusRequestEntityTooLarge {
 			t.Fatalf("expected 413 for oversized body, got %d: %s", rec.Code, rec.Body.String())
 		}
-		assertErrorBody(t, rec, CodeBadRequestBody)
+		assertErrorBody(t, rec, CodePayloadTooLarge)
 		if beforeCalled {
 			t.Fatal("expected Before not to be called on oversized body")
 		}

@@ -36,7 +36,7 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {
-				writeError(w, http.StatusRequestEntityTooLarge, CodeBadRequestBody, "request body too large")
+				writeError(w, http.StatusRequestEntityTooLarge, CodePayloadTooLarge, "request body too large")
 			} else {
 				log.Printf("api: failed to read request body for %s on %s: %v", cfg.Action, cfg.TargetType, err)
 				writeError(w, http.StatusBadRequest, CodeBadRequestBody, MsgBadRequestBody)
