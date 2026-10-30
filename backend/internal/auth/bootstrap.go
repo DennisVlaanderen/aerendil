@@ -13,7 +13,7 @@ import (
 	"aerendil/backend/internal/store"
 )
 
-const seedLeaderWaitTimeout = 10 * time.Second
+var seedLeaderWaitTimeout = 10 * time.Second
 
 // SeedAdminGroupAndUser ensures the protected Admin group and a
 // corresponding admin user (from cfg) exist. It's idempotent -- it never
