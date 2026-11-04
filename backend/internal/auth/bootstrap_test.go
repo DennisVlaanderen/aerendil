@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"slices"
 	"strings"
@@ -128,6 +130,13 @@ func TestSeedAdminGroupAndUser_ChangedUsernameWarnsAndSeedsSecondAdmin(t *testin
 		t.Fatalf("first seed failed: %v", err)
 	}
 
+	var logBuf bytes.Buffer
+	origOut := log.Writer()
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() {
+		log.SetOutput(origOut)
+	})
+
 	// Changing username seeds a second admin while first is active
 	cfg2 := AdminConfig{
 		Username: "secondadmin",
@@ -135,6 +144,12 @@ func TestSeedAdminGroupAndUser_ChangedUsernameWarnsAndSeedsSecondAdmin(t *testin
 	}
 	if err := SeedAdminGroupAndUser(s, cfg2); err != nil {
 		t.Fatalf("second seed failed: %v", err)
+	}
+
+	logged := logBuf.String()
+	const expectedWarning = `seeding a new admin account rather than renaming the existing one`
+	if !strings.Contains(logged, expectedWarning) || !strings.Contains(logged, `"secondadmin"`) {
+		t.Fatalf("expected warning log containing %q and %q, got %q", expectedWarning, `"secondadmin"`, logged)
 	}
 
 	if len(s.Users().List()) != 2 {
@@ -176,6 +191,13 @@ func TestSeedAdminGroupAndUser_InactiveExistingAdminDoesNotCount(t *testing.T) {
 		t.Fatal("expected hasOtherActiveAdmin to be false when the only admin user is inactive")
 	}
 
+	var logBuf bytes.Buffer
+	origOut := log.Writer()
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() {
+		log.SetOutput(origOut)
+	})
+
 	// Seed a new admin
 	cfg := AdminConfig{
 		Username: "newadmin",
@@ -183,6 +205,10 @@ func TestSeedAdminGroupAndUser_InactiveExistingAdminDoesNotCount(t *testing.T) {
 	}
 	if err := SeedAdminGroupAndUser(s, cfg); err != nil {
 		t.Fatalf("seed new admin: %v", err)
+	}
+
+	if strings.Contains(logBuf.String(), "seeding a new admin account rather than renaming") {
+		t.Fatalf("did not expect duplicate-admin warning when prior admin is inactive, got %q", logBuf.String())
 	}
 
 	newAdmin, ok := s.Users().GetByUsername("newadmin")
@@ -194,10 +220,10 @@ func TestSeedAdminGroupAndUser_InactiveExistingAdminDoesNotCount(t *testing.T) {
 func TestSeedAdminGroupAndUser_ExistingAdminGroupNotRecreated(t *testing.T) {
 	s := store.NewTestStore(t)
 
-	// Pre-create Admin group with customized system settings or name
+	// Pre-create Admin group with a customized name so overwriting it would be observable
 	customGroup := store.Group{
 		ID:     store.AdminGroupID,
-		Name:   "Admin",
+		Name:   "CustomAdminGroup",
 		System: true,
 	}
 	if _, err := s.Groups().Set(customGroup); err != nil {
@@ -218,6 +244,9 @@ func TestSeedAdminGroupAndUser_ExistingAdminGroupNotRecreated(t *testing.T) {
 	}
 	if grp.ID != store.AdminGroupID {
 		t.Fatalf("expected group ID %q, got %q", store.AdminGroupID, grp.ID)
+	}
+	if grp.Name != "CustomAdminGroup" {
+		t.Fatalf("expected existing group Name %q to be preserved, got %q", "CustomAdminGroup", grp.Name)
 	}
 }
 
@@ -244,12 +273,12 @@ func TestSeedAdminGroupAndUser_ErrNotLeaderRetriesAndGivesUp(t *testing.T) {
 		_ = s.Close()
 	})
 
-	// Override timeout to small duration for fast test
-	origTimeout := seedLeaderWaitTimeout
-	seedLeaderWaitTimeout = 50 * time.Millisecond
-	defer func() {
-		seedLeaderWaitTimeout = origTimeout
-	}()
+	var logBuf bytes.Buffer
+	origOut := log.Writer()
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() {
+		log.SetOutput(origOut)
+	})
 
 	cfg := AdminConfig{
 		Username: "admin",
@@ -258,7 +287,7 @@ func TestSeedAdminGroupAndUser_ErrNotLeaderRetriesAndGivesUp(t *testing.T) {
 
 	// Should retry until timeout, log giving up, and return nil
 	start := time.Now()
-	err = SeedAdminGroupAndUser(s, cfg)
+	err = seedAdminGroupAndUser(s, cfg, 50*time.Millisecond)
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -266,6 +295,9 @@ func TestSeedAdminGroupAndUser_ErrNotLeaderRetriesAndGivesUp(t *testing.T) {
 	}
 	if elapsed < 40*time.Millisecond {
 		t.Fatalf("expected to wait at least ~50ms, elapsed: %v", elapsed)
+	}
+	if !strings.Contains(logBuf.String(), "giving up waiting to become raft leader to seed admin account") {
+		t.Fatalf("expected leader-wait give-up log, got %q", logBuf.String())
 	}
 
 	// Verify nothing was seeded on the follower
@@ -288,4 +320,3 @@ func TestSeedAdminGroupAndUser_PasswordTooLongReturnsError(t *testing.T) {
 		t.Fatal("expected error for oversized password")
 	}
 }
-
