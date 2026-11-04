@@ -24,7 +24,11 @@ const seedLeaderWaitTimeout = 10 * time.Second
 // that never becomes leader just logs and returns nil, since the leader
 // will have already seeded the state, which then replicates here.
 func SeedAdminGroupAndUser(s *store.Store, cfg AdminConfig) error {
-	deadline := time.Now().Add(seedLeaderWaitTimeout)
+	return seedAdminGroupAndUser(s, cfg, seedLeaderWaitTimeout)
+}
+
+func seedAdminGroupAndUser(s *store.Store, cfg AdminConfig, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
 	for {
 		err := seedAdminGroupAndUserOnce(s, cfg)
 		if err == nil || !errors.Is(err, store.ErrNotLeader) {
