@@ -26,6 +26,14 @@ func registerFlagRoutes(mux *http.ServeMux) {
 			return f, ok
 		},
 	}, handleErrors(flagsPutHandler))))
+	mux.HandleFunc("POST /api/flags/{key}/force-disable", requirePermission(auth.PermFlagsUpdate, withAudit(auditConfig{
+		Action:     "flag.force_disable",
+		TargetType: "flag",
+		Before: func(r *http.Request, _ []byte) (any, bool) {
+			f, ok := dataStore.Flags().Get(strings.TrimSpace(r.URL.Query().Get("environmentId")), r.PathValue("key"))
+			return f, ok
+		},
+	}, handleErrors(flagsForceDisableHandler))))
 	mux.HandleFunc("DELETE /api/flags/{key}", requirePermission(auth.PermFlagsDelete, withAudit(auditConfig{
 		Action:     "flag.delete",
 		TargetType: "flag",
@@ -224,4 +232,29 @@ func flagsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return ok(w, map[string]string{"status": "deleted"})
+}
+
+func flagsForceDisableHandler(w http.ResponseWriter, r *http.Request) error {
+	key := r.PathValue("key")
+	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
+	if environmentID == "" {
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, MsgBadRequestFlagsEnvironmentIDRequired)
+	}
+
+	principal, found := principalFromContext(r)
+	if !found || !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
+	}
+
+	existing, exists := dataStore.Flags().Get(environmentID, key)
+	if !exists {
+		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
+	}
+
+	existing.Enabled = false
+	flag, err := dataStore.Flags().Set(existing)
+	if err != nil {
+		return err
+	}
+	return ok(w, toLegacyFlag(flag))
 }
