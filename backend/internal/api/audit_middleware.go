@@ -42,7 +42,7 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 				log.Printf("api: failed to read request body for %s on %s: %v", cfg.Action, cfg.TargetType, err)
 				writeError(rec, http.StatusBadRequest, CodeBadRequestBody, MsgBadRequestBody)
 			}
-			recordAudit(w, r, cfg, "", rec)
+			recordAudit(w, r, cfg, "", rec, false)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
@@ -59,14 +59,14 @@ func withAudit(cfg auditConfig, next http.HandlerFunc) http.HandlerFunc {
 		rec := newAuditRecorder()
 		next(rec, r)
 
-		recordAudit(w, r, cfg, beforeJSON, rec)
+		recordAudit(w, r, cfg, beforeJSON, rec, true)
 	}
 }
 
 // recordAudit persists an AuditEntry for the mutation (whether it succeeded,
 // failed in the handler, or failed during request body read) and copies the
 // buffered response to the client.
-func recordAudit(w http.ResponseWriter, r *http.Request, cfg auditConfig, beforeJSON string, rec *auditRecorder) {
+func recordAudit(w http.ResponseWriter, r *http.Request, cfg auditConfig, beforeJSON string, rec *auditRecorder, handlerRan bool) {
 	status := rec.status
 	if status == 0 {
 		status = http.StatusOK
@@ -99,12 +99,21 @@ func recordAudit(w http.ResponseWriter, r *http.Request, cfg auditConfig, before
 		entry.Error = extractErrorMessage(rec.body.Bytes())
 	}
 
-	if dataStore != nil {
-		if _, err := dataStore.Audits().Append(entry); err != nil {
-			log.Printf("api: failed to record audit entry for %s on %s (mutation status %d): %v", cfg.Action, cfg.TargetType, status, err)
-			writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, "the request may have been applied, but recording its audit trail failed; verify before retrying")
-			return
-		}
+	auditErrMsg := "the request may have been applied, but recording its audit trail failed; verify before retrying"
+	if !handlerRan {
+		auditErrMsg = "request was not applied, and recording its audit trail failed"
+	}
+
+	if dataStore == nil {
+		log.Printf("api: failed to record audit entry for %s on %s (actor %s %q, target %q, status %d): datastore is nil", cfg.Action, cfg.TargetType, actorType, actorID, entry.TargetID, status)
+		writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, auditErrMsg)
+		return
+	}
+
+	if _, err := dataStore.Audits().Append(entry); err != nil {
+		log.Printf("api: failed to record audit entry for %s on %s (mutation status %d): %v", cfg.Action, cfg.TargetType, status, err)
+		writeError(w, http.StatusInternalServerError, CodeInternalAuditFailed, auditErrMsg)
+		return
 	}
 
 	maps.Copy(w.Header(), rec.header)
