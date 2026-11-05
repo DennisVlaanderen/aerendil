@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"aerendil/backend/internal/auth"
+	"aerendil/backend/internal/store"
 )
 
 func TestFlagsFullLifecycle(t *testing.T) {
@@ -562,5 +563,141 @@ func TestFlagsPostRejectsExistingKeyWithoutOverwriting(t *testing.T) {
 				t.Fatalf("expected no partial write to the other environment, got %+v", fresh)
 			}
 		})
+	}
+}
+
+func TestFlagsForceDisable(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	otherEnvID := seedEnvironmentForTest(t, "Staging")
+	if _, err := dataStore.Flags().Set(legacyDefinition(envID, "kill-me", true, "active-value")); err != nil {
+		t.Fatalf("seed flag: %v", err)
+	}
+
+	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsUpdate)
+
+	// 1. Successful force-disable turns the flag off while keeping its value.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/kill-me/force-disable?environmentId="+envID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp legacyFlag
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Enabled {
+		t.Fatalf("expected flag to be disabled, got %+v", resp)
+	}
+	if resp.Value != "active-value" {
+		t.Fatalf("expected flag value to be preserved, got %q", resp.Value)
+	}
+
+	stored, exists := dataStore.Flags().Get(envID, "kill-me")
+	if !exists || stored.Enabled {
+		t.Fatalf("expected stored flag to be disabled, got %+v", stored)
+	}
+
+	// 2. Preserves full §6.1 definitions (non-string types, variations, rules, salt).
+	richFlag := store.Flag{
+		EnvironmentID: envID,
+		Key:           "rich-boolean-flag",
+		Type:          store.FlagTypeBoolean,
+		Enabled:       true,
+		Salt:          "custom-salt",
+		Variations: []store.Variation{
+			{ID: "off", Value: json.RawMessage(`false`)},
+			{ID: "on", Value: json.RawMessage(`true`)},
+		},
+		OffVariation: "off",
+		Rules: []store.Rule{
+			{
+				ID:    "beta-users",
+				Serve: store.Serve{Variation: "on"},
+			},
+		},
+		Fallthrough: store.Serve{Variation: "off"},
+	}
+	if _, err := dataStore.Flags().Set(richFlag); err != nil {
+		t.Fatalf("seed rich flag: %v", err)
+	}
+
+	richReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/rich-boolean-flag/force-disable?environmentId="+envID, nil)
+	richReq.Header.Set("Authorization", "Bearer "+token)
+	richRec := httptest.NewRecorder()
+	mux.ServeHTTP(richRec, richReq)
+	if richRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 force-disabling boolean flag, got %d: %s", richRec.Code, richRec.Body.String())
+	}
+	storedRich, exists := dataStore.Flags().Get(envID, "rich-boolean-flag")
+	if !exists || storedRich.Enabled {
+		t.Fatalf("expected rich flag to be disabled, got %+v", storedRich)
+	}
+	if storedRich.Type != store.FlagTypeBoolean || storedRich.Salt != "custom-salt" || len(storedRich.Variations) != 2 || len(storedRich.Rules) != 1 {
+		t.Fatalf("expected §6.1 type, salt, variations, and rules to be preserved, got %+v", storedRich)
+	}
+
+	// 3. Records distinct 'flag.force_disable' audit action with Before/After snapshots.
+	audits := dataStore.Audits().List(store.AuditFilter{TargetType: "flag", TargetID: "kill-me"})
+	var forceAudit *store.AuditEntry
+	for i := range audits {
+		if audits[i].Action == "flag.force_disable" && audits[i].Success {
+			forceAudit = &audits[i]
+			break
+		}
+	}
+	if forceAudit == nil {
+		t.Fatalf("expected successful 'flag.force_disable' audit entry, got %+v", audits)
+	}
+	if forceAudit.Before == "" || forceAudit.After == "" {
+		t.Fatalf("expected Before and After snapshots on force_disable audit entry, got %+v", *forceAudit)
+	}
+
+	// 4. 400 Bad Request when environmentId is missing.
+	reqNoEnv := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/kill-me/force-disable", nil)
+	reqNoEnv.Header.Set("Authorization", "Bearer "+token)
+	recNoEnv := httptest.NewRecorder()
+	mux.ServeHTTP(recNoEnv, reqNoEnv)
+	if recNoEnv.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing environmentId, got %d: %s", recNoEnv.Code, recNoEnv.Body.String())
+	}
+
+	// 5. 404 Not Found for unknown flag key.
+	req404 := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/non-existent/force-disable?environmentId="+envID, nil)
+	req404.Header.Set("Authorization", "Bearer "+token)
+	rec404 := httptest.NewRecorder()
+	mux.ServeHTTP(rec404, req404)
+	if rec404.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing flag, got %d: %s", rec404.Code, rec404.Body.String())
+	}
+
+	// 6. 403 Forbidden without environment access.
+	reqNoEnvAccess := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/kill-me/force-disable?environmentId="+otherEnvID, nil)
+	reqNoEnvAccess.Header.Set("Authorization", "Bearer "+token)
+	recNoEnvAccess := httptest.NewRecorder()
+	mux.ServeHTTP(recNoEnvAccess, reqNoEnvAccess)
+	if recNoEnvAccess.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without environment access, got %d: %s", recNoEnvAccess.Code, recNoEnvAccess.Body.String())
+	}
+
+	// 7. 403 Forbidden without flags:update permission (even with flags:write).
+	tokenWriteOnly := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
+	req403 := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/kill-me/force-disable?environmentId="+envID, nil)
+	req403.Header.Set("Authorization", "Bearer "+tokenWriteOnly)
+	rec403 := httptest.NewRecorder()
+	mux.ServeHTTP(rec403, req403)
+	if rec403.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 without flags:update permission, got %d: %s", rec403.Code, rec403.Body.String())
+	}
+
+	// 8. 401 Unauthorized without token.
+	req401 := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/kill-me/force-disable?environmentId="+envID, nil)
+	rec401 := httptest.NewRecorder()
+	mux.ServeHTTP(rec401, req401)
+	if rec401.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth header, got %d: %s", rec401.Code, rec401.Body.String())
 	}
 }
