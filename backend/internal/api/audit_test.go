@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -544,67 +546,245 @@ func (f *failingReader) Read(p []byte) (int, error) {
 	return 0, errors.New("simulated client disconnect")
 }
 
+func assertRejectedFlagAuditEntry(t *testing.T, targetID string, wantStatus int, wantErr string) {
+	t.Helper()
+
+	entries := dataStore.Audits().List(store.AuditFilter{TargetType: "flag"})
+	var matched *store.AuditEntry
+	for i := range entries {
+		if entries[i].Action == "flag.set" && entries[i].TargetID == targetID {
+			matched = &entries[i]
+			break
+		}
+	}
+	if matched == nil {
+		t.Fatalf("expected a recorded audit entry for rejection on %s, got none", targetID)
+	}
+	if matched.Success {
+		t.Fatal("expected failed audit entry, got success=true")
+	}
+	if matched.StatusCode != wantStatus {
+		t.Fatalf("expected StatusCode %d, got %d", wantStatus, matched.StatusCode)
+	}
+	if matched.Error != wantErr {
+		t.Fatalf("expected error %q, got %q", wantErr, matched.Error)
+	}
+	if matched.Before != "" {
+		t.Fatalf("expected empty Before, got %q", matched.Before)
+	}
+}
+
 func TestWithAuditRejectsOversizedAndFailedBodiesBeforeHandler(t *testing.T) {
-	t.Run("oversized body returns 413 without calling Before or handler", func(t *testing.T) {
-		beforeCalled := false
-		handlerCalled := false
+	_ = newTestMux(t)
+
+	cases := []struct {
+		name       string
+		newBody    func() io.Reader
+		wantStatus int
+		wantCode   string
+		wantErr    string
+	}{
+		{
+			name: "oversized body returns 413 without calling Before or handler and records audit entry",
+			newBody: func() io.Reader {
+				return bytes.NewReader(bytes.Repeat([]byte("x"), maxRequestBodyBytes+1))
+			},
+			wantStatus: http.StatusRequestEntityTooLarge,
+			wantCode:   CodePayloadTooLarge,
+			wantErr:    "request body too large",
+		},
+		{
+			name: "read failure returns 400 without calling Before or handler and records audit entry",
+			newBody: func() io.Reader {
+				return &failingReader{prefix: []byte(`{"key":"partial"`)}
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   CodeBadRequestBody,
+			wantErr:    MsgBadRequestBody,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			beforeCalled := false
+			handlerCalled := false
+			targetID := "flag-unreadable-" + store.NewID()
+			h := withAudit(auditConfig{
+				Action:     "flag.set",
+				TargetType: "flag",
+				Before: func(_ *http.Request, _ []byte) (any, bool) {
+					beforeCalled = true
+					return nil, false
+				},
+			}, func(w http.ResponseWriter, _ *http.Request) {
+				handlerCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/"+targetID, tc.newBody())
+			req.SetPathValue("key", targetID)
+			rec := httptest.NewRecorder()
+			h(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tc.wantStatus, rec.Code, rec.Body.String())
+			}
+			assertErrorBody(t, rec, tc.wantCode)
+			if beforeCalled {
+				t.Fatal("expected Before not to be called")
+			}
+			if handlerCalled {
+				t.Fatal("expected handler not to be called")
+			}
+			assertRejectedFlagAuditEntry(t, targetID, tc.wantStatus, tc.wantErr)
+		})
+	}
+}
+
+func TestAuditRecordsOversizedBodyRejection(t *testing.T) {
+	mux := newTestMux(t)
+	writeToken := tokenFor(t, auth.PermUsersCreate)
+	readToken := tokenFor(t, auth.PermAuditsRead)
+
+	cases := []struct {
+		name       string
+		newBody    func() io.Reader
+		wantStatus int
+		wantCode   string
+		wantErr    string
+	}{
+		{
+			name: "oversized body",
+			newBody: func() io.Reader {
+				return bytes.NewReader(bytes.Repeat([]byte("x"), maxRequestBodyBytes+1))
+			},
+			wantStatus: http.StatusRequestEntityTooLarge,
+			wantCode:   CodePayloadTooLarge,
+			wantErr:    "request body too large",
+		},
+		{
+			name: "disconnected body read",
+			newBody: func() io.Reader {
+				return &failingReader{prefix: []byte(`{"username":"partial"`)}
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   CodeBadRequestBody,
+			wantErr:    MsgBadRequestBody,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/users", tc.newBody())
+			req.Header.Set("Authorization", "Bearer "+writeToken)
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != tc.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", tc.wantStatus, rec.Code, rec.Body.String())
+			}
+			assertErrorBody(t, rec, tc.wantCode)
+
+			entries := getAudits(t, mux, readToken, "?targetType=user")
+			var rejected *auditEntryView
+			for i := range entries {
+				if entries[i].Action == "user.create" && !entries[i].Success && entries[i].StatusCode == tc.wantStatus {
+					rejected = &entries[i]
+					break
+				}
+			}
+			if rejected == nil {
+				t.Fatalf("expected a rejected user.create audit entry with status %d, got %+v", tc.wantStatus, entries)
+			}
+			if rejected.Error != tc.wantErr {
+				t.Fatalf("expected error message %q on the rejected entry, got %q", tc.wantErr, rejected.Error)
+			}
+			if len(rejected.Before) != 0 || len(rejected.After) != 0 {
+				t.Fatalf("expected no Before or After state on unreadable body rejection, got %+v", rejected)
+			}
+			if rejected.ActorID == "" || rejected.ActorType != "user" {
+				t.Fatalf("expected populated user actor metadata, got %+v", rejected)
+			}
+		})
+	}
+}
+
+func TestWithAuditFailsClosedWhenDatastoreNilOrUnwritable(t *testing.T) {
+	t.Run("nil datastore returns 500 and logs attempted mutation", func(t *testing.T) {
+		origStore := dataStore
+		dataStore = nil
+		t.Cleanup(func() { dataStore = origStore })
+
+		var logBuf bytes.Buffer
+		origOut := log.Writer()
+		log.SetOutput(&logBuf)
+		t.Cleanup(func() { log.SetOutput(origOut) })
+
 		h := withAudit(auditConfig{
 			Action:     "flag.set",
 			TargetType: "flag",
-			Before: func(_ *http.Request, _ []byte) (any, bool) {
-				beforeCalled = true
-				return nil, false
-			},
 		}, func(w http.ResponseWriter, _ *http.Request) {
-			handlerCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/test-key", strings.NewReader(`{}`))
+		req.SetPathValue("key", "test-key")
+		rec := httptest.NewRecorder()
+		h(rec, req)
+
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 when dataStore is nil, got %d: %s", rec.Code, rec.Body.String())
+		}
+		assertErrorBody(t, rec, CodeInternalAuditFailed)
+		if !strings.Contains(rec.Body.String(), "may have been applied") {
+			t.Fatalf("expected handler-ran audit failure message, got %s", rec.Body.String())
+		}
+		if !strings.Contains(logBuf.String(), "flag.set") || !strings.Contains(logBuf.String(), "datastore is nil") {
+			t.Fatalf("expected log entry describing attempted mutation, got %q", logBuf.String())
+		}
+	})
+
+	t.Run("unwritable audit store on pre-handler rejection reports request was not applied", func(t *testing.T) {
+		dataDir, err := os.MkdirTemp("", "aerendil-follower-audit-*")
+		if err != nil {
+			t.Fatalf("create temp dir: %v", err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(dataDir) })
+
+		follower, err := store.Open(store.Config{
+			NodeID:    "follower-audit",
+			BindAddr:  "127.0.0.1:0",
+			DataDir:   dataDir,
+			Bootstrap: false,
+		})
+		if err != nil {
+			t.Fatalf("open follower store: %v", err)
+		}
+		t.Cleanup(func() { _ = follower.Close() })
+
+		origStore := dataStore
+		dataStore = follower
+		t.Cleanup(func() { dataStore = origStore })
+
+		h := withAudit(auditConfig{
+			Action:     "flag.set",
+			TargetType: "flag",
+		}, func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
 
 		oversized := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(oversized))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags/test-key", bytes.NewReader(oversized))
+		req.SetPathValue("key", "test-key")
 		rec := httptest.NewRecorder()
 		h(rec, req)
 
-		if rec.Code != http.StatusRequestEntityTooLarge {
-			t.Fatalf("expected 413 for oversized body, got %d: %s", rec.Code, rec.Body.String())
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500 when audit Append fails on follower, got %d: %s", rec.Code, rec.Body.String())
 		}
-		assertErrorBody(t, rec, CodePayloadTooLarge)
-		if beforeCalled {
-			t.Fatal("expected Before not to be called on oversized body")
-		}
-		if handlerCalled {
-			t.Fatal("expected handler not to be called on oversized body")
-		}
-	})
-
-	t.Run("read failure returns 400 without calling Before or handler", func(t *testing.T) {
-		beforeCalled := false
-		handlerCalled := false
-		h := withAudit(auditConfig{
-			Action:     "flag.set",
-			TargetType: "flag",
-			Before: func(_ *http.Request, _ []byte) (any, bool) {
-				beforeCalled = true
-				return nil, false
-			},
-		}, func(w http.ResponseWriter, _ *http.Request) {
-			handlerCalled = true
-			w.WriteHeader(http.StatusOK)
-		})
-
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", io.NopCloser(&failingReader{prefix: []byte(`{"key":"partial"`)}))
-		rec := httptest.NewRecorder()
-		h(rec, req)
-
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400 for failed body read, got %d: %s", rec.Code, rec.Body.String())
-		}
-		assertErrorBody(t, rec, CodeBadRequestBody)
-		if beforeCalled {
-			t.Fatal("expected Before not to be called on failed body read")
-		}
-		if handlerCalled {
-			t.Fatal("expected handler not to be called on failed body read")
+		assertErrorBody(t, rec, CodeInternalAuditFailed)
+		if strings.Contains(rec.Body.String(), "may have been applied") || !strings.Contains(rec.Body.String(), "request was not applied") {
+			t.Fatalf("expected concise pre-handler audit failure message, got %s", rec.Body.String())
 		}
 	})
 }
