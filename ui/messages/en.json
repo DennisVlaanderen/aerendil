@@ -193,6 +193,8 @@
 	"error_status_label": "Error {status}",
 	"error_go_login": "Go to login",
 	"error_back_dashboard": "Back to dashboard",
+	"error_no_access_title": "You don't have access to this page",
+	"error_no_access_hint": "Ask an administrator to add you to a group that has access.",
 	"error_redirect_countdown": "Redirecting to login in {seconds}s…",
 	"error_generic": "Something went wrong. Please try again.",
 	"error_invalid_credentials": "Invalid username or password.",

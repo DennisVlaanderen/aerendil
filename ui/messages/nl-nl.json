@@ -193,6 +193,8 @@
 	"error_status_label": "Fout {status}",
 	"error_go_login": "Naar inloggen",
 	"error_back_dashboard": "Terug naar dashboard",
+	"error_no_access_title": "Je hebt geen toegang tot deze pagina",
+	"error_no_access_hint": "Vraag een beheerder je aan een groep met toegang toe te voegen.",
 	"error_redirect_countdown": "Doorverwijzen naar inloggen over {seconds}s…",
 	"error_generic": "Er is iets misgegaan. Probeer het opnieuw.",
 	"error_invalid_credentials": "Ongeldige gebruikersnaam of wachtwoord.",
