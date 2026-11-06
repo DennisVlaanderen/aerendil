@@ -15,6 +15,7 @@ describe('POST /bff/groups', () => {
 	it('enforces groups:create, requires token, validates name, and forwards group payload', async () => {
 		vi.spyOn(auth, 'getSession')
 			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['groups:read'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['groups:create'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['groups:create'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['groups:create'] }))
@@ -36,6 +37,11 @@ describe('POST /bff/groups', () => {
 				code: ErrorCode.BadRequestUnknownPermission,
 				status: 400
 			});
+
+		const unauthenticated = await POST(
+			makeRequestEvent<CreateGroupEvent>({ request: jsonRequest({ name: 'Platform' }) })
+		);
+		expect(unauthenticated.status).toBe(403);
 
 		const forbidden = await POST(
 			makeRequestEvent<CreateGroupEvent>({ request: jsonRequest({ name: 'Platform' }) })

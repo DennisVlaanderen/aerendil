@@ -16,6 +16,7 @@ describe('PUT /bff/users/[id]', () => {
 	it('enforces users:update, keeps omitted groupIds undefined, and forwards id and token', async () => {
 		vi.spyOn(auth, 'getSession')
 			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['users:read'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['users:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['users:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['users:update'] }))
@@ -31,6 +32,14 @@ describe('PUT /bff/users/[id]', () => {
 				code: ErrorCode.BusinessLastAdmin,
 				status: 403
 			});
+
+		const unauthenticated = await PUT(
+			makeRequestEvent<PutUserEvent>({
+				params: { id: 'u-5' },
+				request: jsonRequest({ username: 'carol', active: true }, 'PUT')
+			})
+		);
+		expect(unauthenticated.status).toBe(403);
 
 		const forbidden = await PUT(
 			makeRequestEvent<PutUserEvent>({
@@ -60,7 +69,10 @@ describe('PUT /bff/users/[id]', () => {
 		const okRes = await PUT(
 			makeRequestEvent<PutUserEvent>({
 				params: { id: 'u-5' },
-				request: jsonRequest({ username: '  carol ', password: ' new-pass ', active: true }, 'PUT'),
+				request: jsonRequest(
+					{ username: '  carol ', password: ' new-pass ', active: true },
+					'PUT'
+				),
 				cookies: fakeCookies({ 'aerendil.auth': 'tok-usr' })
 			})
 		);
@@ -87,6 +99,12 @@ describe('PUT /bff/users/[id]', () => {
 			error: 'last admin',
 			code: ErrorCode.BusinessLastAdmin
 		});
+		expect(updateSpy).toHaveBeenLastCalledWith('tok-usr', 'u-5', {
+			username: 'carol',
+			password: undefined,
+			groupIds: [],
+			active: false
+		});
 	});
 });
 
@@ -107,7 +125,9 @@ describe('DELETE /bff/users/[id]', () => {
 			.mockResolvedValueOnce(makeSession({ isAdmin: true }))
 			.mockResolvedValueOnce(makeSession({ isAdmin: true }));
 
-		const nonAdmin = await DELETE(makeRequestEvent<DeleteUserEvent>({ params: { id: 'u-5' } }));
+		const nonAdmin = await DELETE(
+			makeRequestEvent<DeleteUserEvent>({ params: { id: 'u-5' } })
+		);
 		expect(nonAdmin.status).toBe(403);
 		expect(await nonAdmin.json()).toEqual({
 			error: 'Only an administrator can delete users.',

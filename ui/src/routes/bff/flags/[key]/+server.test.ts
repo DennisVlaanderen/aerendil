@@ -16,6 +16,7 @@ describe('PUT /bff/flags/[key]', () => {
 	it('enforces flags:update, requires environmentId query param, and forwards key and body', async () => {
 		vi.spyOn(auth, 'getSession')
 			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['flags:read'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['flags:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['flags:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['flags:update'] }))
@@ -37,6 +38,15 @@ describe('PUT /bff/flags/[key]', () => {
 				code: ErrorCode.NotFoundFlag,
 				status: 404
 			});
+
+		const unauthenticated = await PUT(
+			makeRequestEvent<PutFlagEvent>({
+				params: { key: 'new-checkout' },
+				url: 'http://localhost/bff/flags/new-checkout?environmentId=env-prod',
+				request: jsonRequest({ enabled: true, value: 'on' }, 'PUT')
+			})
+		);
+		expect(unauthenticated.status).toBe(403);
 
 		const forbidden = await PUT(
 			makeRequestEvent<PutFlagEvent>({
