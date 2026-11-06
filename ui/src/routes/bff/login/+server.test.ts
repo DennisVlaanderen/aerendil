@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as auth from '#lib/server/auth.ts';
 import { ErrorCode } from '#lib/errors.ts';
-import { fakeCookies, invalidJsonRequest, jsonRequest, makeRequestEvent } from '#lib/test/bff.ts';
+import {
+	fakeCookies,
+	invalidJsonRequest,
+	jsonRequest,
+	makeRequestEvent
+} from '#lib/test/bff.ts';
 import { POST } from './+server';
 
 type LoginEvent = Parameters<typeof POST>[0];
@@ -42,6 +47,17 @@ describe('POST /bff/login', () => {
 		);
 		expect(missingRes.status).toBe(400);
 		expect(await missingRes.json()).toEqual({
+			error: 'Invalid username or password.',
+			code: ErrorCode.AuthInvalidCredentials
+		});
+
+		const missingPasswordRes = await POST(
+			makeRequestEvent<LoginEvent>({
+				request: jsonRequest({ username: 'admin', password: '' })
+			})
+		);
+		expect(missingPasswordRes.status).toBe(400);
+		expect(await missingPasswordRes.json()).toEqual({
 			error: 'Invalid username or password.',
 			code: ErrorCode.AuthInvalidCredentials
 		});

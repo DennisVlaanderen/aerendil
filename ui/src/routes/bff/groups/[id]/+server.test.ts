@@ -16,6 +16,7 @@ describe('PUT /bff/groups/[id]', () => {
 	it('enforces groups:update, validates name, requires token, and forwards id and payload', async () => {
 		vi.spyOn(auth, 'getSession')
 			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['groups:read'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['groups:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['groups:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['groups:update'] }))
@@ -37,6 +38,14 @@ describe('PUT /bff/groups/[id]', () => {
 				code: ErrorCode.BusinessProtectedGroup,
 				status: 403
 			});
+
+		const unauthenticated = await PUT(
+			makeRequestEvent<PutGroupEvent>({
+				params: { id: 'g-2' },
+				request: jsonRequest({ name: 'Developers' }, 'PUT')
+			})
+		);
+		expect(unauthenticated.status).toBe(403);
 
 		const forbidden = await PUT(
 			makeRequestEvent<PutGroupEvent>({
@@ -116,7 +125,9 @@ describe('DELETE /bff/groups/[id]', () => {
 				status: 403
 			});
 
-		const forbidden = await DELETE(makeRequestEvent<DeleteGroupEvent>({ params: { id: 'g-2' } }));
+		const forbidden = await DELETE(
+			makeRequestEvent<DeleteGroupEvent>({ params: { id: 'g-2' } })
+		);
 		expect(forbidden.status).toBe(403);
 
 		const noToken = await DELETE(

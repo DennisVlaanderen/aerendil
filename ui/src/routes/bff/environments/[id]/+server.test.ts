@@ -16,6 +16,7 @@ describe('PUT /bff/environments/[id]', () => {
 	it('enforces environments:update, validates name, and omits absent color', async () => {
 		vi.spyOn(auth, 'getSession')
 			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['environments:read'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['environments:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['environments:update'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['environments:update'] }));
@@ -23,6 +24,14 @@ describe('PUT /bff/environments/[id]', () => {
 		const updateSpy = vi.spyOn(environmentsApi, 'updateEnvironment').mockResolvedValueOnce({
 			environment: { id: 'env-1', name: 'Staging', order: 1, color: '#3b82f6' }
 		});
+
+		const unauthenticated = await PUT(
+			makeRequestEvent<PutEnvEvent>({
+				params: { id: 'env-1' },
+				request: jsonRequest({ name: 'Staging' }, 'PUT')
+			})
+		);
+		expect(unauthenticated.status).toBe(403);
 
 		const forbidden = await PUT(
 			makeRequestEvent<PutEnvEvent>({
@@ -87,7 +96,9 @@ describe('DELETE /bff/environments/[id]', () => {
 				status: 403
 			});
 
-		const forbidden = await DELETE(makeRequestEvent<DeleteEnvEvent>({ params: { id: 'env-1' } }));
+		const forbidden = await DELETE(
+			makeRequestEvent<DeleteEnvEvent>({ params: { id: 'env-1' } })
+		);
 		expect(forbidden.status).toBe(403);
 
 		const noToken = await DELETE(

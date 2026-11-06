@@ -14,21 +14,25 @@ afterEach(() => {
 
 describe('PUT /bff/application-credentials/[id]', () => {
 	it('rejects unauthenticated or unauthorized callers with 403', async () => {
-		vi.spyOn(auth, 'getSession').mockResolvedValueOnce(null);
+		vi.spyOn(auth, 'getSession')
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['applicationCredentials:read'] }));
 		const updateSpy = vi.spyOn(credsApi, 'updateApplicationCredential');
 
-		const res = await PUT(
-			makeRequestEvent<PutCredEvent>({
-				params: { id: 'cred-1' },
-				request: jsonRequest({ name: 'SDK', environmentId: 'env-1', active: true }, 'PUT')
-			})
-		);
+		for (let i = 0; i < 2; i++) {
+			const res = await PUT(
+				makeRequestEvent<PutCredEvent>({
+					params: { id: 'cred-1' },
+					request: jsonRequest({ name: 'SDK', environmentId: 'env-1', active: true }, 'PUT')
+				})
+			);
 
-		expect(res.status).toBe(403);
-		expect(await res.json()).toEqual({
-			error: 'You do not have permission to manage application credentials.',
-			code: ErrorCode.AuthForbidden
-		});
+			expect(res.status).toBe(403);
+			expect(await res.json()).toEqual({
+				error: 'You do not have permission to manage application credentials.',
+				code: ErrorCode.AuthForbidden
+			});
+		}
 		expect(updateSpy).not.toHaveBeenCalled();
 	});
 

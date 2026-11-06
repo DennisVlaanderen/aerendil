@@ -15,6 +15,7 @@ describe('POST /bff/users', () => {
 	it('enforces users:create, preserves password whitespace, and never echoes password back', async () => {
 		vi.spyOn(auth, 'getSession')
 			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(makeSession({ permissions: ['users:read'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['users:create'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['users:create'] }))
 			.mockResolvedValueOnce(makeSession({ permissions: ['users:create'] }))
@@ -30,6 +31,13 @@ describe('POST /bff/users', () => {
 				code: ErrorCode.ConflictUsernameTaken,
 				status: 409
 			});
+
+		const unauthenticated = await POST(
+			makeRequestEvent<CreateUserEvent>({
+				request: jsonRequest({ username: 'bob', password: 'secret-password' })
+			})
+		);
+		expect(unauthenticated.status).toBe(403);
 
 		const forbidden = await POST(
 			makeRequestEvent<CreateUserEvent>({

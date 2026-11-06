@@ -54,6 +54,14 @@ describe('POST /bff/selected-environment', () => {
 			code: ErrorCode.AuthForbidden
 		});
 
+		const missingFieldRes = await POST(
+			makeRequestEvent<SelectedEnvEvent>({
+				request: jsonRequest({}),
+				cookies
+			})
+		);
+		expect(missingFieldRes.status).toBe(403);
+
 		const emptyRes = await POST(
 			makeRequestEvent<SelectedEnvEvent>({
 				request: invalidJsonRequest(),

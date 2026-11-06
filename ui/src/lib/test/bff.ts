@@ -64,6 +64,11 @@ export interface FakeRequestEventOptions {
 }
 
 export function makeRequestEvent<Event>(options: FakeRequestEventOptions = {}): Event {
+	const unmockedFetch = vi.fn(async (input: RequestInfo | URL) => {
+		throw new Error(`Unexpected unmocked fetch call in BFF test: ${String(input)}`);
+	});
+	vi.stubGlobal('fetch', unmockedFetch);
+
 	const resolvedUrl =
 		typeof options.url === 'string'
 			? new URL(options.url)
@@ -74,7 +79,7 @@ export function makeRequestEvent<Event>(options: FakeRequestEventOptions = {}): 
 		cookies: options.cookies ?? fakeCookies({ 'aerendil.auth': 'tok-123' }),
 		params: options.params ?? {},
 		url: resolvedUrl,
-		fetch: globalThis.fetch,
+		fetch: unmockedFetch,
 		getClientAddress: () => '127.0.0.1',
 		locals: {},
 		platform: undefined,
