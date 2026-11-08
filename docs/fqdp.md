@@ -624,9 +624,12 @@ These semantics are normative and identical in every evaluator:
   element: `{groups in ["a"], negate}` is false for `["a", "b"]`. An empty list
   counts as a missing attribute, since it has no value kind.
 - **Missing or mismatched attributes.** If the attribute is missing, or its
-  value kind does not fit the operator, the condition is **false**, and `negate`
-  is **not** applied. A missing attribute never widens a rule's audience.
-- **`negate`.** When the attribute is present and its value kind fits,
+  value kind differs from the kind of the condition's `values`, the condition
+  is **false**, and `negate` is **not** applied. This holds for `in` too, even
+  though `in` accepts every value kind: `{code in [5], negate}` is false for
+  `code: "5"`. A missing or wrongly typed attribute never widens a rule's
+  audience.
+- **`negate`.** When the attribute is present and its value kind matches,
   `negate: true` inverts the result.
 - **`inSegment`.** It has no attribute and always counts as present, so
   `negate: true` inverts it: `{inSegment beta, negate}` matches every context
@@ -1512,7 +1515,8 @@ Appendix B session, holds five categories of case:
   contexts, given both as JSON and as expected binary hex, together with the
   expected `{variationId, reason, ruleId, errorKind}`. Together the cases cover:
   - every operator;
-  - `negate` with missing attributes;
+  - `negate` with missing attributes, and with a value kind that differs from
+    the condition's on `in` (`"5"` against `[5]`);
   - `negate` on `inSegment` (matches non-members);
   - `bucketBy` on a number attribute of `-0` (bucketed as `"0"`);
   - `bucketBy` on a number attribute of 2^60 (unusable, bucket 0);
@@ -1927,7 +1931,7 @@ the lowest-value bit: bit 0 has value 1, bit 1 has value 2, bit 8 has value 256
 | Rule | A condition tree plus a serve. Rules are tried in order; the first match wins. | §6.1 |
 | Condition | A single test: an attribute, an operator, a list of values, and an optional `negate`. | §6.3 |
 | Operator (`op`) | The test a condition applies: `in`, `contains`, `startsWith`, `endsWith`, `lt`, `lte`, `gt`, `gte`, `inSegment`. | §6.3 |
-| `negate` | Invert a condition's result, but only when the attribute is present and of a fitting value kind. | §6.3 |
+| `negate` | Invert a condition's result, but only when the attribute is present and of the same value kind as the condition's values. | §6.3 |
 | Condition tree | The structure of a rule's conditions, made of clauses: groups containing leaves. | §6.4 |
 | Clause | One element of a condition tree: a leaf or a group. | §6.4 |
 | Leaf | A clause holding one condition. | §6.4 |

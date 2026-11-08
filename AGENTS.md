@@ -154,6 +154,11 @@ store.
   Query, Subscribe, or Update handling exists yet. `message_types.go` /
   `errors.go` hold the wire constants. Treat `docs/fqdp.md` as the target
   spec, not a description of current behavior, when working in this package.
+- **`eval/`** — the pure `docs/fqdp.md` §7 evaluator (conditions, segment
+  membership, rollouts and bucketing), with no dependency on `store` so a Go
+  SDK can reuse it. Its `Flag`/`Segment` types mirror the store's JSON form;
+  `Evaluate` returns value, variation id, reason, `ruleId` and error kind,
+  and `Validate` decides what counts as `malformed_flag`.
 
 ## UI architecture (`ui/src/`)
 
