@@ -12,14 +12,17 @@
 	let { name, label, value = $bindable('') }: Props = $props();
 
 	const id = $props.id();
-	let isCustom = $derived(value.startsWith('#'));
+	// form.reset() clears the swatch radios and Svelte writes null into the
+	// bound group, so treat a missing value as "no color".
+	const color = $derived(value ?? '');
+	let isCustom = $derived(color.startsWith('#'));
 	// <input type="color"> only accepts #rrggbb, so expand the short #rgb form.
 	let customHex = $derived(
 		!isCustom
 			? '#6b7280'
-			: value.length === 4
-				? `#${[...value.slice(1)].map((c) => c + c).join('')}`
-				: value
+			: color.length === 4
+				? `#${[...color.slice(1)].map((c) => c + c).join('')}`
+				: color
 	);
 
 	const swatch =
@@ -28,7 +31,7 @@
 
 <fieldset class="grid gap-1.5">
 	<legend class="mb-1.5 text-sm font-medium text-foreground">{label}</legend>
-	<input type="hidden" {name} {value} />
+	<input type="hidden" {name} value={color} />
 
 	<div class="flex flex-wrap items-center gap-3">
 		<label class="cursor-pointer" title={m.environments_color_none()}>
