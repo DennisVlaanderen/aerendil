@@ -69,10 +69,7 @@ describe('PUT /bff/users/[id]', () => {
 		const okRes = await PUT(
 			makeRequestEvent<PutUserEvent>({
 				params: { id: 'u-5' },
-				request: jsonRequest(
-					{ username: '  carol ', password: ' new-pass ', active: true },
-					'PUT'
-				),
+				request: jsonRequest({ username: '  carol ', password: ' new-pass ', active: true }, 'PUT'),
 				cookies: fakeCookies({ 'aerendil.auth': 'tok-usr' })
 			})
 		);
@@ -125,9 +122,7 @@ describe('DELETE /bff/users/[id]', () => {
 			.mockResolvedValueOnce(makeSession({ isAdmin: true }))
 			.mockResolvedValueOnce(makeSession({ isAdmin: true }));
 
-		const nonAdmin = await DELETE(
-			makeRequestEvent<DeleteUserEvent>({ params: { id: 'u-5' } })
-		);
+		const nonAdmin = await DELETE(makeRequestEvent<DeleteUserEvent>({ params: { id: 'u-5' } }));
 		expect(nonAdmin.status).toBe(403);
 		expect(await nonAdmin.json()).toEqual({
 			error: 'Only an administrator can delete users.',

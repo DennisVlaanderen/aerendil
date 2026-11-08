@@ -96,9 +96,7 @@ describe('DELETE /bff/environments/[id]', () => {
 				status: 403
 			});
 
-		const forbidden = await DELETE(
-			makeRequestEvent<DeleteEnvEvent>({ params: { id: 'env-1' } })
-		);
+		const forbidden = await DELETE(makeRequestEvent<DeleteEnvEvent>({ params: { id: 'env-1' } }));
 		expect(forbidden.status).toBe(403);
 
 		const noToken = await DELETE(

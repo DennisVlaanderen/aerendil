@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as auth from '#lib/server/auth.ts';
 import { ErrorCode } from '#lib/errors.ts';
-import {
-	fakeCookies,
-	invalidJsonRequest,
-	jsonRequest,
-	makeRequestEvent
-} from '#lib/test/bff.ts';
+import { fakeCookies, invalidJsonRequest, jsonRequest, makeRequestEvent } from '#lib/test/bff.ts';
 import { POST } from './+server';
 
 type LoginEvent = Parameters<typeof POST>[0];

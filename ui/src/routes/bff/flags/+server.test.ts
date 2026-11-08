@@ -44,9 +44,7 @@ describe('POST /bff/flags', () => {
 	});
 
 	it('validates key and environmentIds and forwards payload and backend errors', async () => {
-		vi.spyOn(auth, 'getSession').mockResolvedValue(
-			makeSession({ permissions: ['flags:write'] })
-		);
+		vi.spyOn(auth, 'getSession').mockResolvedValue(makeSession({ permissions: ['flags:write'] }));
 		const createSpy = vi
 			.spyOn(flagsApi, 'createFlags')
 			.mockResolvedValueOnce({

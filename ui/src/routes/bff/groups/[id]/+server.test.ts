@@ -125,9 +125,7 @@ describe('DELETE /bff/groups/[id]', () => {
 				status: 403
 			});
 
-		const forbidden = await DELETE(
-			makeRequestEvent<DeleteGroupEvent>({ params: { id: 'g-2' } })
-		);
+		const forbidden = await DELETE(makeRequestEvent<DeleteGroupEvent>({ params: { id: 'g-2' } }));
 		expect(forbidden.status).toBe(403);
 
 		const noToken = await DELETE(
