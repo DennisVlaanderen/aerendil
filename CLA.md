@@ -126,5 +126,7 @@ I have read the CLA and I agree to its terms.
 ```
 
 Posting that comment signs this version of the Agreement for all of Your
-current and future Contributions. Signatures are recorded on the
-`cla-signatures` branch of the repository.
+current and future Contributions. A comment posted from Your account by
+an automated tool that You operate or have authorized signs on Your
+behalf, just as if You had posted it Yourself. Signatures are recorded
+on the `cla-signatures` branch of the repository.

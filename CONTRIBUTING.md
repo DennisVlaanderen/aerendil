@@ -244,6 +244,9 @@ Signing takes one comment, and you only do it once:
    I have read the CLA and I agree to its terms.
    ```
 
+   An automated tool that posts from your account can post this comment
+   for you; it signs on your behalf, as if you had posted it yourself.
+
 3. The `CLA` check turns green once everyone listed has signed. Comment
    `recheck` to run it again.
 
