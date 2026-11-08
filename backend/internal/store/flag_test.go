@@ -77,8 +77,8 @@ func TestStoreSetFlagKeepsRulesAndRollouts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected set to succeed: %v", err)
 	}
-	if applied.Revision != s.raft.AppliedIndex() {
-		t.Fatalf("expected revision %d to equal the raft index %d", applied.Revision, s.raft.AppliedIndex())
+	if applied.Revision != s.raft.LastIndex() {
+		t.Fatalf("expected revision %d to equal the raft index %d", applied.Revision, s.raft.LastIndex())
 	}
 
 	want := richFlag(envID)

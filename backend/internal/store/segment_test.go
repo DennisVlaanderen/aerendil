@@ -34,7 +34,7 @@ func TestStoreSegmentCRUD(t *testing.T) {
 	want := betaSegment(envID)
 	want.SchemaVersion = 1
 	want.EvaluatorLevel = 1
-	want.Revision = s.raft.AppliedIndex()
+	want.Revision = s.raft.LastIndex()
 	got, ok := s.Segments().Get(envID, "beta")
 	if !ok || mustJSON(t, got) != mustJSON(t, want) || mustJSON(t, applied) != mustJSON(t, want) {
 		t.Fatalf("stored segment differs:\n got %s\nwant %s", mustJSON(t, got), mustJSON(t, want))
