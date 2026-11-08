@@ -26,10 +26,16 @@ const STATUS_CONTEXT = 'CLA';
 const COMMENT_MARKER = '<!-- aerendil-cla-check -->';
 const AGENT_LOGINS = new Set(['claude']);
 
-// Case, surrounding whitespace, and a trailing period don't matter when
+// Case, surrounding whitespace, a trailing period, and hidden HTML comments
+// (markers automated tools add to comments they post) don't matter when
 // matching a comment against SIGN_PHRASE or RECHECK_PHRASE.
 const normalize = (text) =>
-  text.trim().replace(/\s+/g, ' ').replace(/\.$/, '').toLowerCase();
+  text
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\.$/, '')
+    .toLowerCase();
 
 module.exports = async ({ github, context, core }) => {
   const { owner, repo } = context.repo;
