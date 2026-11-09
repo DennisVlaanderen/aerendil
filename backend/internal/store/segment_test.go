@@ -51,6 +51,22 @@ func TestStoreSegmentCRUD(t *testing.T) {
 	}
 }
 
+func TestStoreCreateSegmentNeverOverwrites(t *testing.T) {
+	s := newTestStore(t)
+	envID := seedEnvironment(t, s, "Production")
+	if _, err := s.Segments().Create(betaSegment(envID)); err != nil {
+		t.Fatalf("expected first create to succeed: %v", err)
+	}
+	changed := betaSegment(envID)
+	changed.Name = "changed"
+	if _, err := s.Segments().Create(changed); !errors.Is(err, ErrSegmentExists) {
+		t.Fatalf("expected ErrSegmentExists, got %v", err)
+	}
+	if got, _ := s.Segments().Get(envID, "beta"); got.Name == "changed" {
+		t.Fatal("expected the existing segment to be kept")
+	}
+}
+
 func TestStoreSetSegmentRejectsUnknownEnvironment(t *testing.T) {
 	s := newTestStore(t)
 	if _, err := s.Segments().Set(betaSegment("does-not-exist")); !errors.Is(err, ErrUnknownEnvironment) {

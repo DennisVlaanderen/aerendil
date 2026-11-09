@@ -222,7 +222,7 @@ func TestFlagsPostSucceedsWithWritePermission(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
 
-	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
+	body := flagBody("checkout", true, "on", envID)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite))
@@ -234,12 +234,12 @@ func TestFlagsPostSucceedsWithWritePermission(t *testing.T) {
 	}
 
 	var resp struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(resp.Flags) != 1 || resp.Flags[0].Key != "checkout" || !resp.Flags[0].Enabled || resp.Flags[0].Value != "on" {
+	if len(resp.Flags) != 1 || resp.Flags[0].Key != "checkout" || !resp.Flags[0].Enabled || flagValue(resp.Flags[0]) != "on" {
 		t.Fatalf("unexpected flags in response: %+v", resp.Flags)
 	}
 }
@@ -249,7 +249,7 @@ func TestFlagsPostRequiresEnvironmentAccessForEveryRequestedEnvironment(t *testi
 	grantedID := seedEnvironmentForTest(t, "Production")
 	ungrantedID := seedEnvironmentForTest(t, "Staging")
 
-	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{grantedID, ungrantedID}})
+	body := flagBody("checkout", true, "", grantedID, ungrantedID)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
 	// Only granted access to one of the two requested environments.

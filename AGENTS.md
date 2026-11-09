@@ -96,7 +96,10 @@ store.
     `Store.Audits()`, `Store.Environments()` — rather than living directly
     on `Store`.
   - `flag.go` defines `Flag`, the `docs/fqdp.md` §6.1 flag definition
-    (type, variations, rules, rollouts, fallthrough); `environment.go`
+    (type, variations, rules, rollouts, fallthrough), and `segment.go`
+    `Segment` (§6.2). The FSM refuses a flag whose `inSegment` names a
+    segment its environment lacks, and a segment delete while a flag still
+    references it, so neither depends on an API pre-check; `environment.go`
     defines `Environment{ID, Name, Order, Version}` (the deployment targets
     flags/permissions will be scoped to). `Version` on every entity (a
     flag's `Revision`) is set from the Raft log index on apply, not a
@@ -104,7 +107,7 @@ store.
 
 - **`api/`** — `net/http` (stdlib `ServeMux` with Go 1.22+ method patterns,
   e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires routes for
-  flags, auth, users, groups, audits, environments, and application
+  flags, segments, auth, users, groups, audits, environments, and application
   credentials (plus the unauthenticated `POST /api/oauth/token` OAuth2
   client-credentials endpoint those credentials authenticate against) —
   check `api.go` directly for the exact list rather than assuming it here,
@@ -115,7 +118,12 @@ store.
   handler with bearer-token parsing plus a single permission-string check
   via the `auth` package. Route handlers currently do minimal validation —
   check the relevant `api/*.go` file directly rather than assuming REST
-  conventions beyond what's there.
+  conventions beyond what's there. The exception is flag and segment
+  definitions: they travel as the `docs/fqdp.md` §6 JSON, and
+  `definitions.go` validates them on write by running `eval.Validate` /
+  `eval.ValidateSegment` (mapping each `eval.Err*` reason to its own 400
+  code) plus the §2.2 patterns and limits `eval` leaves to write time.
+  `POST /api/flags/{key}/evaluate` is a dry run of `eval.Evaluate`.
 
 - **`auth/`** — `Service` in `service.go` issues/parses HS256 JWTs
   (`golang-jwt/jwt`) and hashes passwords with bcrypt. A human login token's
@@ -132,7 +140,8 @@ store.
   `System: true` Admin `Group` (`store.AdminGroupID = "admin"`) whose
   membership bypasses every permission check. All other access is
   group-based: `permissions.go` holds a flat catalog of permission strings
-  (`PermFlagsRead/Write`, `PermUsersRead/Create/Update/Delete`,
+  (`PermFlagsRead/Write/Update/Delete`,
+  `PermSegmentsRead/Write/Update/Delete`, `PermUsersRead/Create/Update/Delete`,
   `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`,
   `PermEnvironmentsRead/Create/Update/Delete`,
   `PermApplicationCredentialsRead/Create/Update/Delete`) attached to
@@ -158,7 +167,9 @@ store.
   membership, rollouts and bucketing), with no dependency on `store` so a Go
   SDK can reuse it. Its `Flag`/`Segment` types mirror the store's JSON form;
   `Evaluate` returns value, variation id, reason, `ruleId` and error kind,
-  and `Validate` decides what counts as `malformed_flag`.
+  and `Validate` decides what counts as `malformed_flag`. Every `Validate`
+  error wraps `ErrMalformed` plus one `Err*` reason, which the HTTP API maps
+  to its error codes.
 
 ## UI architecture (`ui/src/`)
 

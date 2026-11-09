@@ -60,6 +60,33 @@ func richFlag(environmentID string) Flag {
 	}
 }
 
+// seedBetaSegment creates the segment richFlag references in each environment.
+func seedBetaSegment(t *testing.T, s *Store, environmentIDs ...string) {
+	t.Helper()
+	for _, envID := range environmentIDs {
+		if _, err := s.Segments().Set(betaSegment(envID)); err != nil {
+			t.Fatalf("seed segment: %v", err)
+		}
+	}
+}
+
+func TestStoreFlagWritesRejectUnknownSegment(t *testing.T) {
+	s := newTestStore(t)
+	envA := seedEnvironment(t, s, "A")
+	envB := seedEnvironment(t, s, "B")
+	seedBetaSegment(t, s, envA)
+
+	if _, err := s.Flags().Set(richFlag(envB)); !errors.Is(err, ErrUnknownSegment) {
+		t.Fatalf("expected ErrUnknownSegment from Set, got %v", err)
+	}
+	if _, err := s.Flags().SetMany(richFlag(""), []string{envA, envB}); !errors.Is(err, ErrUnknownSegment) {
+		t.Fatalf("expected ErrUnknownSegment from SetMany, got %v", err)
+	}
+	if _, ok := s.Flags().Get(envA, "checkout.new-flow"); ok {
+		t.Fatal("expected SetMany to write nothing when one environment lacks the segment")
+	}
+}
+
 func mustJSON(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -72,6 +99,7 @@ func mustJSON(t *testing.T, v any) string {
 func TestStoreSetFlagKeepsRulesAndRollouts(t *testing.T) {
 	s := newTestStore(t)
 	envID := seedEnvironment(t, s, "Production")
+	seedBetaSegment(t, s, envID)
 
 	applied, err := s.Flags().Set(richFlag(envID))
 	if err != nil {
@@ -161,6 +189,7 @@ func TestStoreSetManyKeepsRulesAndRollouts(t *testing.T) {
 	s := newTestStore(t)
 	envA := seedEnvironment(t, s, "A")
 	envB := seedEnvironment(t, s, "B")
+	seedBetaSegment(t, s, envA, envB)
 
 	if _, err := s.Flags().SetMany(richFlag("ignored"), []string{envA, envB}); err != nil {
 		t.Fatalf("expected SetMany to succeed: %v", err)
@@ -176,6 +205,7 @@ func TestStoreSetManyKeepsRulesAndRollouts(t *testing.T) {
 func TestStoreDeleteFlag(t *testing.T) {
 	s := newTestStore(t)
 	envID := seedEnvironment(t, s, "Production")
+	seedBetaSegment(t, s, envID)
 
 	if _, err := s.Flags().Set(richFlag(envID)); err != nil {
 		t.Fatalf("expected set to succeed: %v", err)
@@ -191,6 +221,7 @@ func TestStoreDeleteFlag(t *testing.T) {
 func TestFSMSnapshotRestoreRoundTripFlagDefinition(t *testing.T) {
 	f := newFSM()
 	f.environments["prod"] = Environment{ID: "prod", Name: "Production"}
+	f.segments[flagMapKey("prod", "beta")] = betaSegment("prod")
 	flag := richFlag("prod")
 	if err, isErr := f.applyFlag(7, command{Op: opSet, Entity: entityFlag, Flag: &flag}).(error); isErr {
 		t.Fatalf("expected applyFlag to succeed: %v", err)

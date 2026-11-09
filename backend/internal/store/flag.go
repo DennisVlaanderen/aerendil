@@ -18,6 +18,10 @@ var ErrFlagExists = errors.New("flag already exists")
 // which fqdp.md §6.1 fixes at creation.
 var ErrFlagTypeChanged = errors.New("flag type cannot be changed")
 
+// ErrUnknownSegment means a flag's inSegment condition names a segment its
+// environment does not have.
+var ErrUnknownSegment = errors.New("segment does not exist")
+
 // ErrUnknownFlagType means a flag's Type is not one of the FlagType values.
 var ErrUnknownFlagType = errors.New("unknown flag type")
 
@@ -143,6 +147,11 @@ func (f *fsm) applyFlag(index uint64, cmd command) any {
 		if existing, ok := f.flags[flagMapKey(cmd.Flag.EnvironmentID, cmd.Flag.Key)]; ok && existing.Type != cmd.Flag.Type {
 			return fmt.Errorf("%w: %q is %q", ErrFlagTypeChanged, cmd.Flag.Key, existing.Type)
 		}
+		// Here, not only in the API, so a segment deleted after the API's
+		// check can't leave a dangling reference.
+		if key, ok := f.missingSegmentLocked(*cmd.Flag); ok {
+			return fmt.Errorf("%w: %q in environment %q", ErrUnknownSegment, key, cmd.Flag.EnvironmentID)
+		}
 		stampFlag(cmd.Flag, index)
 		f.flags[flagMapKey(cmd.Flag.EnvironmentID, cmd.Flag.Key)] = *cmd.Flag
 		return *cmd.Flag
@@ -159,6 +168,9 @@ func (f *fsm) applyFlag(index uint64, cmd command) any {
 			}
 			if _, ok := f.flags[flagMapKey(flag.EnvironmentID, flag.Key)]; ok {
 				return fmt.Errorf("%w: %q in environment %q", ErrFlagExists, flag.Key, flag.EnvironmentID)
+			}
+			if key, ok := f.missingSegmentLocked(flag); ok {
+				return fmt.Errorf("%w: %q in environment %q", ErrUnknownSegment, key, flag.EnvironmentID)
 			}
 		}
 		applied := make([]Flag, len(cmd.Flags))

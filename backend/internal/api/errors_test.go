@@ -24,6 +24,13 @@ func TestStoreErrorToAPIErrorCodesAreStructured(t *testing.T) {
 		store.ErrEnvironmentHasFlags,
 		store.ErrEnvironmentHasSegments,
 		store.ErrUnknownEnvironment,
+		store.ErrFlagTypeChanged,
+		store.ErrUnknownFlagType,
+		store.ErrUnknownSegment,
+		store.ErrSegmentExists,
+		store.ErrSegmentInUse,
+		store.ErrSegmentLimitExceeded,
+		store.ErrSegmentUsesInSegment,
 	}
 
 	for _, sentinel := range sentinels {

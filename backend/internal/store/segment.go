@@ -11,6 +11,10 @@ import (
 // same environment still references it via inSegment (fqdp.md §6.2).
 var ErrSegmentInUse = errors.New("segment is referenced by a flag")
 
+// ErrSegmentExists means Create targeted a key that already exists in the
+// environment; creating must never overwrite (that's Set, via PUT).
+var ErrSegmentExists = errors.New("segment already exists")
+
 // ErrSegmentUsesInSegment means a segment rule used inSegment; segments must
 // not recurse (fqdp.md §6.2).
 var ErrSegmentUsesInSegment = errors.New("segment rules must not use inSegment")
@@ -95,6 +99,36 @@ func usesInSegment(conditions []Condition, segmentKey *string) bool {
 	return false
 }
 
+// missingSegmentLocked returns the first segment flag references through
+// inSegment that its environment lacks. Caller holds f.mu.
+func (f *fsm) missingSegmentLocked(flag Flag) (string, bool) {
+	for _, rule := range flag.Rules {
+		if key, ok := f.missingSegmentInLocked(flag.EnvironmentID, rule.Conditions); ok {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+func (f *fsm) missingSegmentInLocked(environmentID string, conditions []Condition) (string, bool) {
+	for _, condition := range conditions {
+		if condition.Op == opInSegment {
+			for _, raw := range condition.Values {
+				var key string
+				if json.Unmarshal(raw, &key) == nil {
+					if _, ok := f.segments[flagMapKey(environmentID, key)]; !ok {
+						return key, true
+					}
+				}
+			}
+		}
+		if key, ok := f.missingSegmentInLocked(environmentID, condition.Conditions); ok {
+			return key, true
+		}
+	}
+	return "", false
+}
+
 // segmentReferencedLocked reports whether a flag in environmentID references
 // segmentKey. Caller holds f.mu.
 func (f *fsm) segmentReferencedLocked(environmentID, segmentKey string) bool {
@@ -131,12 +165,17 @@ func (f *fsm) hasSegmentsInEnvironment(environmentID string) bool {
 
 func (f *fsm) applySegment(index uint64, cmd command) any {
 	switch cmd.Op {
-	case opSet:
+	case opSet, opCreate:
 		if _, ok := f.environments[cmd.Segment.EnvironmentID]; !ok {
 			return fmt.Errorf("%w: %q", ErrUnknownEnvironment, cmd.Segment.EnvironmentID)
 		}
 		if err := validateSegment(*cmd.Segment); err != nil {
 			return err
+		}
+		// Checked here, not only in the API, so two concurrent creates can't
+		// both pass a pre-check and overwrite.
+		if _, ok := f.segments[flagMapKey(cmd.Segment.EnvironmentID, cmd.Segment.Key)]; ok && cmd.Op == opCreate {
+			return fmt.Errorf("%w: %q in environment %q", ErrSegmentExists, cmd.Segment.Key, cmd.Segment.EnvironmentID)
 		}
 		cmd.Segment.SchemaVersion = segmentSchemaVersion
 		cmd.Segment.Revision = index
@@ -196,7 +235,16 @@ func (r SegmentRepository) List(environmentID string) []Segment {
 // Set applies a segment change through Raft; fails with
 // ErrUnknownEnvironment, ErrSegmentLimitExceeded or ErrSegmentUsesInSegment.
 func (r SegmentRepository) Set(segment Segment) (Segment, error) {
-	resp, err := r.store.apply(command{Op: opSet, Entity: entitySegment, Segment: &segment})
+	return r.apply(opSet, segment)
+}
+
+// Create is Set that fails with ErrSegmentExists instead of overwriting.
+func (r SegmentRepository) Create(segment Segment) (Segment, error) {
+	return r.apply(opCreate, segment)
+}
+
+func (r SegmentRepository) apply(op string, segment Segment) (Segment, error) {
+	resp, err := r.store.apply(command{Op: op, Entity: entitySegment, Segment: &segment})
 	if err != nil {
 		return Segment{}, err
 	}

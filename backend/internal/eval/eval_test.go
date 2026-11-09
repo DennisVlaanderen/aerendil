@@ -322,58 +322,59 @@ func TestValidateRejects(t *testing.T) {
 	leaf := func(f *Flag, c Condition) { f.Rules[1].Conditions = []Condition{c} }
 	tests := []struct {
 		name     string
+		kind     error
 		flag     func(*Flag)
 		segments func(map[string]Segment)
 	}{
-		{name: "unknown schemaVersion", flag: func(f *Flag) { f.SchemaVersion = 2 }},
-		{name: "unknown type", flag: func(f *Flag) { f.Type = "float" }},
-		{name: "no variations", flag: func(f *Flag) { f.Variations = nil }},
-		{name: "duplicate variation id", flag: func(f *Flag) { f.Variations[1].ID = "control" }},
-		{name: "value does not fit type", flag: func(f *Flag) { f.Variations[0].Value = json.RawMessage(`1`) }},
-		{name: "integer with a fraction", flag: func(f *Flag) {
+		{name: "unknown schemaVersion", kind: ErrSchemaVersion, flag: func(f *Flag) { f.SchemaVersion = 2 }},
+		{name: "unknown type", kind: ErrFlagType, flag: func(f *Flag) { f.Type = "float" }},
+		{name: "no variations", kind: ErrNoVariations, flag: func(f *Flag) { f.Variations = nil }},
+		{name: "duplicate variation id", kind: ErrDuplicateID, flag: func(f *Flag) { f.Variations[1].ID = "control" }},
+		{name: "value does not fit type", kind: ErrVariationValue, flag: func(f *Flag) { f.Variations[0].Value = json.RawMessage(`1`) }},
+		{name: "integer with a fraction", kind: ErrVariationValue, flag: func(f *Flag) {
 			f.Type = FlagTypeInteger
 			f.Variations[0].Value, f.Variations[1].Value = json.RawMessage(`1`), json.RawMessage(`1.5`)
 		}},
-		{name: "boolean table not true,false", flag: func(f *Flag) {
+		{name: "boolean table not true,false", kind: ErrBooleanVariations, flag: func(f *Flag) {
 			f.Type = FlagTypeBoolean
 			f.Variations = []Variation{{ID: "false", Value: json.RawMessage(`false`)}, {ID: "true", Value: json.RawMessage(`true`)}}
 			f.OffVariation = "false"
 		}},
-		{name: "unknown offVariation", flag: func(f *Flag) { f.OffVariation = "nope" }},
-		{name: "serve with both", flag: func(f *Flag) { f.Fallthrough.Rollout = fiftyFifty() }},
-		{name: "serve with neither", flag: func(f *Flag) { f.Fallthrough = Serve{} }},
-		{name: "weights not summing to 100000", flag: func(f *Flag) { f.Rules[1].Serve.Rollout.Weights[0].Weight = 40000 }},
-		{name: "wrapping weights", flag: func(f *Flag) {
+		{name: "unknown offVariation", kind: ErrUnknownVariation, flag: func(f *Flag) { f.OffVariation = "nope" }},
+		{name: "serve with both", kind: ErrServe, flag: func(f *Flag) { f.Fallthrough.Rollout = fiftyFifty() }},
+		{name: "serve with neither", kind: ErrServe, flag: func(f *Flag) { f.Fallthrough = Serve{} }},
+		{name: "weights not summing to 100000", kind: ErrRolloutWeights, flag: func(f *Flag) { f.Rules[1].Serve.Rollout.Weights[0].Weight = 40000 }},
+		{name: "wrapping weights", kind: ErrRolloutWeights, flag: func(f *Flag) {
 			f.Rules[1].Serve.Rollout.Weights[0].Weight = 4294967295
 			f.Rules[1].Serve.Rollout.Weights[1].Weight = 100001
 		}},
-		{name: "negative weight", flag: func(f *Flag) {
+		{name: "negative weight", kind: ErrRolloutWeights, flag: func(f *Flag) {
 			f.Rules[1].Serve.Rollout.Weights[0].Weight = -1
 			f.Rules[1].Serve.Rollout.Weights[1].Weight = 100001
 		}},
-		{name: "duplicate rollout variation", flag: func(f *Flag) { f.Rules[1].Serve.Rollout.Weights[1].Variation = "control" }},
-		{name: "duplicate rule id", flag: func(f *Flag) { f.Rules[1].ID = "beta-testers" }},
-		{name: "unknown match", flag: func(f *Flag) { f.Rules[1].Match = "none" }},
-		{name: "empty group", flag: func(f *Flag) { f.Rules[1].Conditions = nil }},
-		{name: "nested group", flag: func(f *Flag) {
+		{name: "duplicate rollout variation", kind: ErrUnknownVariation, flag: func(f *Flag) { f.Rules[1].Serve.Rollout.Weights[1].Variation = "control" }},
+		{name: "duplicate rule id", kind: ErrDuplicateID, flag: func(f *Flag) { f.Rules[1].ID = "beta-testers" }},
+		{name: "unknown match", kind: ErrGroup, flag: func(f *Flag) { f.Rules[1].Match = "none" }},
+		{name: "empty group", kind: ErrGroup, flag: func(f *Flag) { f.Rules[1].Conditions = nil }},
+		{name: "nested group", kind: ErrNestedGroup, flag: func(f *Flag) {
 			leaf(f, Condition{Match: "all", Conditions: f.Rules[1].Conditions})
 		}},
-		{name: "leaf and group at once", flag: func(f *Flag) { f.Rules[1].Conditions[0].Match = "all" }},
-		{name: "unknown op", flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "matches", Values: raws(t, "x")}) }},
-		{name: "no values", flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "in"}) }},
-		{name: "mixed value kinds", flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "in", Values: raws(t, "x", 1)}) }},
-		{name: "lt with strings", flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "lt", Values: raws(t, "x")}) }},
-		{name: "contains with numbers", flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "contains", Values: raws(t, 1)}) }},
-		{name: "null value", flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "in", Values: raws(t, nil)}) }},
-		{name: "leaf without attribute", flag: func(f *Flag) { leaf(f, Condition{Op: "in", Values: raws(t, "x")}) }},
-		{name: "inSegment with attribute", flag: func(f *Flag) { f.Rules[0].Conditions[0].Attribute = "a" }},
-		{name: "segment not held", segments: func(s map[string]Segment) { delete(s, "beta") }},
-		{name: "segment uses inSegment", segments: func(s map[string]Segment) {
+		{name: "leaf and group at once", kind: ErrNestedGroup, flag: func(f *Flag) { f.Rules[1].Conditions[0].Match = "all" }},
+		{name: "unknown op", kind: ErrCondition, flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "matches", Values: raws(t, "x")}) }},
+		{name: "no values", kind: ErrCondition, flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "in"}) }},
+		{name: "mixed value kinds", kind: ErrConditionValues, flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "in", Values: raws(t, "x", 1)}) }},
+		{name: "lt with strings", kind: ErrConditionValues, flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "lt", Values: raws(t, "x")}) }},
+		{name: "contains with numbers", kind: ErrConditionValues, flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "contains", Values: raws(t, 1)}) }},
+		{name: "null value", kind: ErrConditionValues, flag: func(f *Flag) { leaf(f, Condition{Attribute: "a", Op: "in", Values: raws(t, nil)}) }},
+		{name: "leaf without attribute", kind: ErrCondition, flag: func(f *Flag) { leaf(f, Condition{Op: "in", Values: raws(t, "x")}) }},
+		{name: "inSegment with attribute", kind: ErrCondition, flag: func(f *Flag) { f.Rules[0].Conditions[0].Attribute = "a" }},
+		{name: "segment not held", kind: ErrUnknownSegment, segments: func(s map[string]Segment) { delete(s, "beta") }},
+		{name: "segment uses inSegment", kind: ErrSegmentUsesSegments, segments: func(s map[string]Segment) {
 			seg := s["beta"]
 			seg.Rules[0].Conditions = []Condition{{Op: "inSegment", Values: raws(t, "beta")}}
 			s["beta"] = seg
 		}},
-		{name: "invalid segment rule", segments: func(s map[string]Segment) {
+		{name: "invalid segment rule", kind: ErrGroup, segments: func(s map[string]Segment) {
 			seg := s["beta"]
 			seg.Rules[0].Conditions = nil
 			s["beta"] = seg
@@ -388,8 +389,8 @@ func TestValidateRejects(t *testing.T) {
 			if tt.segments != nil {
 				tt.segments(segments)
 			}
-			if err := Validate(flag, segments); !errors.Is(err, ErrMalformed) {
-				t.Fatalf("expected ErrMalformed, got %v", err)
+			if err := Validate(flag, segments); !errors.Is(err, ErrMalformed) || !errors.Is(err, tt.kind) {
+				t.Fatalf("expected ErrMalformed and %v, got %v", tt.kind, err)
 			}
 			if got := Evaluate(&flag, segments, Context{TargetingKey: "user-1"}); got.Reason != ReasonEvaluationError ||
 				got.ErrorKind != ErrorKindMalformedFlag || got.VariationID != "" {

@@ -161,7 +161,7 @@ func TestAuditRecordsFlagUpdateBeforeState(t *testing.T) {
 
 	key := fmt.Sprintf("flag-%s", store.NewID())
 
-	firstBody, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "value": "on", "environmentIds": []string{envID}})
+	firstBody := flagBody(key, true, "on", envID)
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(firstBody))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec := httptest.NewRecorder()
@@ -170,7 +170,7 @@ func TestAuditRecordsFlagUpdateBeforeState(t *testing.T) {
 		t.Fatalf("expected 200 on first flag set, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	secondBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
+	secondBody := jsonBody(testFlag("", "", false, "off"))
 	req = httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/"+key+"?environmentId="+envID, bytes.NewReader(secondBody))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec = httptest.NewRecorder()
@@ -204,7 +204,7 @@ func TestAuditsListFiltersByActorID(t *testing.T) {
 	readToken := tokenFor(t, auth.PermAuditsRead)
 
 	key := fmt.Sprintf("actor-filter-flag-%s", store.NewID())
-	body, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "environmentIds": []string{envID}})
+	body := flagBody(key, true, "", envID)
 	req := httptest.NewRequest(http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec := httptest.NewRecorder()
@@ -248,7 +248,7 @@ func seedAuditEntryForTest(t *testing.T, mux *http.ServeMux, readToken string) a
 	writeToken := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
 
 	key := fmt.Sprintf("audit-by-id-flag-%s", store.NewID())
-	body, _ := json.Marshal(map[string]any{"key": key, "enabled": true, "environmentIds": []string{envID}})
+	body := flagBody(key, true, "", envID)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+writeToken)
 	rec := httptest.NewRecorder()

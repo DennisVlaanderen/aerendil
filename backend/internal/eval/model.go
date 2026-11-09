@@ -123,9 +123,9 @@ const ErrorKindMalformedFlag ErrorKind = "malformed_flag"
 // empty, evaluation produced no value and the caller returns its fallback
 // value.
 type Result struct {
-	Value       json.RawMessage
-	VariationID string
-	Reason      Reason
-	RuleID      string
-	ErrorKind   ErrorKind
+	Value       json.RawMessage `json:"value,omitempty"`
+	VariationID string          `json:"variationId,omitempty"`
+	Reason      Reason          `json:"reason"`
+	RuleID      string          `json:"ruleId,omitempty"`
+	ErrorKind   ErrorKind       `json:"errorKind,omitempty"`
 }

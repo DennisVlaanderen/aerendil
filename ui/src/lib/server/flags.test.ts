@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteFlag, updateFlag } from './flags';
+import { createFlags, deleteFlag, listFlags, updateFlag } from './flags';
 import { ErrorCode } from '#lib/errors.ts';
 
 // Same convention as environments.test.ts: fetch is mocked, these are unit
@@ -21,17 +21,70 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+// A docs/fqdp.md §6.1 definition as the backend returns it.
+function definition(overrides: Record<string, unknown> = {}) {
+	return {
+		environmentId: 'prod',
+		key: 'checkout',
+		type: 'string',
+		enabled: true,
+		revision: 2,
+		variations: [{ id: 'value', value: 'on' }],
+		offVariation: 'value',
+		rules: [{ id: 'beta', conditions: [], serve: { variation: 'value' } }],
+		fallthrough: { variation: 'value' },
+		...overrides
+	};
+}
+
+describe('listFlags', () => {
+	it('maps each definition to a summary', async () => {
+		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { flags: [definition()] }));
+
+		expect(await listFlags('a-token', 'prod')).toEqual([
+			{ environmentId: 'prod', key: 'checkout', enabled: true, value: 'on', version: 2 }
+		]);
+	});
+});
+
+describe('createFlags', () => {
+	it('sends a one-variation string definition', async () => {
+		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { flags: [definition()] }));
+
+		const result = await createFlags('a-token', {
+			key: 'checkout',
+			enabled: true,
+			value: 'on',
+			environmentIds: ['prod']
+		});
+
+		expect(result).toEqual({
+			flags: [{ environmentId: 'prod', key: 'checkout', enabled: true, value: 'on', version: 2 }]
+		});
+		const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
+		expect(body).toEqual({
+			key: 'checkout',
+			type: 'string',
+			enabled: true,
+			variations: [{ id: 'value', value: 'on' }],
+			offVariation: 'value',
+			rules: [],
+			fallthrough: { variation: 'value' },
+			environmentIds: ['prod']
+		});
+	});
+});
+
 describe('updateFlag', () => {
-	it('returns the updated flag on success', async () => {
-		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(200, {
-				environmentId: 'prod',
-				key: 'checkout',
-				enabled: false,
-				value: 'off',
-				version: 2
-			})
-		);
+	it('puts the stored definition back with the edit, keeping its rules', async () => {
+		vi.mocked(fetch)
+			.mockResolvedValueOnce(jsonResponse(200, definition()))
+			.mockResolvedValueOnce(
+				jsonResponse(
+					200,
+					definition({ enabled: false, variations: [{ id: 'value', value: 'off' }], revision: 3 })
+				)
+			);
 
 		const result = await updateFlag('a-token', 'prod', 'checkout', {
 			enabled: false,
@@ -39,12 +92,33 @@ describe('updateFlag', () => {
 		});
 
 		expect(result).toEqual({
-			flag: { environmentId: 'prod', key: 'checkout', enabled: false, value: 'off', version: 2 }
+			flag: { environmentId: 'prod', key: 'checkout', enabled: false, value: 'off', version: 3 }
 		});
-		expect(fetch).toHaveBeenCalledWith(
-			expect.stringContaining('/api/flags/checkout?environmentId=prod'),
-			expect.objectContaining({ method: 'PUT' })
+		const [url, init] = vi.mocked(fetch).mock.calls[1];
+		expect(url).toEqual(expect.stringContaining('/api/flags/checkout?environmentId=prod'));
+		expect(init).toEqual(expect.objectContaining({ method: 'PUT' }));
+		expect(JSON.parse(init?.body as string)).toEqual(
+			definition({ enabled: false, variations: [{ id: 'value', value: 'off' }] })
 		);
+	});
+
+	it('leaves the values of a non-string flag alone', async () => {
+		const boolean = definition({
+			type: 'boolean',
+			variations: [
+				{ id: 'true', value: true },
+				{ id: 'false', value: false }
+			]
+		});
+		vi.mocked(fetch)
+			.mockResolvedValueOnce(jsonResponse(200, boolean))
+			.mockResolvedValueOnce(jsonResponse(200, boolean));
+
+		await updateFlag('a-token', 'prod', 'checkout', { enabled: false, value: 'ignored' });
+
+		const body = JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string);
+		expect(body.variations).toEqual(boolean.variations);
+		expect(body.enabled).toBe(false);
 	});
 
 	it('returns the backend error message and status on a non-OK response', async () => {
@@ -58,6 +132,7 @@ describe('updateFlag', () => {
 		});
 
 		expect(result).toEqual({ error: 'flag not found', code: ErrorCode.NotFoundFlag, status: 404 });
+		expect(fetch).toHaveBeenCalledTimes(1);
 	});
 });
 

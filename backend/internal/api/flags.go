@@ -1,22 +1,25 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"aerendil/backend/internal/auth"
+	"aerendil/backend/internal/eval"
 	"aerendil/backend/internal/store"
 )
 
 func registerFlagRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/flags", requirePermission(auth.PermFlagsRead, handleErrors(flagsGetHandler)))
 	mux.HandleFunc("GET /api/flags/{key}", requirePermission(auth.PermFlagsRead, handleErrors(flagsGetByKeyHandler)))
+	// A dry run that writes nothing, so it needs read permission and isn't audited.
+	mux.HandleFunc("POST /api/flags/{key}/evaluate", requirePermission(auth.PermFlagsRead, handleErrors(flagsEvaluateHandler)))
 	// Create-only (ErrFlagExists -> 409), so there's never a Before state.
 	mux.HandleFunc("POST /api/flags", requirePermission(auth.PermFlagsWrite, withAudit(auditConfig{
 		Action:     "flag.set",
 		TargetType: "flag",
+		Details:    flagRuleChanges,
 	}, handleErrors(flagsPostHandler))))
 	mux.HandleFunc("PUT /api/flags/{key}", requirePermission(auth.PermFlagsUpdate, withAudit(auditConfig{
 		Action:     "flag.update",
@@ -25,6 +28,7 @@ func registerFlagRoutes(mux *http.ServeMux) {
 			f, ok := dataStore.Flags().Get(r.URL.Query().Get("environmentId"), r.PathValue("key"))
 			return f, ok
 		},
+		Details: flagRuleChanges,
 	}, handleErrors(flagsPutHandler))))
 	mux.HandleFunc("POST /api/flags/{key}/force-disable", requirePermission(auth.PermFlagsUpdate, withAudit(auditConfig{
 		Action:     "flag.force_disable",
@@ -41,55 +45,8 @@ func registerFlagRoutes(mux *http.ServeMux) {
 			f, ok := dataStore.Flags().Get(r.URL.Query().Get("environmentId"), r.PathValue("key"))
 			return f, ok
 		},
+		Details: flagRuleChanges,
 	}, handleErrors(flagsDeleteHandler))))
-}
-
-// shortcut: legacyFlag keeps the pre-§6.1 {enabled, value} HTTP contract on
-// top of the definition model, as a one-variation string flag; #146 replaces
-// it with the §6.1 JSON.
-type legacyFlag struct {
-	EnvironmentID string `json:"environmentId"`
-	Key           string `json:"key"`
-	Enabled       bool   `json:"enabled"`
-	Value         string `json:"value,omitempty"`
-	Version       uint64 `json:"version"`
-}
-
-const legacyVariationID = "value"
-
-func legacyDefinition(environmentID, key string, enabled bool, value string) store.Flag {
-	raw, _ := json.Marshal(value) // marshaling a string can't fail
-	return store.Flag{
-		EnvironmentID: environmentID,
-		Key:           key,
-		Type:          store.FlagTypeString,
-		Enabled:       enabled,
-		Variations:    []store.Variation{{ID: legacyVariationID, Value: raw}},
-		OffVariation:  legacyVariationID,
-		Fallthrough:   store.Serve{Variation: legacyVariationID},
-	}
-}
-
-func toLegacyFlag(flag store.Flag) legacyFlag {
-	var value string
-	if len(flag.Variations) > 0 {
-		_ = json.Unmarshal(flag.Variations[0].Value, &value)
-	}
-	return legacyFlag{
-		EnvironmentID: flag.EnvironmentID,
-		Key:           flag.Key,
-		Enabled:       flag.Enabled,
-		Value:         value,
-		Version:       flag.Revision,
-	}
-}
-
-func toLegacyFlags(flags []store.Flag) []legacyFlag {
-	legacy := make([]legacyFlag, len(flags))
-	for i, flag := range flags {
-		legacy[i] = toLegacyFlag(flag)
-	}
-	return legacy
 }
 
 func flagsGetHandler(w http.ResponseWriter, r *http.Request) error {
@@ -103,7 +60,7 @@ func flagsGetHandler(w http.ResponseWriter, r *http.Request) error {
 		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
-	flags, page, err := paginate(r, toLegacyFlags(dataStore.Flags().List(environmentID)))
+	flags, page, err := paginate(r, dataStore.Flags().List(environmentID))
 	if err != nil {
 		return err
 	}
@@ -126,14 +83,14 @@ func flagsGetByKeyHandler(w http.ResponseWriter, r *http.Request) error {
 	if !exists {
 		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
-	return ok(w, toLegacyFlag(flag))
+	return ok(w, flag)
 }
 
 func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
+	// The §6.1 definition plus the environments to create it in. Fields the
+	// store owns (revision, schemaVersion, evaluatorLevel) are ignored.
 	var payload struct {
-		Key            string   `json:"key"`
-		Enabled        bool     `json:"enabled"`
-		Value          string   `json:"value"`
+		store.Flag
 		EnvironmentIDs []string `json:"environmentIds"`
 	}
 	if err := decodeJSON(w, r, &payload); err != nil {
@@ -159,13 +116,18 @@ func flagsPostHandler(w http.ResponseWriter, r *http.Request) error {
 		if _, exists := dataStore.Environments().Get(envID); !exists {
 			return badRequest(CodeBadRequestEnvironmentUnknown, fmt.Sprintf("unknown environment: %q", envID))
 		}
+		// Per environment, since each has its own segments.
+		payload.EnvironmentID = envID
+		if err := validateFlag(&payload.Flag); err != nil {
+			return err
+		}
 	}
 
-	flags, err := dataStore.Flags().SetMany(legacyDefinition("", payload.Key, payload.Enabled, payload.Value), payload.EnvironmentIDs)
+	flags, err := dataStore.Flags().SetMany(payload.Flag, payload.EnvironmentIDs)
 	if err != nil {
 		return err
 	}
-	return ok(w, map[string]any{"flags": toLegacyFlags(flags)})
+	return ok(w, map[string]any{"flags": flags})
 }
 
 func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
@@ -185,31 +147,23 @@ func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
 
-	// Pointers so an omitted field means "unchanged"; an omitted "enabled"
-	// would otherwise turn the flag off, and an omitted "value" would blank
-	// it, as a side effect of updating the other one.
-	var payload struct {
-		Enabled *bool   `json:"enabled"`
-		Value   *string `json:"value"`
-	}
-	if err := decodeJSON(w, r, &payload); err != nil {
+	// The full §6.1 definition replaces the stored one. The path and query
+	// name the flag; fields the store owns are ignored. The salt is kept:
+	// changing it reshuffles every rollout bucket (§6.1).
+	var flag store.Flag
+	if err := decodeJSON(w, r, &flag); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
-
-	enabled := existing.Enabled
-	if payload.Enabled != nil {
-		enabled = *payload.Enabled
-	}
-	value := toLegacyFlag(existing).Value
-	if payload.Value != nil {
-		value = *payload.Value
+	flag.Key, flag.EnvironmentID, flag.Salt = key, environmentID, existing.Salt
+	if err := validateFlag(&flag); err != nil {
+		return err
 	}
 
-	flag, err := dataStore.Flags().Set(legacyDefinition(environmentID, key, enabled, value))
+	applied, err := dataStore.Flags().Set(flag)
 	if err != nil {
 		return err
 	}
-	return ok(w, toLegacyFlag(flag))
+	return ok(w, applied)
 }
 
 func flagsDeleteHandler(w http.ResponseWriter, r *http.Request) error {
@@ -256,5 +210,42 @@ func flagsForceDisableHandler(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return ok(w, toLegacyFlag(flag))
+	return ok(w, flag)
+}
+
+// flagsEvaluateHandler runs eval.Evaluate on the stored flag for the context
+// in the body, for dry runs from the UI and tests.
+func flagsEvaluateHandler(w http.ResponseWriter, r *http.Request) error {
+	key := r.PathValue("key")
+	environmentID := strings.TrimSpace(r.URL.Query().Get("environmentId"))
+	if environmentID == "" {
+		return badRequest(CodeBadRequestFlagsEnvironmentIDRequired, MsgBadRequestFlagsEnvironmentIDRequired)
+	}
+
+	principal, found := principalFromContext(r)
+	if !found || !principal.hasEnvironmentAccess(environmentID) {
+		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
+	}
+
+	var ctx eval.Context
+	if err := decodeJSON(w, r, &ctx); err != nil {
+		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
+	}
+	if err := validateContext(ctx); err != nil {
+		return err
+	}
+
+	stored, exists := dataStore.Flags().Get(environmentID, key)
+	if !exists {
+		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
+	}
+	flag, err := toEval[eval.Flag](stored)
+	if err != nil {
+		return err
+	}
+	segments, err := evalSegments(environmentID)
+	if err != nil {
+		return err
+	}
+	return ok(w, eval.Evaluate(&flag, segments, ctx))
 }

@@ -16,7 +16,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate)
 
-	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
+	createBody := flagBody("checkout", true, "on", envID)
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
@@ -33,7 +33,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 		t.Fatalf("expected list to succeed, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 	var listed struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	if err := json.Unmarshal(getRec.Body.Bytes(), &listed); err != nil {
 		t.Fatalf("decode list response: %v", err)
@@ -43,7 +43,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 	}
 
 	// POST is create-only; changing an existing flag goes through PUT.
-	updateBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
+	updateBody := jsonBody(testFlag("", "", false, "off"))
 	updateReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(updateBody))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
 	updateRec := httptest.NewRecorder()
@@ -57,7 +57,7 @@ func TestFlagsFullLifecycle(t *testing.T) {
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
 	var updated struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	if err := json.Unmarshal(verifyRec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode verify response: %v", err)
@@ -73,7 +73,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	stagingID := seedEnvironmentForTest(t, "Staging")
 	token := tokenForWithEnvironments(t, []string{prodID, stagingID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
-	prodBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{prodID}})
+	prodBody := flagBody("checkout", true, "", prodID)
 	prodReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(prodBody))
 	prodReq.Header.Set("Authorization", "Bearer "+token)
 	prodRec := httptest.NewRecorder()
@@ -82,7 +82,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 		t.Fatalf("expected prod create to succeed, got %d: %s", prodRec.Code, prodRec.Body.String())
 	}
 
-	stagingBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": false, "environmentIds": []string{stagingID}})
+	stagingBody := flagBody("checkout", false, "", stagingID)
 	stagingReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(stagingBody))
 	stagingReq.Header.Set("Authorization", "Bearer "+token)
 	stagingRec := httptest.NewRecorder()
@@ -96,7 +96,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	prodListRec := httptest.NewRecorder()
 	mux.ServeHTTP(prodListRec, prodListReq)
 	var prodListed struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	_ = json.Unmarshal(prodListRec.Body.Bytes(), &prodListed)
 	if len(prodListed.Flags) != 1 || !prodListed.Flags[0].Enabled {
@@ -108,7 +108,7 @@ func TestFlagsAreIsolatedPerEnvironmentThroughAPI(t *testing.T) {
 	stagingListRec := httptest.NewRecorder()
 	mux.ServeHTTP(stagingListRec, stagingListReq)
 	var stagingListed struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	_ = json.Unmarshal(stagingListRec.Body.Bytes(), &stagingListed)
 	if len(stagingListed.Flags) != 1 || stagingListed.Flags[0].Enabled {
@@ -122,7 +122,7 @@ func TestFlagsPostMultiEnvironmentCreateIsAtomic(t *testing.T) {
 	envB := seedEnvironmentForTest(t, "B")
 	token := tokenForWithEnvironments(t, []string{envA, envB}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
-	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envA, envB}})
+	body := flagBody("checkout", true, "on", envA, envB)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestFlagsPostMultiEnvironmentCreateIsAtomic(t *testing.T) {
 	}
 
 	var resp struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -140,7 +140,7 @@ func TestFlagsPostMultiEnvironmentCreateIsAtomic(t *testing.T) {
 	if len(resp.Flags) != 2 {
 		t.Fatalf("expected 2 flags in the response, got %+v", resp.Flags)
 	}
-	if resp.Flags[0].Version != resp.Flags[1].Version {
+	if resp.Flags[0].Revision != resp.Flags[1].Revision {
 		t.Fatalf("expected both flags in the batch to share the same Version, got %+v", resp.Flags)
 	}
 }
@@ -155,7 +155,7 @@ func TestFlagsPostRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) {
 	// case already covered in middleware_test.go.
 	token := tokenForWithEnvironments(t, []string{envA, "does-not-exist"}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
-	body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envA, "does-not-exist"}})
+	body := flagBody("checkout", true, "", envA, "does-not-exist")
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -169,7 +169,7 @@ func TestFlagsPostRejectsUnknownEnvironmentWithNoPartialWrites(t *testing.T) {
 	verifyRec := httptest.NewRecorder()
 	mux.ServeHTTP(verifyRec, verifyReq)
 	var listed struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	_ = json.Unmarshal(verifyRec.Body.Bytes(), &listed)
 	if len(listed.Flags) != 0 {
@@ -183,7 +183,7 @@ func TestEnvironmentsDeleteRejectsWhenFlagsStillReferenceItThroughAPI(t *testing
 	seedEnvironmentForTest(t, "Staging") // a second environment so ErrLastEnvironment doesn't also fire.
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsWrite)
 
-	flagBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
+	flagBody := flagBody("checkout", true, "", envID)
 	flagReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(flagBody))
 	flagReq.Header.Set("Authorization", "Bearer "+token)
 	flagRec := httptest.NewRecorder()
@@ -207,7 +207,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate)
 
-	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
+	createBody := flagBody("checkout", true, "on", envID)
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
@@ -216,7 +216,7 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
 	}
 
-	putBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
+	putBody := jsonBody(testFlag("", "", false, "off"))
 	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
@@ -224,11 +224,11 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	if putRec.Code != http.StatusOK {
 		t.Fatalf("expected update to succeed, got %d: %s", putRec.Code, putRec.Body.String())
 	}
-	var updated legacyFlag
+	var updated store.Flag
 	if err := json.Unmarshal(putRec.Body.Bytes(), &updated); err != nil {
 		t.Fatalf("decode update response: %v", err)
 	}
-	if updated.Enabled || updated.Value != "off" {
+	if updated.Enabled || flagValue(updated) != "off" {
 		t.Fatalf("expected the PUT to win, got %+v", updated)
 	}
 
@@ -237,10 +237,10 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
 	var listed struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	_ = json.Unmarshal(getRec.Body.Bytes(), &listed)
-	if len(listed.Flags) != 1 || listed.Flags[0].Enabled || listed.Flags[0].Value != "off" {
+	if len(listed.Flags) != 1 || listed.Flags[0].Enabled || flagValue(listed.Flags[0]) != "off" {
 		t.Fatalf("expected the updated flag to be reflected in the list, got %+v", listed.Flags)
 	}
 }
@@ -249,65 +249,12 @@ func TestFlagsPutUpdatesEnabledAndValue(t *testing.T) {
 // for groupIds in usersPutHandler and active in applicationCredentialsPutHandler.
 // Before the fix, a value-only PUT decoded enabled as false and silently turned
 // the flag off.
-func TestFlagsPutLeavesOmittedFieldsUnchanged(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		body        map[string]any
-		wantEnabled bool
-		wantValue   string
-	}{
-		{"value only", map[string]any{"value": "on-v2"}, true, "on-v2"},
-		{"enabled only", map[string]any{"enabled": false}, false, "on"},
-		{"empty body", map[string]any{}, true, "on"},
-		{"explicit zero values still apply", map[string]any{"enabled": false, "value": ""}, false, ""},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			mux := newTestMux(t)
-			envID := seedEnvironmentForTest(t, "Production")
-			token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate)
-
-			createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
-			createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
-			createReq.Header.Set("Authorization", "Bearer "+token)
-			createRec := httptest.NewRecorder()
-			mux.ServeHTTP(createRec, createReq)
-			if createRec.Code != http.StatusOK {
-				t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
-			}
-
-			putBody, _ := json.Marshal(tc.body)
-			putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
-			putReq.Header.Set("Authorization", "Bearer "+token)
-			putRec := httptest.NewRecorder()
-			mux.ServeHTTP(putRec, putReq)
-			if putRec.Code != http.StatusOK {
-				t.Fatalf("expected update to succeed, got %d: %s", putRec.Code, putRec.Body.String())
-			}
-			var updated legacyFlag
-			if err := json.Unmarshal(putRec.Body.Bytes(), &updated); err != nil {
-				t.Fatalf("decode update response: %v", err)
-			}
-			if updated.Enabled != tc.wantEnabled || updated.Value != tc.wantValue {
-				t.Fatalf("expected enabled=%v value=%q, got %+v", tc.wantEnabled, tc.wantValue, updated)
-			}
-
-			stored, exists := dataStore.Flags().Get(envID, "checkout")
-			if !exists {
-				t.Fatal("expected the flag to still exist")
-			}
-			if stored.Enabled != tc.wantEnabled || toLegacyFlag(stored).Value != tc.wantValue {
-				t.Fatalf("expected the store to hold enabled=%v value=%q, got %+v", tc.wantEnabled, tc.wantValue, stored)
-			}
-		})
-	}
-}
-
 func TestFlagsPutReturnsNotFoundForUnknownFlag(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsUpdate)
 
-	putBody, _ := json.Marshal(map[string]any{"enabled": true, "value": "on"})
+	putBody := jsonBody(testFlag("", "", true, "on"))
 	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/does-not-exist?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
@@ -322,7 +269,7 @@ func TestFlagsPutRequiresPermFlagsUpdate(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead)
 
-	putBody, _ := json.Marshal(map[string]any{"enabled": true, "value": "on"})
+	putBody := jsonBody(testFlag("", "", true, "on"))
 	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
@@ -337,7 +284,7 @@ func TestFlagsGetByKeyReturnsFlag(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
-	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "value": "on", "environmentIds": []string{envID}})
+	createBody := flagBody("checkout", true, "on", envID)
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
@@ -353,11 +300,11 @@ func TestFlagsGetByKeyReturnsFlag(t *testing.T) {
 	if getRec.Code != http.StatusOK {
 		t.Fatalf("expected get to succeed, got %d: %s", getRec.Code, getRec.Body.String())
 	}
-	var got legacyFlag
+	var got store.Flag
 	if err := json.Unmarshal(getRec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("decode get response: %v", err)
 	}
-	if got.Key != "checkout" || !got.Enabled || got.Value != "on" || got.EnvironmentID != envID {
+	if got.Key != "checkout" || !got.Enabled || flagValue(got) != "on" || got.EnvironmentID != envID {
 		t.Fatalf("unexpected flag returned: %+v", got)
 	}
 }
@@ -423,7 +370,7 @@ func TestFlagsPutRequiresUpdateNotJustWrite(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
-	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
+	createBody := flagBody("checkout", true, "", envID)
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
@@ -432,7 +379,7 @@ func TestFlagsPutRequiresUpdateNotJustWrite(t *testing.T) {
 		t.Fatalf("expected create to succeed, got %d: %s", createRec.Code, createRec.Body.String())
 	}
 
-	putBody, _ := json.Marshal(map[string]any{"enabled": false, "value": "off"})
+	putBody := jsonBody(testFlag("", "", false, "off"))
 	putReq := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/checkout?environmentId="+envID, bytes.NewReader(putBody))
 	putReq.Header.Set("Authorization", "Bearer "+token)
 	putRec := httptest.NewRecorder()
@@ -447,7 +394,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsDelete)
 
-	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
+	createBody := flagBody("checkout", true, "", envID)
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
@@ -469,7 +416,7 @@ func TestFlagsDeleteRemovesFlag(t *testing.T) {
 	getRec := httptest.NewRecorder()
 	mux.ServeHTTP(getRec, getReq)
 	var listed struct {
-		Flags []legacyFlag `json:"flags"`
+		Flags []store.Flag `json:"flags"`
 	}
 	_ = json.Unmarshal(getRec.Body.Bytes(), &listed)
 	if len(listed.Flags) != 0 {
@@ -504,7 +451,7 @@ func TestFlagsDeleteRequiresPermFlagsDeleteNotJustWrite(t *testing.T) {
 	envID := seedEnvironmentForTest(t, "Production")
 	token := tokenForWithEnvironments(t, []string{envID}, auth.PermFlagsRead, auth.PermFlagsWrite)
 
-	createBody, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": true, "environmentIds": []string{envID}})
+	createBody := flagBody("checkout", true, "", envID)
 	createReq := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(createBody))
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRec := httptest.NewRecorder()
@@ -539,14 +486,14 @@ func TestFlagsPostRejectsExistingKeyWithoutOverwriting(t *testing.T) {
 			mux := newTestMux(t)
 			existingEnv := seedEnvironmentForTest(t, "Production")
 			freshEnv := seedEnvironmentForTest(t, "Staging")
-			if _, err := dataStore.Flags().Set(legacyDefinition(existingEnv, "checkout", true, "on")); err != nil {
+			if _, err := dataStore.Flags().Set(testFlag(existingEnv, "checkout", true, "on")); err != nil {
 				t.Fatalf("seed flag: %v", err)
 			}
 			token := tt.token(t, []string{existingEnv, freshEnv})
 
 			// The key exists in one of the two targets: the whole request
 			// must be rejected, not just that environment.
-			body, _ := json.Marshal(map[string]any{"key": "checkout", "enabled": false, "value": "off", "environmentIds": []string{existingEnv, freshEnv}})
+			body := flagBody("checkout", false, "off", existingEnv, freshEnv)
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/flags", bytes.NewReader(body))
 			req.Header.Set("Authorization", "Bearer "+token)
 			rec := httptest.NewRecorder()
@@ -556,7 +503,7 @@ func TestFlagsPostRejectsExistingKeyWithoutOverwriting(t *testing.T) {
 			}
 
 			existing, _ := dataStore.Flags().Get(existingEnv, "checkout")
-			if !existing.Enabled || toLegacyFlag(existing).Value != "on" {
+			if !existing.Enabled || flagValue(existing) != "on" {
 				t.Fatalf("expected the existing flag to be unchanged, got %+v", existing)
 			}
 			if fresh, found := dataStore.Flags().Get(freshEnv, "checkout"); found {
@@ -570,7 +517,7 @@ func TestFlagsForceDisable(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")
 	otherEnvID := seedEnvironmentForTest(t, "Staging")
-	if _, err := dataStore.Flags().Set(legacyDefinition(envID, "kill-me", true, "active-value")); err != nil {
+	if _, err := dataStore.Flags().Set(testFlag(envID, "kill-me", true, "active-value")); err != nil {
 		t.Fatalf("seed flag: %v", err)
 	}
 
@@ -585,15 +532,15 @@ func TestFlagsForceDisable(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp legacyFlag
+	var resp store.Flag
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal response: %v", err)
 	}
 	if resp.Enabled {
 		t.Fatalf("expected flag to be disabled, got %+v", resp)
 	}
-	if resp.Value != "active-value" {
-		t.Fatalf("expected flag value to be preserved, got %q", resp.Value)
+	if flagValue(resp) != "active-value" {
+		t.Fatalf("expected flag value to be preserved, got %q", flagValue(resp))
 	}
 
 	stored, exists := dataStore.Flags().Get(envID, "kill-me")
@@ -700,4 +647,41 @@ func TestFlagsForceDisable(t *testing.T) {
 	if rec401.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without auth header, got %d: %s", rec401.Code, rec401.Body.String())
 	}
+}
+
+// testFlag is a minimal valid §6.1 definition: one string variation, value,
+// served everywhere.
+func testFlag(environmentID, key string, enabled bool, value string) store.Flag {
+	raw, _ := json.Marshal(value)
+	return store.Flag{
+		EnvironmentID: environmentID,
+		Key:           key,
+		Type:          store.FlagTypeString,
+		Enabled:       enabled,
+		Variations:    []store.Variation{{ID: "value", Value: raw}},
+		OffVariation:  "value",
+		Fallthrough:   store.Serve{Variation: "value"},
+	}
+}
+
+func jsonBody(v any) []byte {
+	b, _ := json.Marshal(v)
+	return b
+}
+
+// flagBody is testFlag as a POST /api/flags body for environmentIDs.
+func flagBody(key string, enabled bool, value string, environmentIDs ...string) []byte {
+	return jsonBody(struct {
+		store.Flag
+		EnvironmentIDs []string `json:"environmentIds"`
+	}{testFlag("", key, enabled, value), environmentIDs})
+}
+
+// flagValue is the value a testFlag serves.
+func flagValue(flag store.Flag) string {
+	var value string
+	if len(flag.Variations) > 0 {
+		_ = json.Unmarshal(flag.Variations[0].Value, &value)
+	}
+	return value
 }

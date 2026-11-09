@@ -19,6 +19,9 @@ type auditConfig struct {
 	Action     string
 	TargetType string
 	Before     func(r *http.Request, body []byte) (any, bool)
+	// Details, when set, fills AuditEntry.Details on success from the
+	// Before JSON and the response body.
+	Details func(before string, after []byte) string
 }
 
 // withAudit wraps next so every invocation -- success or rejection -- is
@@ -94,6 +97,9 @@ func recordAudit(w http.ResponseWriter, r *http.Request, cfg auditConfig, before
 	}
 	if success {
 		entry.After = redactSensitiveResponseFields(rec.body.Bytes())
+		if cfg.Details != nil {
+			entry.Details = cfg.Details(beforeJSON, rec.body.Bytes())
+		}
 	} else {
 		entry.Error = extractErrorMessage(rec.body.Bytes())
 	}
