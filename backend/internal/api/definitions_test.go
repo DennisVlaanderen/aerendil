@@ -206,6 +206,23 @@ func TestFlagsRevisionReturnedOnReadsAndIgnoredOnWrites(t *testing.T) {
 	if len(got.Rules) != 2 || got.Rules[1].Serve.Rollout == nil || got.Salt != "checkout.new-flow" {
 		t.Fatalf("expected the full §6.1 definition back, got %s", rec.Body.String())
 	}
+
+	// A PUT that omits or changes the salt must not reshuffle rollout buckets.
+	for _, salt := range []string{"", "other-salt"} {
+		update := richFlagForTest("")
+		update.Salt = salt
+		path := "/api/flags/checkout.new-flow?environmentId=" + envID
+		rec = doJSON(t, mux, http.MethodPut, path, token, jsonBody(update))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT with salt %q: expected 200, got %d: %s", salt, rec.Code, rec.Body.String())
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if got.Salt != "checkout.new-flow" {
+			t.Fatalf("PUT with salt %q changed the stored salt to %q", salt, got.Salt)
+		}
+	}
 }
 
 func TestFlagsAuditRecordsRuleChanges(t *testing.T) {

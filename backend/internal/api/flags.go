@@ -142,17 +142,19 @@ func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return forbidden(CodeAuthForbidden, MsgAuthForbidden)
 	}
 
-	if _, exists := dataStore.Flags().Get(environmentID, key); !exists {
+	existing, exists := dataStore.Flags().Get(environmentID, key)
+	if !exists {
 		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
 
 	// The full §6.1 definition replaces the stored one. The path and query
-	// name the flag; fields the store owns are ignored.
+	// name the flag; fields the store owns are ignored. The salt is kept:
+	// changing it reshuffles every rollout bucket (§6.1).
 	var flag store.Flag
 	if err := decodeJSON(w, r, &flag); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
 	}
-	flag.Key, flag.EnvironmentID = key, environmentID
+	flag.Key, flag.EnvironmentID, flag.Salt = key, environmentID, existing.Salt
 	if err := validateFlag(&flag); err != nil {
 		return err
 	}

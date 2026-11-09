@@ -91,9 +91,6 @@ func evalSegments(environmentID string) (map[string]eval.Segment, error) {
 // against §2.2 and §6. It sets SchemaVersion, which the store also stamps.
 func validateFlag(flag *store.Flag) error {
 	flag.SchemaVersion = definitionSchemaVersion
-	if flag.Key == "" {
-		return badRequest(CodeBadRequestFlagsKeyRequired, "key is required")
-	}
 	if !definitionKeyPattern.MatchString(flag.Key) {
 		return badRequest(CodeBadRequestFlagKeyInvalid, fmt.Sprintf("key %q must match %s", flag.Key, definitionKeyPattern))
 	}
