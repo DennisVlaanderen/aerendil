@@ -23,6 +23,9 @@ type AuditEntry struct {
 	Success    bool   `json:"success"`
 	StatusCode int    `json:"statusCode"`
 	Error      string `json:"error,omitempty"`
+	// Details is optional route-specific JSON, such as a flag write's
+	// added, changed and removed rule ids.
+	Details string `json:"details,omitempty"`
 }
 
 func (f *fsm) applyAuditEntry(index uint64, cmd command) interface{} {

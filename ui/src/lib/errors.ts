@@ -34,6 +34,16 @@ export const ErrorCode = {
 	BadRequestFlagsEnvironmentIDRequired: 'BR02-0001',
 	BadRequestFlagsKeyRequired: 'BR02-0002',
 	BadRequestFlagsEnvironmentIDsRequired: 'BR02-0003',
+	BadRequestFlagKeyInvalid: 'BR02-0004',
+	BadRequestFlagTypeInvalid: 'BR02-0005',
+	BadRequestFlagVariationsRequired: 'BR02-0006',
+	BadRequestFlagVariationValueInvalid: 'BR02-0007',
+	BadRequestFlagBooleanVariations: 'BR02-0008',
+	BadRequestFlagVariationUnknown: 'BR02-0009',
+	BadRequestFlagServeInvalid: 'BR02-0010',
+	BadRequestFlagRolloutWeightsInvalid: 'BR02-0011',
+	BadRequestFlagTypeChanged: 'BR02-0012',
+	BadRequestFlagContextInvalid: 'BR02-0013',
 
 	// BR03 -- bad request, environments domain (400).
 	BadRequestEnvironmentUnknown: 'BR03-0001',
@@ -61,6 +71,21 @@ export const ErrorCode = {
 	BadRequestAuditCursorInvalid: 'BR07-0002',
 	BadRequestAuditTimeRangeInvalid: 'BR07-0003',
 
+	// BR08 -- bad request, the rule language flags and segments share (400).
+	BadRequestDefinitionIDInvalid: 'BR08-0001',
+	BadRequestDefinitionIDDuplicate: 'BR08-0002',
+	BadRequestDefinitionLimitExceeded: 'BR08-0003',
+	BadRequestConditionGroupInvalid: 'BR08-0004',
+	BadRequestConditionGroupNested: 'BR08-0005',
+	BadRequestConditionInvalid: 'BR08-0006',
+	BadRequestConditionValuesInvalid: 'BR08-0007',
+	BadRequestSegmentUnknown: 'BR08-0008',
+	BadRequestSegmentUsesInSegment: 'BR08-0009',
+
+	// BR09 -- bad request, segments domain (400).
+	BadRequestSegmentKeyInvalid: 'BR09-0001',
+	BadRequestSegmentEnvironmentIDRequired: 'BR09-0002',
+
 	// NF -- not found (404), one group per domain.
 	NotFoundUser: 'NF01-0001',
 	NotFoundFlag: 'NF02-0001',
@@ -68,10 +93,13 @@ export const ErrorCode = {
 	NotFoundGroup: 'NF04-0001',
 	NotFoundApplicationCredential: 'NF05-0001',
 	NotFoundAudit: 'NF06-0001',
+	NotFoundSegment: 'NF07-0001',
 
 	// CF -- conflict (409), one group per domain.
 	ConflictUsernameTaken: 'CF01-0001',
 	ConflictFlagExists: 'CF02-0001',
+	ConflictSegmentExists: 'CF03-0001',
+	ConflictSegmentInUse: 'CF03-0002',
 
 	// MN01 -- method not allowed (405).
 	MethodNotAllowed: 'MN01-0001',
@@ -140,6 +168,30 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.NotFoundAudit]: m.error_audit_not_found,
 	[ErrorCode.ConflictUsernameTaken]: m.error_username_taken,
 	[ErrorCode.ConflictFlagExists]: m.error_flag_exists,
+	[ErrorCode.BadRequestFlagKeyInvalid]: m.error_flag_key_invalid,
+	[ErrorCode.BadRequestFlagTypeInvalid]: m.error_flag_type_invalid,
+	[ErrorCode.BadRequestFlagVariationsRequired]: m.error_flag_variations_required,
+	[ErrorCode.BadRequestFlagVariationValueInvalid]: m.error_flag_variation_value_invalid,
+	[ErrorCode.BadRequestFlagBooleanVariations]: m.error_flag_boolean_variations,
+	[ErrorCode.BadRequestFlagVariationUnknown]: m.error_flag_variation_unknown,
+	[ErrorCode.BadRequestFlagServeInvalid]: m.error_flag_serve_invalid,
+	[ErrorCode.BadRequestFlagRolloutWeightsInvalid]: m.error_flag_rollout_weights_invalid,
+	[ErrorCode.BadRequestFlagTypeChanged]: m.error_flag_type_changed,
+	[ErrorCode.BadRequestFlagContextInvalid]: m.error_flag_context_invalid,
+	[ErrorCode.BadRequestDefinitionIDInvalid]: m.error_definition_id_invalid,
+	[ErrorCode.BadRequestDefinitionIDDuplicate]: m.error_definition_id_duplicate,
+	[ErrorCode.BadRequestDefinitionLimitExceeded]: m.error_definition_limit_exceeded,
+	[ErrorCode.BadRequestConditionGroupInvalid]: m.error_condition_group_invalid,
+	[ErrorCode.BadRequestConditionGroupNested]: m.error_condition_group_nested,
+	[ErrorCode.BadRequestConditionInvalid]: m.error_condition_invalid,
+	[ErrorCode.BadRequestConditionValuesInvalid]: m.error_condition_values_invalid,
+	[ErrorCode.BadRequestSegmentUnknown]: m.error_segment_unknown,
+	[ErrorCode.BadRequestSegmentUsesInSegment]: m.error_segment_uses_in_segment,
+	[ErrorCode.BadRequestSegmentKeyInvalid]: m.error_segment_key_invalid,
+	[ErrorCode.BadRequestSegmentEnvironmentIDRequired]: m.error_segment_environment_required,
+	[ErrorCode.NotFoundSegment]: m.error_segment_not_found,
+	[ErrorCode.ConflictSegmentExists]: m.error_segment_exists,
+	[ErrorCode.ConflictSegmentInUse]: m.error_segment_in_use,
 	[ErrorCode.MethodNotAllowed]: m.error_method_not_allowed
 };
 

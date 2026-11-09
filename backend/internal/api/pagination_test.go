@@ -60,7 +60,7 @@ func TestListEndpointsPaginate(t *testing.T) {
 		tokenFor(t) // seeds a user
 		seedGroupForTest(t, name, nil)
 		seedEnvironmentForTest(t, name)
-		if _, err := dataStore.Flags().Set(legacyDefinition(envID, name, false, "")); err != nil {
+		if _, err := dataStore.Flags().Set(testFlag(envID, name, false, "")); err != nil {
 			t.Fatalf("seed flag: %v", err)
 		}
 		createApplicationCredentialForTest(t, mux, token, name, envID, nil)

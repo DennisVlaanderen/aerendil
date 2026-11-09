@@ -14,6 +14,10 @@ const (
 	PermFlagsWrite         = "flags:write"
 	PermFlagsUpdate        = "flags:update"
 	PermFlagsDelete        = "flags:delete"
+	PermSegmentsRead       = "segments:read"
+	PermSegmentsWrite      = "segments:write"
+	PermSegmentsUpdate     = "segments:update"
+	PermSegmentsDelete     = "segments:delete"
 	PermUsersRead          = "users:read"
 	PermUsersCreate        = "users:create"
 	PermUsersUpdate        = "users:update"
@@ -42,9 +46,10 @@ const (
 // permissions; Flags follow the same split except create still uses the
 // original "write" name rather than "create" (flags:write, flags:update,
 // flags:delete) so a group can be granted flags:write (create) without
-// also getting flags:update or flags:delete.
+// also getting flags:update or flags:delete. Segments copy the flags split.
 var AllPermissions = []string{
 	PermFlagsRead, PermFlagsWrite, PermFlagsUpdate, PermFlagsDelete,
+	PermSegmentsRead, PermSegmentsWrite, PermSegmentsUpdate, PermSegmentsDelete,
 	PermUsersRead, PermUsersCreate, PermUsersUpdate, PermUsersDelete,
 	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
 	PermAuditsRead,

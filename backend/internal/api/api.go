@@ -1,5 +1,6 @@
 // Package api implements Aerendil's HTTP API: flags, auth, users, groups,
-// audits, environments, and application credentials. See RegisterRoutes.
+// segments, audits, environments, and application credentials. See
+// RegisterRoutes.
 package api
 
 import (
@@ -48,6 +49,7 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 
 	registerAuthRoutes(mux)
 	registerFlagRoutes(mux)
+	registerSegmentRoutes(mux)
 	registerUserRoutes(mux)
 	registerGroupRoutes(mux)
 	registerAuditRoutes(mux)

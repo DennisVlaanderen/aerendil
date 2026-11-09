@@ -65,6 +65,20 @@ func storeErrorToAPIError(err error) *apiError {
 		return &apiError{http.StatusForbidden, CodeBusinessEnvironmentHasCredentials, err.Error()}
 	case errors.Is(err, store.ErrEnvironmentHasSegments):
 		return &apiError{http.StatusForbidden, CodeBusinessEnvironmentHasSegments, err.Error()}
+	case errors.Is(err, store.ErrFlagTypeChanged):
+		return &apiError{http.StatusBadRequest, CodeBadRequestFlagTypeChanged, err.Error()}
+	case errors.Is(err, store.ErrUnknownFlagType):
+		return &apiError{http.StatusBadRequest, CodeBadRequestFlagTypeInvalid, err.Error()}
+	case errors.Is(err, store.ErrUnknownSegment):
+		return &apiError{http.StatusBadRequest, CodeBadRequestSegmentUnknown, err.Error()}
+	case errors.Is(err, store.ErrSegmentExists):
+		return &apiError{http.StatusConflict, CodeConflictSegmentExists, err.Error()}
+	case errors.Is(err, store.ErrSegmentInUse):
+		return &apiError{http.StatusConflict, CodeConflictSegmentInUse, err.Error()}
+	case errors.Is(err, store.ErrSegmentLimitExceeded):
+		return &apiError{http.StatusBadRequest, CodeBadRequestDefinitionLimitExceeded, err.Error()}
+	case errors.Is(err, store.ErrSegmentUsesInSegment):
+		return &apiError{http.StatusBadRequest, CodeBadRequestSegmentUsesInSegment, err.Error()}
 	case errors.Is(err, store.ErrUnknownEnvironment):
 		return &apiError{http.StatusBadRequest, CodeBadRequestEnvironmentUnknown, err.Error()}
 	default:

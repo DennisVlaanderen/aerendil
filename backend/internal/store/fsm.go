@@ -12,6 +12,7 @@ import (
 
 const (
 	opSet      = "set"
+	opCreate   = "create"
 	opSetBatch = "setBatch"
 	opDelete   = "delete"
 	opAppend   = "append"

@@ -25,6 +25,9 @@ const (
 	// BR05 -- bad request, groups domain.
 	MsgBadRequestGroupNameRequired = "name is required"
 
+	// BR09 -- bad request, segments domain.
+	MsgBadRequestSegmentEnvironmentIDRequired = "environmentId is required"
+
 	// BR06 -- bad request, application credentials domain.
 	MsgBadRequestCredentialEnvironmentRequired = "environmentId is required"
 
@@ -35,6 +38,7 @@ const (
 	MsgNotFoundGroup                 = "group not found"
 	MsgNotFoundApplicationCredential = "application credential not found"
 	MsgNotFoundAudit                 = "audit entry not found"
+	MsgNotFoundSegment               = "segment not found"
 
 	// CF -- conflict.
 	MsgConflictUsernameTaken = "username is already taken"
