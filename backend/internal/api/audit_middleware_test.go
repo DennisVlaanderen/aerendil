@@ -298,7 +298,7 @@ func TestWithAuditMiddlewareDirect(t *testing.T) {
 				req := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/api/flags/"+tc.targetID, nil)
 				req.SetPathValue("key", tc.targetID)
 				rec := httptest.NewRecorder()
-			h(rec, req)
+				h(rec, req)
 
 				if rec.Code != tc.status {
 					t.Fatalf("expected status %d, got %d", tc.status, rec.Code)
