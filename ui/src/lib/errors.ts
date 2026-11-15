@@ -100,6 +100,7 @@ export const ErrorCode = {
 	ConflictFlagExists: 'CF02-0001',
 	ConflictSegmentExists: 'CF03-0001',
 	ConflictSegmentInUse: 'CF03-0002',
+	ConflictRevision: 'CF04-0001',
 
 	// MN01 -- method not allowed (405).
 	MethodNotAllowed: 'MN01-0001',
@@ -192,6 +193,7 @@ export const errorMessages: Record<string, () => string> = {
 	[ErrorCode.NotFoundSegment]: m.error_segment_not_found,
 	[ErrorCode.ConflictSegmentExists]: m.error_segment_exists,
 	[ErrorCode.ConflictSegmentInUse]: m.error_segment_in_use,
+	[ErrorCode.ConflictRevision]: m.error_revision_conflict,
 	[ErrorCode.MethodNotAllowed]: m.error_method_not_allowed
 };
 

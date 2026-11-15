@@ -31,6 +31,7 @@ func TestStoreErrorToAPIErrorCodesAreStructured(t *testing.T) {
 		store.ErrSegmentInUse,
 		store.ErrSegmentLimitExceeded,
 		store.ErrSegmentUsesInSegment,
+		store.ErrRevisionMismatch,
 	}
 
 	for _, sentinel := range sentinels {

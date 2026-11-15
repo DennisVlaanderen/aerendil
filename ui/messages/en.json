@@ -258,6 +258,7 @@
 	"error_segment_not_found": "That segment no longer exists.",
 	"error_segment_exists": "A segment with this key already exists in this environment.",
 	"error_segment_in_use": "A flag still uses this segment, so it can't be deleted.",
+	"error_revision_conflict": "Someone else saved this since you opened it. Reload the page to see their changes, then make yours again.",
 	"error_method_not_allowed": "That action isn't supported.",
 	"toast_route_not_found": "That page doesn't exist, so we brought you back to the dashboard.",
 	"toast_dismiss": "Dismiss",

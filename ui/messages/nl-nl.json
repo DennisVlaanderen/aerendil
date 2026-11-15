@@ -258,6 +258,7 @@
 	"error_segment_not_found": "Dat segment bestaat niet meer.",
 	"error_segment_exists": "Er bestaat al een segment met deze sleutel in deze omgeving.",
 	"error_segment_in_use": "Een flag gebruikt dit segment nog, dus het kan niet worden verwijderd.",
+	"error_revision_conflict": "Iemand anders heeft dit opgeslagen nadat je het opende. Herlaad de pagina om hun wijzigingen te zien en breng de jouwe opnieuw aan.",
 	"error_method_not_allowed": "Die actie wordt niet ondersteund.",
 	"toast_route_not_found": "Die pagina bestaat niet, dus we hebben je teruggebracht naar het dashboard.",
 	"toast_dismiss": "Sluiten",

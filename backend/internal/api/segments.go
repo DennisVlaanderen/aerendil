@@ -102,7 +102,8 @@ func segmentsPutHandler(w http.ResponseWriter, r *http.Request) error {
 		return notFound(CodeNotFoundSegment, MsgNotFoundSegment)
 	}
 
-	// The full segment replaces the stored one. The path and query name it.
+	// The full segment replaces the stored one. The path and query name it;
+	// a non-zero revision must be the stored one (else 409).
 	var segment store.Segment
 	if err := decodeJSON(w, r, &segment); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)

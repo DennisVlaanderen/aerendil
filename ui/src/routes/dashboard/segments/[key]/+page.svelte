@@ -32,7 +32,8 @@
 		saveError = '';
 		const result = await apiRequest(segmentUrl(), {
 			method: 'PUT',
-			body: JSON.stringify(segment)
+			// The backend answers 409 if someone saved since this page loaded.
+			body: JSON.stringify({ ...segment, revision: data.segment.revision })
 		});
 		isSaving = false;
 		if (result.error) {

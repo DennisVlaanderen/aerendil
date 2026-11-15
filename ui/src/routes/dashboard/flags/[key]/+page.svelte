@@ -91,6 +91,8 @@
 			body: JSON.stringify({
 				key: data.flag.key,
 				type: data.flag.type,
+				// The backend answers 409 if someone saved since this page loaded.
+				revision: data.flag.revision,
 				enabled: draft.enabled,
 				variations,
 				offVariation: draft.offVariation,

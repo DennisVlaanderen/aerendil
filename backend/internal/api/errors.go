@@ -73,6 +73,8 @@ func storeErrorToAPIError(err error) *apiError {
 		return &apiError{http.StatusBadRequest, CodeBadRequestSegmentUnknown, err.Error()}
 	case errors.Is(err, store.ErrSegmentExists):
 		return &apiError{http.StatusConflict, CodeConflictSegmentExists, err.Error()}
+	case errors.Is(err, store.ErrRevisionMismatch):
+		return &apiError{http.StatusConflict, CodeConflictRevision, err.Error()}
 	case errors.Is(err, store.ErrSegmentInUse):
 		return &apiError{http.StatusConflict, CodeConflictSegmentInUse, err.Error()}
 	case errors.Is(err, store.ErrSegmentLimitExceeded):

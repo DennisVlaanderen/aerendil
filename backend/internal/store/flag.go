@@ -22,6 +22,11 @@ var ErrFlagTypeChanged = errors.New("flag type cannot be changed")
 // environment does not have.
 var ErrUnknownSegment = errors.New("segment does not exist")
 
+// ErrRevisionMismatch means a Set named a non-zero Revision that is not the
+// stored one: someone else wrote (or deleted) the definition since it was
+// read. Revision 0 skips the check.
+var ErrRevisionMismatch = errors.New("definition was changed since it was read")
+
 // ErrUnknownFlagType means a flag's Type is not one of the FlagType values.
 var ErrUnknownFlagType = errors.New("unknown flag type")
 
@@ -144,8 +149,12 @@ func (f *fsm) applyFlag(index uint64, cmd command) any {
 			return fmt.Errorf("%w: %q", ErrUnknownFlagType, cmd.Flag.Type)
 		}
 		// Enforced here, not only in the API, so no write path can retype a flag.
-		if existing, ok := f.flags[flagMapKey(cmd.Flag.EnvironmentID, cmd.Flag.Key)]; ok && existing.Type != cmd.Flag.Type {
+		existing, ok := f.flags[flagMapKey(cmd.Flag.EnvironmentID, cmd.Flag.Key)]
+		if ok && existing.Type != cmd.Flag.Type {
 			return fmt.Errorf("%w: %q is %q", ErrFlagTypeChanged, cmd.Flag.Key, existing.Type)
+		}
+		if cmd.Flag.Revision != 0 && (!ok || existing.Revision != cmd.Flag.Revision) {
+			return fmt.Errorf("%w: flag %q revision %d", ErrRevisionMismatch, cmd.Flag.Key, cmd.Flag.Revision)
 		}
 		// Here, not only in the API, so a segment deleted after the API's
 		// check can't leave a dangling reference.
@@ -242,8 +251,9 @@ func (r FlagRepository) List(environmentID string) []Flag {
 }
 
 // Set applies a flag change through Raft; an unknown EnvironmentID returns
-// ErrUnknownEnvironment, and changing an existing flag's Type returns
-// ErrFlagTypeChanged.
+// ErrUnknownEnvironment, changing an existing flag's Type returns
+// ErrFlagTypeChanged, and a stale non-zero Revision returns
+// ErrRevisionMismatch.
 func (r FlagRepository) Set(flag Flag) (Flag, error) {
 	resp, err := r.store.apply(command{Op: opSet, Entity: entityFlag, Flag: &flag})
 	if err != nil {

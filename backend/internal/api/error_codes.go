@@ -99,6 +99,8 @@ const (
 	CodeConflictFlagExists    = "CF02-0001" // POST /api/flags: key already exists in a target environment
 	CodeConflictSegmentExists = "CF03-0001" // POST /api/segments: key already exists in the environment
 	CodeConflictSegmentInUse  = "CF03-0002" // DELETE /api/segments/{key}: a flag still references it
+	// CF04 -- conflict, the definitions flags and segments share.
+	CodeConflictRevision = "CF04-0001" // PUT: the revision sent isn't the stored one
 
 	// MN01 -- method not allowed (405).
 	CodeMethodNotAllowed = "MN01-0001"
