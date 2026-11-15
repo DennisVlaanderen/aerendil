@@ -40,7 +40,8 @@
 			enabled: copy.enabled,
 			variations: copy.variations.map((v) => ({
 				id: v.id,
-				text: variationText(v.value, flag.type)
+				text: variationText(v.value, flag.type),
+				saved: true
 			})),
 			offVariation: copy.offVariation,
 			rules: copy.rules ?? [],

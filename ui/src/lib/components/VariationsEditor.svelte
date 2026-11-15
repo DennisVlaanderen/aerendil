@@ -3,12 +3,17 @@
 	import { uniqueId, type FlagType } from '#lib/flags.ts';
 
 	// Values are edited as text and parsed on save (parseVariationValue); a
-	// boolean flag's two variations are fixed (fqdp.md §6.1).
+	// boolean flag's two variations are fixed (fqdp.md §6.1). A saved
+	// variation's id is locked: offVariation, rules and rollouts refer to it.
 	let {
 		variations = $bindable(),
 		type,
 		disabled = false
-	}: { variations: { id: string; text: string }[]; type: FlagType; disabled?: boolean } = $props();
+	}: {
+		variations: { id: string; text: string; saved?: boolean }[];
+		type: FlagType;
+		disabled?: boolean;
+	} = $props();
 
 	const field =
 		'rounded-lg border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none disabled:opacity-60';
@@ -23,7 +28,7 @@
 				aria-label={m.variation_id_label()}
 				bind:value={variation.id}
 				required
-				disabled={fixed}
+				disabled={fixed || variation.saved}
 			/>
 			{#if type === 'json'}
 				<textarea
