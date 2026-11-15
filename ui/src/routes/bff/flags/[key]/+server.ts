@@ -26,12 +26,16 @@ export const PUT: RequestHandler = async ({ request, cookies, params, url }) => 
 	}
 
 	const body = await request.json().catch(() => null);
-	const enabled = Boolean(body?.enabled);
-	const value = typeof body?.value === 'string' ? body.value : '';
+	if (!body || typeof body !== 'object') {
+		return json(
+			{ error: 'Invalid request body.', code: ErrorCode.BadRequestBody },
+			{ status: 400 }
+		);
+	}
 
 	const token = getAuthToken(cookies);
 	const result = token
-		? await updateFlag(token, environmentId, params.key, { enabled, value })
+		? await updateFlag(token, environmentId, params.key, body)
 		: { error: 'Not authenticated.', code: ErrorCode.AuthInvalidToken, status: 401 };
 	if (result.error) {
 		return json({ error: result.error, code: result.code }, { status: result.status });
