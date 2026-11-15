@@ -1,9 +1,6 @@
 import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 import type { EvaluationResult, FlagDefinition } from '#lib/flags.ts';
-
-// `status` mirrors the backend's own HTTP status verbatim -- see the
-// identical convention on GroupResult (lib/server/groups.ts) for why.
-type Failure = { error: string; status: number; code: string };
+import { send, type Failure } from '#lib/server/backend.ts';
 
 export type FlagsResult =
 	| { flags: FlagDefinition[]; error?: undefined; status?: undefined; code?: undefined }
@@ -19,33 +16,6 @@ export type EvaluationOutcome =
 
 function flagUrl(environmentId: string, key: string, suffix = '') {
 	return `${API_ORIGIN}/api/flags/${encodeURIComponent(key)}${suffix}?environmentId=${encodeURIComponent(environmentId)}`;
-}
-
-// send calls the backend and returns its JSON body, or a Failure carrying
-// the backend's error, code and status (fallback used for a missing body).
-async function send(
-	url: string,
-	token: string,
-	init: RequestInit,
-	fallback: string
-): Promise<{ body: unknown; failure?: undefined } | { body?: undefined; failure: Failure }> {
-	const response = await fetch(url, {
-		...init,
-		headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` }
-	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return {
-			failure: {
-				error: typeof payload?.error === 'string' ? payload.error : fallback,
-				code: typeof payload?.code === 'string' ? payload.code : 'internal',
-				status: response.status
-			}
-		};
-	}
-	return payload
-		? { body: payload }
-		: { failure: { error: fallback, code: 'internal', status: 502 } };
 }
 
 export async function listFlags(token: string, environmentId: string): Promise<FlagDefinition[]> {

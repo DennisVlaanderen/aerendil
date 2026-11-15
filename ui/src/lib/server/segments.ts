@@ -1,9 +1,6 @@
 import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
 import type { Segment } from '#lib/flags.ts';
-
-// `status` mirrors the backend's own HTTP status verbatim -- see the
-// identical convention on GroupResult (lib/server/groups.ts) for why.
-type Failure = { error: string; status: number; code: string };
+import { send, type Failure } from '#lib/server/backend.ts';
 
 export type SegmentResult =
 	| { segment: Segment; error?: undefined; status?: undefined; code?: undefined }
@@ -13,15 +10,6 @@ function segmentUrl(environmentId: string, key: string) {
 	return `${API_ORIGIN}/api/segments/${encodeURIComponent(key)}?environmentId=${encodeURIComponent(environmentId)}`;
 }
 
-async function failure(response: Response, fallback: string): Promise<Failure> {
-	const payload = await response.json().catch(() => null);
-	return {
-		error: typeof payload?.error === 'string' ? payload.error : fallback,
-		code: typeof payload?.code === 'string' ? payload.code : 'internal',
-		status: response.status
-	};
-}
-
 async function write(
 	url: string,
 	token: string,
@@ -29,14 +17,13 @@ async function write(
 	segment: Partial<Segment>,
 	fallback: string
 ): Promise<SegmentResult> {
-	const response = await fetch(url, {
-		method,
-		headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(segment)
-	});
-	if (!response.ok) return failure(response, fallback);
-	const applied = await response.json().catch(() => null);
-	return applied ? { segment: applied } : { error: fallback, code: 'internal', status: 502 };
+	const { body, failure } = await send(
+		url,
+		token,
+		{ method, body: JSON.stringify(segment) },
+		fallback
+	);
+	return failure ?? { segment: body as Segment };
 }
 
 export async function listSegments(token: string, environmentId: string): Promise<Segment[]> {
@@ -58,10 +45,11 @@ export async function getSegment(
 	environmentId: string,
 	key: string
 ): Promise<Segment | null> {
-	const response = await fetch(segmentUrl(environmentId, key), {
-		headers: { Authorization: `Bearer ${token}` }
-	}).catch(() => null);
-	return response?.ok ? response.json().catch(() => null) : null;
+	// A backend that can't be reached shows as "not found", like a 404.
+	const { body } = await send(segmentUrl(environmentId, key), token, {}, '').catch(() => ({
+		body: undefined
+	}));
+	return (body as Segment) ?? null;
 }
 
 export function createSegment(token: string, segment: Partial<Segment>): Promise<SegmentResult> {
@@ -94,9 +82,11 @@ export async function deleteSegment(
 	environmentId: string,
 	key: string
 ): Promise<Failure | null> {
-	const response = await fetch(segmentUrl(environmentId, key), {
-		method: 'DELETE',
-		headers: { Authorization: `Bearer ${token}` }
-	});
-	return response.ok ? null : failure(response, "Couldn't delete that segment.");
+	const { failure } = await send(
+		segmentUrl(environmentId, key),
+		token,
+		{ method: 'DELETE' },
+		"Couldn't delete that segment."
+	);
+	return failure ?? null;
 }
