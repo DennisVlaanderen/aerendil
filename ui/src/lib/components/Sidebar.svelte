@@ -3,7 +3,7 @@
 	import { localizedResolve } from '#lib/localizedResolve.ts';
 	import { m } from '#lib/paraglide/messages.js';
 	import ProfileMenu from './ProfileMenu.svelte';
-	import type { FlagSummary } from '#lib/server/flags.ts';
+	import type { FlagDefinition } from '#lib/flags.ts';
 	import { hasPermission } from '#lib/permissions.ts';
 
 	let {
@@ -11,7 +11,12 @@
 		username,
 		isAdmin,
 		permissions
-	}: { flags: FlagSummary[]; username: string; isAdmin: boolean; permissions: string[] } = $props();
+	}: {
+		flags: Pick<FlagDefinition, 'key' | 'enabled'>[];
+		username: string;
+		isAdmin: boolean;
+		permissions: string[];
+	} = $props();
 
 	let collapsed = $state(false);
 	let userManagementOpen = $state(false);
@@ -23,6 +28,7 @@
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
 	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
 	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
+	const canSeeSegments = $derived(hasPermission({ isAdmin, permissions }, 'segments:read'));
 	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
 	const canSeeEnvironments = $derived(hasPermission({ isAdmin, permissions }, 'environments:read'));
 	// Application credentials are an "Application Settings" concept (they
@@ -248,6 +254,22 @@
 					</div>
 				{/if}
 			</div>
+		{/if}
+
+		{#if canSeeSegments}
+			<a
+				class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-surface-muted {page.url.pathname.includes(
+					'/dashboard/segments'
+				)
+					? 'bg-accent text-accent-foreground'
+					: 'text-muted-foreground'}"
+				href={localizedResolve('/dashboard/segments')}
+			>
+				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
+					<span class="icon-[lucide--users-round] size-4.5"></span>
+				</span>
+				{#if !collapsed}<span>{m.nav_segments()}</span>{/if}
+			</a>
 		{/if}
 
 		{#if canSeeAuditLog}

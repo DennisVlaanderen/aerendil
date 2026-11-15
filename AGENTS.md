@@ -181,14 +181,19 @@ never directly from the browser.
 - **`lib/server/*.ts`** are the only bridge to the backend API
   (`AERENDIL_API_ORIGIN` env var, default `http://127.0.0.1:8080`) — one
   file per resource (`auth.ts`, `flags.ts`, `groups.ts`, `users.ts`,
-  `auditLog.ts`, `environments.ts`), each following the same shape: an
-  `API_ORIGIN` const, bearer-token `fetch` calls, and (for mutations) a
+  `auditLog.ts`, `environments.ts`, `segments.ts`), each following the same
+  shape: an `API_ORIGIN` const, bearer-token `fetch` calls, and (for mutations) a
   `{ x } | { error, status }` result union that mirrors the backend's real
   HTTP status verbatim. `auth.ts`'s `getSession()` reads the
   `aerendil.auth` httpOnly cookie and validates it against `/api/auth/me`
   on every call (no local session cache) — the JWT itself lives only in
   that cookie. `setAuthCookie`/`clearAuthCookie` manage it (`secure` in
   non-dev).
+- **`lib/flags.ts`** holds the `docs/fqdp.md` §6 flag/segment types and the
+  pure helpers behind the definition editors (`lib/components/RulesEditor`,
+  `ConditionsEditor`, `ServeEditor`, `VariationsEditor`, `SegmentForm`).
+  Flags and segments are edited per environment (the selected one), and the
+  BFF passes definitions through unchanged: the backend validates them.
 - **`routes/bff/**`** is the proxy layer client components' `apiRequest()`
   calls hit (see `lib/client/api.ts`) — each `+server.ts` there checks
   `hasPermission` and then calls the matching `lib/server/*.ts` bridge

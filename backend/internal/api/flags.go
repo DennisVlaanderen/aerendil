@@ -148,8 +148,10 @@ func flagsPutHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// The full §6.1 definition replaces the stored one. The path and query
-	// name the flag; fields the store owns are ignored. The salt is kept:
-	// changing it reshuffles every rollout bucket (§6.1).
+	// name the flag; fields the store owns are ignored, except that a
+	// non-zero revision must be the stored one (else 409, so a stale editor
+	// can't wipe someone else's save). The salt is kept: changing it
+	// reshuffles every rollout bucket (§6.1).
 	var flag store.Flag
 	if err := decodeJSON(w, r, &flag); err != nil {
 		return badRequest(CodeBadRequestBody, MsgBadRequestBody)
@@ -205,7 +207,8 @@ func flagsForceDisableHandler(w http.ResponseWriter, r *http.Request) error {
 		return notFound(CodeNotFoundFlag, MsgNotFoundFlag)
 	}
 
-	existing.Enabled = false
+	// Revision 0: the kill switch must win over an edit that lands meanwhile.
+	existing.Enabled, existing.Revision = false, 0
 	flag, err := dataStore.Flags().Set(existing)
 	if err != nil {
 		return err

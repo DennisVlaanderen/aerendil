@@ -15,10 +15,10 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 	}
 
 	const body = await request.json().catch(() => null);
-	const key = typeof body?.key === 'string' ? body.key.trim() : '';
-	const enabled = Boolean(body?.enabled);
-	const value = typeof body?.value === 'string' ? body.value : '';
-	const environmentIds = Array.isArray(body?.environmentIds) ? body.environmentIds.map(String) : [];
+	const key = typeof body?.definition?.key === 'string' ? body.definition.key.trim() : '';
+	const environmentIds: string[] = Array.isArray(body?.environmentIds)
+		? body.environmentIds.map(String)
+		: [];
 
 	if (!key) {
 		return json(
@@ -38,7 +38,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
 	const token = getAuthToken(cookies);
 	const result = token
-		? await createFlags(token, { key, enabled, value, environmentIds })
+		? // The backend validates the §6.1 definition itself (definitions.go).
+			await createFlags(token, { ...body.definition, key }, environmentIds)
 		: { error: 'Not authenticated.', code: ErrorCode.AuthInvalidToken, status: 401 };
 	if (result.error) {
 		return json({ error: result.error, code: result.code }, { status: result.status });

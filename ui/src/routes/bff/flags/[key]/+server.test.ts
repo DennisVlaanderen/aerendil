@@ -8,6 +8,21 @@ import { DELETE, PUT } from './+server';
 type PutFlagEvent = Parameters<typeof PUT>[0];
 type DeleteFlagEvent = Parameters<typeof DELETE>[0];
 
+const flag = {
+	environmentId: 'env-prod',
+	key: 'new-checkout',
+	type: 'boolean' as const,
+	enabled: true,
+	revision: 3,
+	variations: [
+		{ id: 'true', value: true },
+		{ id: 'false', value: false }
+	],
+	offVariation: 'false',
+	rules: [],
+	fallthrough: { variation: 'true' }
+};
+
 afterEach(() => {
 	vi.restoreAllMocks();
 });
@@ -25,13 +40,7 @@ describe('PUT /bff/flags/[key]', () => {
 		const updateSpy = vi
 			.spyOn(flagsApi, 'updateFlag')
 			.mockResolvedValueOnce({
-				flag: {
-					environmentId: 'env-prod',
-					key: 'new-checkout',
-					enabled: true,
-					value: 'on',
-					version: 3
-				}
+				flag
 			})
 			.mockResolvedValueOnce({
 				error: 'flag not found',
@@ -43,7 +52,7 @@ describe('PUT /bff/flags/[key]', () => {
 			makeRequestEvent<PutFlagEvent>({
 				params: { key: 'new-checkout' },
 				url: 'http://localhost/bff/flags/new-checkout?environmentId=env-prod',
-				request: jsonRequest({ enabled: true, value: 'on' }, 'PUT')
+				request: jsonRequest({ enabled: true, revision: 3 }, 'PUT')
 			})
 		);
 		expect(unauthenticated.status).toBe(403);
@@ -52,7 +61,7 @@ describe('PUT /bff/flags/[key]', () => {
 			makeRequestEvent<PutFlagEvent>({
 				params: { key: 'new-checkout' },
 				url: 'http://localhost/bff/flags/new-checkout?environmentId=env-prod',
-				request: jsonRequest({ enabled: true, value: 'on' }, 'PUT')
+				request: jsonRequest({ enabled: true, revision: 3 }, 'PUT')
 			})
 		);
 		expect(forbidden.status).toBe(403);
@@ -61,7 +70,7 @@ describe('PUT /bff/flags/[key]', () => {
 			makeRequestEvent<PutFlagEvent>({
 				params: { key: 'new-checkout' },
 				url: 'http://localhost/bff/flags/new-checkout',
-				request: jsonRequest({ enabled: true, value: 'on' }, 'PUT')
+				request: jsonRequest({ enabled: true, revision: 3 }, 'PUT')
 			})
 		);
 		expect(missingEnv.status).toBe(400);
@@ -74,7 +83,7 @@ describe('PUT /bff/flags/[key]', () => {
 			makeRequestEvent<PutFlagEvent>({
 				params: { key: 'new-checkout' },
 				url: 'http://localhost/bff/flags/new-checkout?environmentId=env-prod',
-				request: jsonRequest({ enabled: true, value: 'on' }, 'PUT'),
+				request: jsonRequest({ enabled: true, revision: 3 }, 'PUT'),
 				cookies: fakeCookies()
 			})
 		);
@@ -84,28 +93,22 @@ describe('PUT /bff/flags/[key]', () => {
 			makeRequestEvent<PutFlagEvent>({
 				params: { key: 'new-checkout' },
 				url: 'http://localhost/bff/flags/new-checkout?environmentId=env-prod',
-				request: jsonRequest({ enabled: true, value: 'on' }, 'PUT'),
+				request: jsonRequest({ enabled: true, revision: 3 }, 'PUT'),
 				cookies: fakeCookies({ 'aerendil.auth': 'tok-f' })
 			})
 		);
 		expect(okRes.status).toBe(200);
-		expect(await okRes.json()).toEqual({
-			environmentId: 'env-prod',
-			key: 'new-checkout',
-			enabled: true,
-			value: 'on',
-			version: 3
-		});
+		expect(await okRes.json()).toEqual(flag);
 		expect(updateSpy).toHaveBeenCalledWith('tok-f', 'env-prod', 'new-checkout', {
 			enabled: true,
-			value: 'on'
+			revision: 3
 		});
 
 		const errRes = await PUT(
 			makeRequestEvent<PutFlagEvent>({
 				params: { key: 'new-checkout' },
 				url: 'http://localhost/bff/flags/new-checkout?environmentId=env-prod',
-				request: jsonRequest({ enabled: false, value: '' }, 'PUT'),
+				request: jsonRequest({ enabled: false, revision: 3 }, 'PUT'),
 				cookies: fakeCookies({ 'aerendil.auth': 'tok-f' })
 			})
 		);

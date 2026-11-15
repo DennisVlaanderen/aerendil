@@ -4,9 +4,26 @@
 	import { apiRequest } from '#lib/client/api.ts';
 	import { resolveErrorMessage } from '#lib/errors.ts';
 	import { m } from '#lib/paraglide/messages.js';
+	import VariationsEditor from '#lib/components/VariationsEditor.svelte';
+	import {
+		BOOLEAN_VARIATIONS,
+		FLAG_TYPES,
+		parseVariationValue,
+		variationText,
+		type FlagType
+	} from '#lib/flags.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+
+	let type: FlagType = $state('boolean');
+	let variations = $state(draftVariations('boolean'));
+
+	function draftVariations(type: FlagType) {
+		return type === 'boolean'
+			? BOOLEAN_VARIATIONS.map((v) => ({ id: v.id, text: variationText(v.value, type) }))
+			: [{ id: 'variation-1', text: type === 'json' ? '{}' : '' }];
+	}
 
 	let isCreating = $state(false);
 	let createError = $state('');
@@ -18,15 +35,30 @@
 		const key = (formData.get('key') ?? '').toString();
 		const environmentIds = formData.getAll('environmentIds').map(String);
 
-		isCreating = true;
 		createError = '';
+		let parsed;
+		try {
+			parsed = variations.map((v) => ({ id: v.id, value: parseVariationValue(v.text, type) }));
+		} catch {
+			createError = m.flag_variation_value_parse_error();
+			return;
+		}
+		// Serve the off variation (false for a boolean flag) until rules are added.
+		const offVariation = type === 'boolean' ? 'false' : parsed[0].id;
 
+		isCreating = true;
 		const result = await apiRequest('/bff/flags', {
 			method: 'POST',
 			body: JSON.stringify({
-				key,
-				enabled: formData.get('enabled') === 'on',
-				value: (formData.get('value') ?? '').toString(),
+				definition: {
+					key,
+					type,
+					enabled: formData.get('enabled') === 'on',
+					variations: parsed,
+					offVariation,
+					rules: [],
+					fallthrough: { variation: offVariation }
+				},
 				environmentIds
 			})
 		});
@@ -74,13 +106,25 @@
 				</label>
 
 				<label class="grid gap-1.5 text-sm font-medium text-foreground">
-					<span>{m.flag_create_value_label()}</span>
-					<input
-						name="value"
-						type="text"
+					<span>{m.flag_create_type_label()}</span>
+					<select
+						bind:value={type}
+						onchange={() => (variations = draftVariations(type))}
 						class="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-base text-foreground focus:border-ring focus:ring-2 focus:ring-ring/40 focus:outline-none"
-					/>
+					>
+						{#each FLAG_TYPES as flagType (flagType)}
+							<option value={flagType}>{flagType}</option>
+						{/each}
+					</select>
+					<span class="text-xs font-normal text-muted-foreground">{m.flag_create_type_hint()}</span>
 				</label>
+
+				<fieldset class="grid gap-1.5">
+					<legend class="mb-1.5 text-sm font-medium text-foreground"
+						>{m.flag_variations_label()}</legend
+					>
+					<VariationsEditor bind:variations {type} />
+				</fieldset>
 
 				<label class="flex items-center gap-2 text-sm font-medium text-foreground">
 					<input type="checkbox" name="enabled" />

@@ -7,6 +7,21 @@ import { POST } from './+server';
 
 type CreateFlagEvent = Parameters<typeof POST>[0];
 
+const flag = {
+	environmentId: 'env-1',
+	key: 'checkout',
+	type: 'boolean' as const,
+	enabled: true,
+	revision: 1,
+	variations: [
+		{ id: 'true', value: true },
+		{ id: 'false', value: false }
+	],
+	offVariation: 'false',
+	rules: [],
+	fallthrough: { variation: 'false' }
+};
+
 afterEach(() => {
 	vi.restoreAllMocks();
 });
@@ -21,21 +36,21 @@ describe('POST /bff/flags', () => {
 
 		const unauth = await POST(
 			makeRequestEvent<CreateFlagEvent>({
-				request: jsonRequest({ key: 'checkout', environmentIds: ['env-1'] })
+				request: jsonRequest({ definition: { key: 'checkout' }, environmentIds: ['env-1'] })
 			})
 		);
 		expect(unauth.status).toBe(403);
 
 		const forbidden = await POST(
 			makeRequestEvent<CreateFlagEvent>({
-				request: jsonRequest({ key: 'checkout', environmentIds: ['env-1'] })
+				request: jsonRequest({ definition: { key: 'checkout' }, environmentIds: ['env-1'] })
 			})
 		);
 		expect(forbidden.status).toBe(403);
 
 		const missingToken = await POST(
 			makeRequestEvent<CreateFlagEvent>({
-				request: jsonRequest({ key: 'checkout', environmentIds: ['env-1'] }),
+				request: jsonRequest({ definition: { key: 'checkout' }, environmentIds: ['env-1'] }),
 				cookies: fakeCookies()
 			})
 		);
@@ -48,15 +63,7 @@ describe('POST /bff/flags', () => {
 		const createSpy = vi
 			.spyOn(flagsApi, 'createFlags')
 			.mockResolvedValueOnce({
-				flags: [
-					{
-						environmentId: 'env-1',
-						key: 'checkout',
-						enabled: true,
-						value: 'v2',
-						version: 1
-					}
-				]
+				flags: [flag]
 			})
 			.mockResolvedValueOnce({
 				error: 'flag already exists',
@@ -66,7 +73,7 @@ describe('POST /bff/flags', () => {
 
 		const missingKey = await POST(
 			makeRequestEvent<CreateFlagEvent>({
-				request: jsonRequest({ key: '   ', environmentIds: ['env-1'] })
+				request: jsonRequest({ definition: { key: '   ' }, environmentIds: ['env-1'] })
 			})
 		);
 		expect(missingKey.status).toBe(400);
@@ -77,7 +84,7 @@ describe('POST /bff/flags', () => {
 
 		const missingEnvs = await POST(
 			makeRequestEvent<CreateFlagEvent>({
-				request: jsonRequest({ key: 'checkout', environmentIds: [] })
+				request: jsonRequest({ definition: { key: 'checkout' }, environmentIds: [] })
 			})
 		);
 		expect(missingEnvs.status).toBe(400);
@@ -89,36 +96,23 @@ describe('POST /bff/flags', () => {
 		const okRes = await POST(
 			makeRequestEvent<CreateFlagEvent>({
 				request: jsonRequest({
-					key: '  checkout  ',
-					enabled: true,
-					value: 'v2',
+					definition: { key: '  checkout  ', type: 'boolean', enabled: true },
 					environmentIds: ['env-1']
 				}),
 				cookies: fakeCookies({ 'aerendil.auth': 'tok-flags' })
 			})
 		);
 		expect(okRes.status).toBe(200);
-		expect(await okRes.json()).toEqual({
-			flags: [
-				{
-					environmentId: 'env-1',
-					key: 'checkout',
-					enabled: true,
-					value: 'v2',
-					version: 1
-				}
-			]
-		});
-		expect(createSpy).toHaveBeenCalledWith('tok-flags', {
-			key: 'checkout',
-			enabled: true,
-			value: 'v2',
-			environmentIds: ['env-1']
-		});
+		expect(await okRes.json()).toEqual({ flags: [flag] });
+		expect(createSpy).toHaveBeenCalledWith(
+			'tok-flags',
+			{ key: 'checkout', type: 'boolean', enabled: true },
+			['env-1']
+		);
 
 		const conflictRes = await POST(
 			makeRequestEvent<CreateFlagEvent>({
-				request: jsonRequest({ key: 'checkout', environmentIds: ['env-1'] }),
+				request: jsonRequest({ definition: { key: 'checkout' }, environmentIds: ['env-1'] }),
 				cookies: fakeCookies({ 'aerendil.auth': 'tok-flags' })
 			})
 		);

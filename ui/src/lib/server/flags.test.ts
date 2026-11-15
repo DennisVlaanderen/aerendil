@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFlags, deleteFlag, listFlags, updateFlag } from './flags';
+import { createFlags, deleteFlag, evaluateFlag, getFlag, listFlags, updateFlag } from './flags';
 import { ErrorCode } from '#lib/errors.ts';
 
 // Same convention as environments.test.ts: fetch is mocked, these are unit
@@ -26,7 +26,7 @@ function definition(overrides: Record<string, unknown> = {}) {
 	return {
 		environmentId: 'prod',
 		key: 'checkout',
-		type: 'string',
+		type: 'string' as const,
 		enabled: true,
 		revision: 2,
 		variations: [{ id: 'value', value: 'on' }],
@@ -38,101 +38,104 @@ function definition(overrides: Record<string, unknown> = {}) {
 }
 
 describe('listFlags', () => {
-	it('maps each definition to a summary', async () => {
+	it('returns the definitions as the backend sends them', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { flags: [definition()] }));
 
-		expect(await listFlags('a-token', 'prod')).toEqual([
-			{ environmentId: 'prod', key: 'checkout', enabled: true, value: 'on', version: 2 }
-		]);
+		expect(await listFlags('a-token', 'prod')).toEqual([definition()]);
+	});
+
+	it('returns an empty list on a non-OK response', async () => {
+		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(403, { error: 'forbidden' }));
+
+		expect(await listFlags('a-token', 'prod')).toEqual([]);
+	});
+});
+
+describe('getFlag', () => {
+	it('returns the definition, or null when missing', async () => {
+		vi.mocked(fetch)
+			.mockResolvedValueOnce(jsonResponse(200, definition()))
+			.mockResolvedValueOnce(jsonResponse(404, { error: 'flag not found' }));
+
+		expect(await getFlag('a-token', 'prod', 'checkout')).toEqual(definition());
+		expect(await getFlag('a-token', 'prod', 'missing')).toBeNull();
+		expect(vi.mocked(fetch).mock.calls[0][0]).toEqual(
+			expect.stringContaining('/api/flags/checkout?environmentId=prod')
+		);
 	});
 });
 
 describe('createFlags', () => {
-	it('sends a one-variation string definition', async () => {
+	it('sends the definition with the environment ids', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, { flags: [definition()] }));
+		const input = { ...definition(), environmentId: undefined, revision: undefined };
 
-		const result = await createFlags('a-token', {
-			key: 'checkout',
-			enabled: true,
-			value: 'on',
-			environmentIds: ['prod']
-		});
+		const result = await createFlags('a-token', input, ['prod', 'dev']);
 
-		expect(result).toEqual({
-			flags: [{ environmentId: 'prod', key: 'checkout', enabled: true, value: 'on', version: 2 }]
-		});
+		expect(result).toEqual({ flags: [definition()] });
 		const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string);
-		expect(body).toEqual({
-			key: 'checkout',
-			type: 'string',
-			enabled: true,
-			variations: [{ id: 'value', value: 'on' }],
-			offVariation: 'value',
-			rules: [],
-			fallthrough: { variation: 'value' },
-			environmentIds: ['prod']
+		// JSON drops the undefined fields the backend owns.
+		expect(body).toEqual({ ...JSON.parse(JSON.stringify(input)), environmentIds: ['prod', 'dev'] });
+	});
+
+	it('returns the backend error, code and status on a non-OK response', async () => {
+		vi.mocked(fetch).mockResolvedValueOnce(
+			jsonResponse(409, { error: 'flag already exists', code: ErrorCode.ConflictFlagExists })
+		);
+
+		expect(await createFlags('a-token', { key: 'checkout' }, ['prod'])).toEqual({
+			error: 'flag already exists',
+			code: ErrorCode.ConflictFlagExists,
+			status: 409
 		});
 	});
 });
 
 describe('updateFlag', () => {
-	it('puts the stored definition back with the edit, keeping its rules', async () => {
-		vi.mocked(fetch)
-			.mockResolvedValueOnce(jsonResponse(200, definition()))
-			.mockResolvedValueOnce(
-				jsonResponse(
-					200,
-					definition({ enabled: false, variations: [{ id: 'value', value: 'off' }], revision: 3 })
-				)
-			);
+	it('puts the definition as given in one request', async () => {
+		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, definition({ revision: 3 })));
+		const edited = definition({ enabled: false, rules: [] });
 
-		const result = await updateFlag('a-token', 'prod', 'checkout', {
-			enabled: false,
-			value: 'off'
-		});
+		const result = await updateFlag('a-token', 'prod', 'checkout', edited);
 
-		expect(result).toEqual({
-			flag: { environmentId: 'prod', key: 'checkout', enabled: false, value: 'off', version: 3 }
-		});
-		const [url, init] = vi.mocked(fetch).mock.calls[1];
+		expect(result).toEqual({ flag: definition({ revision: 3 }) });
+		expect(fetch).toHaveBeenCalledTimes(1);
+		const [url, init] = vi.mocked(fetch).mock.calls[0];
 		expect(url).toEqual(expect.stringContaining('/api/flags/checkout?environmentId=prod'));
 		expect(init).toEqual(expect.objectContaining({ method: 'PUT' }));
-		expect(JSON.parse(init?.body as string)).toEqual(
-			definition({ enabled: false, variations: [{ id: 'value', value: 'off' }] })
-		);
-	});
-
-	it('leaves the values of a non-string flag alone', async () => {
-		const boolean = definition({
-			type: 'boolean',
-			variations: [
-				{ id: 'true', value: true },
-				{ id: 'false', value: false }
-			]
-		});
-		vi.mocked(fetch)
-			.mockResolvedValueOnce(jsonResponse(200, boolean))
-			.mockResolvedValueOnce(jsonResponse(200, boolean));
-
-		await updateFlag('a-token', 'prod', 'checkout', { enabled: false, value: 'ignored' });
-
-		const body = JSON.parse(vi.mocked(fetch).mock.calls[1][1]?.body as string);
-		expect(body.variations).toEqual(boolean.variations);
-		expect(body.enabled).toBe(false);
+		expect(JSON.parse(init?.body as string)).toEqual(edited);
 	});
 
 	it('returns the backend error message and status on a non-OK response', async () => {
 		vi.mocked(fetch).mockResolvedValueOnce(
-			jsonResponse(404, { error: 'flag not found', code: ErrorCode.NotFoundFlag })
+			jsonResponse(400, {
+				error: 'weights must sum to 100000',
+				code: ErrorCode.BadRequestFlagRolloutWeightsInvalid
+			})
 		);
 
-		const result = await updateFlag('a-token', 'prod', 'does-not-exist', {
-			enabled: true,
-			value: ''
-		});
+		const result = await updateFlag('a-token', 'prod', 'checkout', definition());
 
-		expect(result).toEqual({ error: 'flag not found', code: ErrorCode.NotFoundFlag, status: 404 });
-		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({
+			error: 'weights must sum to 100000',
+			code: ErrorCode.BadRequestFlagRolloutWeightsInvalid,
+			status: 400
+		});
+	});
+});
+
+describe('evaluateFlag', () => {
+	it('posts the context to the dry-run endpoint', async () => {
+		const evaluation = { value: 'on', variationId: 'value', reason: 'FALLTHROUGH' };
+		vi.mocked(fetch).mockResolvedValueOnce(jsonResponse(200, evaluation));
+		const context = { targetingKey: 'user-1', attributes: { plan: 'pro' } };
+
+		expect(await evaluateFlag('a-token', 'prod', 'checkout', context)).toEqual({
+			result: evaluation
+		});
+		const [url, init] = vi.mocked(fetch).mock.calls[0];
+		expect(url).toEqual(expect.stringContaining('/api/flags/checkout/evaluate?environmentId=prod'));
+		expect(JSON.parse(init?.body as string)).toEqual(context);
 	});
 });
 

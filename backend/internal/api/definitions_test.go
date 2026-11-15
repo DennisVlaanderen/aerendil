@@ -225,6 +225,40 @@ func TestFlagsRevisionReturnedOnReadsAndIgnoredOnWrites(t *testing.T) {
 	}
 }
 
+// Two editors load revision R; the first save wins, the second (still on R)
+// gets 409 instead of silently replacing it. Same for segments.
+func TestPutRejectsStaleRevision(t *testing.T) {
+	mux := newTestMux(t)
+	envID := seedEnvironmentForTest(t, "Production")
+	seedSegmentForTest(t, betaSegmentForTest(envID))
+	token := tokenForWithEnvironments(t, []string{envID},
+		auth.PermFlagsRead, auth.PermFlagsWrite, auth.PermFlagsUpdate, auth.PermSegmentsRead, auth.PermSegmentsUpdate)
+	create := jsonBody(struct {
+		store.Flag
+		EnvironmentIDs []string `json:"environmentIds"`
+	}{richFlagForTest(""), []string{envID}})
+	if rec := doJSON(t, mux, http.MethodPost, "/api/flags", token, create); rec.Code != http.StatusOK {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+
+	for _, path := range []string{"/api/flags/checkout.new-flow", "/api/segments/beta"} {
+		path += "?environmentId=" + envID
+		var loaded map[string]any
+		if err := json.Unmarshal(doJSON(t, mux, http.MethodGet, path, token, nil).Body.Bytes(), &loaded); err != nil {
+			t.Fatalf("%s get: %v", path, err)
+		}
+		for i, want := range []int{http.StatusOK, http.StatusConflict} {
+			rec := doJSON(t, mux, http.MethodPut, path, token, jsonBody(loaded))
+			if rec.Code != want {
+				t.Fatalf("%s save %d: expected %d, got %d: %s", path, i+1, want, rec.Code, rec.Body.String())
+			}
+			if want == http.StatusConflict {
+				assertErrorBody(t, rec, CodeConflictRevision)
+			}
+		}
+	}
+}
+
 func TestFlagsAuditRecordsRuleChanges(t *testing.T) {
 	mux := newTestMux(t)
 	envID := seedEnvironmentForTest(t, "Production")

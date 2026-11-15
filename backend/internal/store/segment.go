@@ -174,8 +174,12 @@ func (f *fsm) applySegment(index uint64, cmd command) any {
 		}
 		// Checked here, not only in the API, so two concurrent creates can't
 		// both pass a pre-check and overwrite.
-		if _, ok := f.segments[flagMapKey(cmd.Segment.EnvironmentID, cmd.Segment.Key)]; ok && cmd.Op == opCreate {
+		existing, ok := f.segments[flagMapKey(cmd.Segment.EnvironmentID, cmd.Segment.Key)]
+		if ok && cmd.Op == opCreate {
 			return fmt.Errorf("%w: %q in environment %q", ErrSegmentExists, cmd.Segment.Key, cmd.Segment.EnvironmentID)
+		}
+		if cmd.Op == opSet && cmd.Segment.Revision != 0 && (!ok || existing.Revision != cmd.Segment.Revision) {
+			return fmt.Errorf("%w: segment %q revision %d", ErrRevisionMismatch, cmd.Segment.Key, cmd.Segment.Revision)
 		}
 		cmd.Segment.SchemaVersion = segmentSchemaVersion
 		cmd.Segment.Revision = index
@@ -233,7 +237,8 @@ func (r SegmentRepository) List(environmentID string) []Segment {
 }
 
 // Set applies a segment change through Raft; fails with
-// ErrUnknownEnvironment, ErrSegmentLimitExceeded or ErrSegmentUsesInSegment.
+// ErrUnknownEnvironment, ErrSegmentLimitExceeded, ErrSegmentUsesInSegment or,
+// for a stale non-zero Revision, ErrRevisionMismatch.
 func (r SegmentRepository) Set(segment Segment) (Segment, error) {
 	return r.apply(opSet, segment)
 }

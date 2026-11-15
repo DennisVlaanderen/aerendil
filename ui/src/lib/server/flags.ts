@@ -1,74 +1,24 @@
 import { AERENDIL_API_ORIGIN as API_ORIGIN } from '$app/env/private';
+import type { EvaluationResult, FlagDefinition } from '#lib/flags.ts';
+import { send, type Failure } from '#lib/server/backend.ts';
 
-export interface FlagSummary {
-	environmentId: string;
-	key: string;
-	enabled: boolean;
-	value: string;
-	version: number;
-}
-
-// shortcut: today's flag pages still edit a flag as {enabled, value}. This
-// bridge maps that onto the backend's docs/fqdp.md §6.1 definition, as a
-// one-variation string flag. #147 replaces it with the variations, rules
-// and segments editor and works with FlagDefinition directly.
-interface FlagDefinition {
-	environmentId: string;
-	key: string;
-	type: string;
-	enabled: boolean;
-	revision: number;
-	variations: { id: string; value: unknown }[];
-	[field: string]: unknown;
-}
-
-function toSummary(definition: FlagDefinition): FlagSummary {
-	const value = definition.variations?.[0]?.value;
-	return {
-		environmentId: definition.environmentId,
-		key: definition.key,
-		enabled: definition.enabled,
-		value: typeof value === 'string' ? value : JSON.stringify(value ?? ''),
-		version: definition.revision
-	};
-}
-
-const BRIDGE_VARIATION_ID = 'value';
-
-function stringDefinition(key: string, enabled: boolean, value: string) {
-	return {
-		key,
-		type: 'string',
-		enabled,
-		variations: [{ id: BRIDGE_VARIATION_ID, value }],
-		offVariation: BRIDGE_VARIATION_ID,
-		rules: [],
-		fallthrough: { variation: BRIDGE_VARIATION_ID }
-	};
-}
-
-// withSummaryEdit applies a summary edit to a stored definition, keeping its
-// rules and other variations. Only a string flag's first value is editable.
-function withSummaryEdit(
-	definition: FlagDefinition,
-	edit: { enabled: boolean; value: string }
-): FlagDefinition {
-	return {
-		...definition,
-		enabled: edit.enabled,
-		variations: definition.variations.map((variation, i) =>
-			i === 0 && definition.type === 'string' ? { ...variation, value: edit.value } : variation
-		)
-	};
-}
-
-// `status` mirrors the backend's own HTTP status verbatim -- see the
-// identical convention on GroupResult (lib/server/groups.ts) for why.
 export type FlagsResult =
-	| { flags: FlagSummary[]; error?: undefined; status?: undefined; code?: undefined }
-	| { flags?: undefined; error: string; status: number; code: string };
+	| { flags: FlagDefinition[]; error?: undefined; status?: undefined; code?: undefined }
+	| ({ flags?: undefined } & Failure);
 
-export async function listFlags(token: string, environmentId: string): Promise<FlagSummary[]> {
+export type FlagResult =
+	| { flag: FlagDefinition; error?: undefined; status?: undefined; code?: undefined }
+	| ({ flag?: undefined } & Failure);
+
+export type EvaluationOutcome =
+	| { result: EvaluationResult; error?: undefined; status?: undefined; code?: undefined }
+	| ({ result?: undefined } & Failure);
+
+function flagUrl(environmentId: string, key: string, suffix = '') {
+	return `${API_ORIGIN}/api/flags/${encodeURIComponent(key)}${suffix}?environmentId=${encodeURIComponent(environmentId)}`;
+}
+
+export async function listFlags(token: string, environmentId: string): Promise<FlagDefinition[]> {
 	const response = await fetch(
 		`${API_ORIGIN}/api/flags?environmentId=${encodeURIComponent(environmentId)}`,
 		{
@@ -82,107 +32,84 @@ export async function listFlags(token: string, environmentId: string): Promise<F
 	}
 
 	const payload = await response.json().catch(() => null);
-	return Array.isArray(payload?.flags) ? payload.flags.map(toSummary) : [];
+	return Array.isArray(payload?.flags) ? payload.flags : [];
 }
 
-// createFlags writes the same key/enabled/value into every listed
-// environment as a single atomic backend request -- mirrors
-// FlagRepository.SetMany's all-or-nothing contract; there is deliberately
-// no single-environment create function, since "create in N environments
-// at once, consistently" is the only supported shape.
+export async function getFlag(
+	token: string,
+	environmentId: string,
+	key: string
+): Promise<FlagDefinition | null> {
+	const { body } = await send(flagUrl(environmentId, key), token, {}, "Couldn't load that flag.");
+	return (body as FlagDefinition) ?? null;
+}
+
+// createFlags writes one definition into every listed environment as a
+// single atomic backend request -- mirrors FlagRepository.SetMany's
+// all-or-nothing contract; there is deliberately no single-environment
+// create function, since "create in N environments at once, consistently"
+// is the only supported shape.
 export async function createFlags(
 	token: string,
-	input: { key: string; enabled: boolean; value: string; environmentIds: string[] }
+	definition: Partial<FlagDefinition>,
+	environmentIds: string[]
 ): Promise<FlagsResult> {
-	const response = await fetch(`${API_ORIGIN}/api/flags`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({
-			...stringDefinition(input.key, input.enabled, input.value),
-			environmentIds: input.environmentIds
-		})
-	});
-	if (!response.ok) {
-		const payload = await response.json().catch(() => null);
-		return {
-			error: typeof payload?.error === 'string' ? payload.error : "Couldn't create that flag.",
-			code: typeof payload?.code === 'string' ? payload.code : 'internal',
-			status: response.status
-		};
-	}
-
-	const payload = await response.json().catch(() => null);
-	return Array.isArray(payload?.flags)
-		? { flags: payload.flags.map(toSummary) }
+	const { body, failure } = await send(
+		`${API_ORIGIN}/api/flags`,
+		token,
+		{ method: 'POST', body: JSON.stringify({ ...definition, environmentIds }) },
+		"Couldn't create that flag."
+	);
+	if (failure) return failure;
+	const flags = (body as { flags?: unknown }).flags;
+	return Array.isArray(flags)
+		? { flags }
 		: { error: "Couldn't create that flag.", code: 'internal', status: 502 };
 }
 
-// `status` mirrors the backend's own HTTP status verbatim -- see FlagsResult.
-export type FlagResult =
-	| { flag: FlagSummary; error?: undefined; status?: undefined; code?: undefined }
-	| { flag?: undefined; error: string; status: number; code: string };
-
+// updateFlag replaces the stored definition (PUT is a full replace; the
+// backend keeps the salt and owns revision/schemaVersion).
 export async function updateFlag(
 	token: string,
 	environmentId: string,
 	key: string,
-	input: { enabled: boolean; value: string }
+	definition: Partial<FlagDefinition>
 ): Promise<FlagResult> {
-	const url = `${API_ORIGIN}/api/flags/${encodeURIComponent(key)}?environmentId=${encodeURIComponent(environmentId)}`;
-	const failed = async (response: Response) => {
-		const payload = await response.json().catch(() => null);
-		return {
-			error: typeof payload?.error === 'string' ? payload.error : "Couldn't update that flag.",
-			code: typeof payload?.code === 'string' ? payload.code : 'internal',
-			status: response.status
-		};
-	};
+	const { body, failure } = await send(
+		flagUrl(environmentId, key),
+		token,
+		{ method: 'PUT', body: JSON.stringify(definition) },
+		"Couldn't update that flag."
+	);
+	return failure ?? { flag: body as FlagDefinition };
+}
 
-	// PUT replaces the whole definition, so read it first to keep its rules.
-	const current = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-	if (!current.ok) {
-		return failed(current);
-	}
-	const definition: FlagDefinition | null = await current.json().catch(() => null);
-	if (!definition) {
-		return { error: "Couldn't update that flag.", code: 'internal', status: 502 };
-	}
-
-	const response = await fetch(url, {
-		method: 'PUT',
-		headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(withSummaryEdit(definition, input))
-	});
-	if (!response.ok) {
-		return failed(response);
-	}
-
-	const flag = await response.json().catch(() => null);
-	return flag
-		? { flag: toSummary(flag) }
-		: { error: "Couldn't update that flag.", code: 'internal', status: 502 };
+// evaluateFlag is the backend's dry run: it writes nothing.
+export async function evaluateFlag(
+	token: string,
+	environmentId: string,
+	key: string,
+	context: unknown
+): Promise<EvaluationOutcome> {
+	const { body, failure } = await send(
+		flagUrl(environmentId, key, '/evaluate'),
+		token,
+		{ method: 'POST', body: JSON.stringify(context) },
+		"Couldn't evaluate that flag."
+	);
+	return failure ?? { result: body as EvaluationResult };
 }
 
 export async function deleteFlag(
 	token: string,
 	environmentId: string,
 	key: string
-): Promise<{ error: string; status: number; code: string } | null> {
-	const response = await fetch(
-		`${API_ORIGIN}/api/flags/${encodeURIComponent(key)}?environmentId=${encodeURIComponent(environmentId)}`,
-		{
-			method: 'DELETE',
-			headers: { Authorization: `Bearer ${token}` }
-		}
+): Promise<Failure | null> {
+	const { failure } = await send(
+		flagUrl(environmentId, key),
+		token,
+		{ method: 'DELETE' },
+		"Couldn't delete that flag."
 	);
-	if (response.ok) {
-		return null;
-	}
-
-	const payload = await response.json().catch(() => null);
-	return {
-		error: typeof payload?.error === 'string' ? payload.error : "Couldn't delete that flag.",
-		code: typeof payload?.code === 'string' ? payload.code : 'internal',
-		status: response.status
-	};
+	return failure ?? null;
 }
