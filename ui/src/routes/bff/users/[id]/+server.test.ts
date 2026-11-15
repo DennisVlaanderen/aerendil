@@ -98,7 +98,7 @@ describe('PUT /bff/users/[id]', () => {
 		});
 		expect(updateSpy).toHaveBeenLastCalledWith('tok-usr', 'u-5', {
 			username: 'carol',
-			password: undefined,
+			password: '',
 			groupIds: [],
 			active: false
 		});
