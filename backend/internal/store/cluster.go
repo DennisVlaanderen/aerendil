@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -82,4 +83,61 @@ func newRaft(nodeID, bindAddr, dataDir string, bootstrap bool) (*raft.Raft, *fsm
 
 	ok = true
 	return r, fsmStore, boltStore, nil
+}
+
+// ClusterStatus is a point-in-time view of the local node's Raft state.
+type ClusterStatus struct {
+	LeaderID      string     `json:"leaderId"`
+	LeaderAddress string     `json:"leaderAddress"`
+	Nodes         []NodeInfo `json:"nodes"`
+	CommitIndex   uint64     `json:"commitIndex"`
+	LastLogIndex  uint64     `json:"lastLogIndex"`
+	Term          uint64     `json:"term"`
+}
+
+// NodeInfo is one server in the Raft configuration.
+type NodeInfo struct {
+	ID       string `json:"id"`
+	Address  string `json:"address"`
+	Suffrage string `json:"suffrage"`
+	Leader   bool   `json:"leader"`
+	// Lag is always nil: hashicorp/raft exposes no per-follower replication
+	// lag. Kept in the shape so adding it later is not a breaking change.
+	Lag *uint64 `json:"lag"`
+}
+
+// ClusterStatus reports the leader, the configured servers, and the local
+// node's commit index, last log index, and term.
+func (s *Store) ClusterStatus() (ClusterStatus, error) {
+	future := s.raft.GetConfiguration()
+	if err := future.Error(); err != nil {
+		return ClusterStatus{}, fmt.Errorf("get raft configuration: %w", err)
+	}
+	leaderAddr, leaderID := s.raft.LeaderWithID()
+
+	servers := future.Configuration().Servers
+	nodes := make([]NodeInfo, len(servers))
+	for i, srv := range servers {
+		nodes[i] = NodeInfo{
+			ID:       string(srv.ID),
+			Address:  string(srv.Address),
+			Suffrage: srv.Suffrage.String(),
+			Leader:   srv.ID == leaderID,
+		}
+	}
+
+	stats := s.raft.Stats()
+	status := ClusterStatus{LeaderID: string(leaderID), LeaderAddress: string(leaderAddr), Nodes: nodes}
+	for key, dst := range map[string]*uint64{
+		"commit_index":   &status.CommitIndex,
+		"last_log_index": &status.LastLogIndex,
+		"term":           &status.Term,
+	} {
+		v, err := strconv.ParseUint(stats[key], 10, 64)
+		if err != nil {
+			return ClusterStatus{}, fmt.Errorf("parse raft stat %s: %w", key, err)
+		}
+		*dst = v
+	}
+	return status, nil
 }

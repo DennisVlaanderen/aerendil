@@ -30,6 +30,7 @@ export const ALL_PERMISSIONS = [
 	'groups:update',
 	'groups:delete',
 	'audits:read',
+	'cluster:read',
 	'environments:read',
 	'environments:create',
 	'environments:update',
