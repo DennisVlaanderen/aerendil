@@ -1,6 +1,7 @@
 // Package fqdp implements the FQDP binary protocol server described in
 // docs/fqdp.md. Currently a stub: only Handshake is parsed; no session,
-// Query, Subscribe, or Update handling exists yet.
+// Query, Subscribe, or Update handling exists yet. New connections are
+// rate-limited per IP; per-session request limits (§12) await real sessions.
 package fqdp
 
 import (
@@ -11,6 +12,8 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync"
+	"time"
 )
 
 const (
@@ -23,19 +26,24 @@ const (
 )
 
 // StartTCPServer serves FQDP connections on addr, each on its own
-// goroutine, until ctx is canceled.
-func StartTCPServer(ctx context.Context, addr string) error {
+// goroutine, until ctx is canceled. Each source IP may open at most limit
+// new connections per window.
+func StartTCPServer(ctx context.Context, addr string, limit int, window time.Duration) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
-
 	log.Printf("fqdp tcp server listening on %s", addr)
+	serve(ctx, listener, newConnLimiter(limit, window))
+	return nil
+}
+
+func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
+	defer func() { _ = listener.Close() }()
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		_ = listener.Close()
 	}()
 
 	for {
@@ -43,14 +51,60 @@ func StartTCPServer(ctx context.Context, addr string) error {
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				return nil
+				return
 			default:
 				log.Printf("accept error: %v", err)
 				continue
 			}
 		}
+		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+		if n := limiter.count(limitKey(ip)); n > limiter.limit {
+			// Log only the first breach per window so a flood can't flood the logs.
+			if n == limiter.limit+1 {
+				log.Printf("fqdp connection rate limit exceeded for %s; closing further connections this window", ip)
+			}
+			sendError(conn, uint16(ErrRateLimited), "connection rate limit exceeded")
+			_ = conn.Close()
+			continue
+		}
 		go serveConnection(conn)
 	}
+}
+
+// limitKey groups IPv6 addresses by /64, since one host usually owns a whole
+// /64 and could otherwise pick a fresh source address per connection.
+func limitKey(ip string) string {
+	if p := net.ParseIP(ip); p != nil && p.To4() == nil {
+		return p.Mask(net.CIDRMask(64, 128)).String()
+	}
+	return ip
+}
+
+// connLimiter counts new connections per IP in fixed windows.
+// shortcut: fixed window allows up to 2x limit across a window boundary; switch to a sliding window or token bucket if that burst matters.
+type connLimiter struct {
+	mu          sync.Mutex
+	limit       int
+	window      time.Duration
+	windowStart time.Time
+	counts      map[string]int
+}
+
+func newConnLimiter(limit int, window time.Duration) *connLimiter {
+	return &connLimiter{limit: limit, window: window, windowStart: time.Now(), counts: map[string]int{}}
+}
+
+// count records a new connection for key and returns its count this window.
+func (l *connLimiter) count(key string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if now := time.Now(); now.Sub(l.windowStart) >= l.window {
+		// Dropping the whole map bounds memory to the IPs seen in one window.
+		l.windowStart = now
+		clear(l.counts)
+	}
+	l.counts[key]++
+	return l.counts[key]
 }
 
 func serveConnection(conn net.Conn) {

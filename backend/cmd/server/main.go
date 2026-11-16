@@ -36,8 +36,9 @@ func run() error {
 	}
 	defer flagStore.Close()
 
+	connLimit, connWindow := fqdpConnLimitFromEnvironment()
 	go func() {
-		if err := fqdp.StartTCPServer(ctx, fqdp.DefaultFQDPAddr); err != nil {
+		if err := fqdp.StartTCPServer(ctx, fqdp.DefaultFQDPAddr, connLimit, connWindow); err != nil {
 			log.Printf("fqdp server stopped: %v", err)
 		}
 	}()
@@ -119,6 +120,30 @@ func storeConfigFromEnvironment() store.Config {
 		DataDir:   dataDir,
 		Bootstrap: bootstrap,
 	}
+}
+
+// fqdpConnLimitFromEnvironment returns how many new FQDP connections one IP
+// may open per window (default 20 per minute).
+func fqdpConnLimitFromEnvironment() (int, time.Duration) {
+	limit := 20
+	if raw := strings.TrimSpace(os.Getenv("AERENDIL_FQDP_CONN_LIMIT")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 {
+			log.Fatal("invalid AERENDIL_FQDP_CONN_LIMIT value: must be a positive integer")
+		}
+		limit = parsed
+	}
+
+	window := time.Minute
+	if raw := strings.TrimSpace(os.Getenv("AERENDIL_FQDP_CONN_WINDOW")); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			log.Fatal("invalid AERENDIL_FQDP_CONN_WINDOW value: must be a positive duration like 1m")
+		}
+		window = parsed
+	}
+
+	return limit, window
 }
 
 func adminConfigFromEnvironment() auth.AdminConfig {
