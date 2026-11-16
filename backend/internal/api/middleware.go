@@ -63,7 +63,8 @@ func principalFromContext(r *http.Request) (resolvedPrincipal, bool) {
 
 // requirePermission wraps next so it only runs for requests whose resolved
 // principal is an Admin (unconditional bypass) or holds perm via a group.
-// The single chokepoint every permission-gated route goes through.
+// The single chokepoint every permission-gated route goes through;
+// requireAdmin covers the Admin-only routes.
 func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := authenticateRequest(w, r)
