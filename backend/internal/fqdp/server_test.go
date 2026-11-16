@@ -125,6 +125,14 @@ func TestConnectionOverLimitIsRejectedAndLogged(t *testing.T) {
 	if !strings.Contains(logs.String(), "rate limit") {
 		t.Fatalf("breach not logged; logs:\n%s", logs.String())
 	}
+
+	// A second rejection in the same window is not logged again.
+	if code := readErrorCode(t, dial(t, addr)); code != uint16(ErrRateLimited) {
+		t.Fatalf("second reject code = %d, want %d", code, ErrRateLimited)
+	}
+	if n := strings.Count(logs.String(), "rate limit"); n != 1 {
+		t.Fatalf("breach logged %d times, want 1; logs:\n%s", n, logs.String())
+	}
 }
 
 func TestLimitResetsAfterWindow(t *testing.T) {

@@ -58,8 +58,11 @@ func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
 			}
 		}
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-		if !limiter.allow(limitKey(ip)) {
-			log.Printf("fqdp connection rate limit exceeded for %s; closing", ip)
+		if n := limiter.count(limitKey(ip)); n > limiter.limit {
+			// Log only the first breach per window so a flood can't flood the logs.
+			if n == limiter.limit+1 {
+				log.Printf("fqdp connection rate limit exceeded for %s; closing further connections this window", ip)
+			}
 			sendError(conn, uint16(ErrRateLimited), "connection rate limit exceeded")
 			conn.Close()
 			continue
@@ -91,7 +94,8 @@ func newConnLimiter(limit int, window time.Duration) *connLimiter {
 	return &connLimiter{limit: limit, window: window, windowStart: time.Now(), counts: map[string]int{}}
 }
 
-func (l *connLimiter) allow(ip string) bool {
+// count records a new connection for key and returns its count this window.
+func (l *connLimiter) count(key string) int {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if now := time.Now(); now.Sub(l.windowStart) >= l.window {
@@ -99,8 +103,8 @@ func (l *connLimiter) allow(ip string) bool {
 		l.windowStart = now
 		clear(l.counts)
 	}
-	l.counts[ip]++
-	return l.counts[ip] <= l.limit
+	l.counts[key]++
+	return l.counts[key]
 }
 
 func serveConnection(conn net.Conn) {
