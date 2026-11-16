@@ -79,3 +79,21 @@ func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 		next(w, withPrincipal(r, principal))
 	}
 }
+
+// requireAdmin wraps next so it only runs for Admin-group principals; no
+// group permission grants access.
+func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		principal, ok := authenticateRequest(w, r)
+		if !ok {
+			return
+		}
+
+		if !principal.IsAdmin {
+			writeError(w, http.StatusForbidden, CodeAuthForbidden, MsgAuthForbidden)
+			return
+		}
+
+		next(w, withPrincipal(r, principal))
+	}
+}

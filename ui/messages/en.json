@@ -331,5 +331,21 @@
 	"segment_used_by": "Used by",
 	"segment_unused": "no flags",
 	"segment_delete_blocked": "Remove this segment from the flags that use it before deleting it.",
-	"segment_delete_confirm_title": "Delete segment?"
+	"segment_delete_confirm_title": "Delete segment?",
+	"nav_cluster": "Cluster",
+	"cluster_page_title": "Cluster Status",
+	"cluster_page_subtitle": "Raft leader, members, and replication progress.",
+	"cluster_load_error": "Could not load the cluster status.",
+	"cluster_no_quorum_title": "Cluster has no quorum",
+	"cluster_no_quorum_body": "No leader is elected, so changes cannot be saved until a majority of voters is reachable.",
+	"cluster_leader": "Leader",
+	"cluster_term": "Term",
+	"cluster_commit_index": "Commit index",
+	"cluster_last_log_index": "Last log index",
+	"cluster_table_node": "Node",
+	"cluster_table_address": "Address",
+	"cluster_table_suffrage": "Suffrage",
+	"cluster_table_role": "Role",
+	"cluster_role_leader": "Leader",
+	"cluster_role_follower": "Follower"
 }

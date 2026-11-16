@@ -331,5 +331,21 @@
 	"segment_used_by": "Gebruikt door",
 	"segment_unused": "geen flags",
 	"segment_delete_blocked": "Haal dit segment uit de flags die het gebruiken voordat je het verwijdert.",
-	"segment_delete_confirm_title": "Segment verwijderen?"
+	"segment_delete_confirm_title": "Segment verwijderen?",
+	"nav_cluster": "Cluster",
+	"cluster_page_title": "Clusterstatus",
+	"cluster_page_subtitle": "Raft-leider, leden en replicatievoortgang.",
+	"cluster_load_error": "De clusterstatus kon niet worden geladen.",
+	"cluster_no_quorum_title": "Cluster heeft geen quorum",
+	"cluster_no_quorum_body": "Er is geen leider gekozen, dus wijzigingen kunnen niet worden opgeslagen totdat een meerderheid van de stemgerechtigde nodes bereikbaar is.",
+	"cluster_leader": "Leider",
+	"cluster_term": "Term",
+	"cluster_commit_index": "Commit-index",
+	"cluster_last_log_index": "Laatste logindex",
+	"cluster_table_node": "Node",
+	"cluster_table_address": "Adres",
+	"cluster_table_suffrage": "Stemrecht",
+	"cluster_table_role": "Rol",
+	"cluster_role_leader": "Leider",
+	"cluster_role_follower": "Volger"
 }

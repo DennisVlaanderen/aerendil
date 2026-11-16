@@ -28,6 +28,8 @@
 	const canSeeGroups = $derived(hasPermission({ isAdmin, permissions }, 'groups:read'));
 	const canSeeUserManagement = $derived(canSeeUsers || canSeeGroups);
 	const canSeeAuditLog = $derived(hasPermission({ isAdmin, permissions }, 'audits:read'));
+	// Admin-only, matching the backend's requireAdmin on /api/cluster/status.
+	const canSeeCluster = $derived(isAdmin);
 	const canSeeSegments = $derived(hasPermission({ isAdmin, permissions }, 'segments:read'));
 	const canCreateFlags = $derived(hasPermission({ isAdmin, permissions }, 'flags:write'));
 	const canSeeEnvironments = $derived(hasPermission({ isAdmin, permissions }, 'environments:read'));
@@ -285,6 +287,22 @@
 					<span class="icon-[lucide--history] size-4.5"></span>
 				</span>
 				{#if !collapsed}<span>{m.nav_audit_log()}</span>{/if}
+			</a>
+		{/if}
+
+		{#if canSeeCluster}
+			<a
+				class="flex items-center gap-3 truncate rounded-lg px-2.5 py-2.25 text-[13.5px] font-medium no-underline hover:bg-surface-muted {isActive(
+					'/dashboard/cluster'
+				)
+					? 'bg-accent text-accent-foreground'
+					: 'text-muted-foreground'}"
+				href={localizedResolve('/dashboard/cluster')}
+			>
+				<span class="flex w-4.5 shrink-0 justify-center" aria-hidden="true">
+					<span class="icon-[lucide--server] size-4.5"></span>
+				</span>
+				{#if !collapsed}<span>{m.nav_cluster()}</span>{/if}
 			</a>
 		{/if}
 
