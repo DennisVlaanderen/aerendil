@@ -135,3 +135,18 @@ func TestLimitResetsAfterWindow(t *testing.T) {
 		t.Fatalf("code after window = %d, want %d", code, ErrHandshakeNotImplemented)
 	}
 }
+
+func TestLimitKeyGroupsIPv6By64(t *testing.T) {
+	cases := map[string]string{
+		"203.0.113.7":           "203.0.113.7",
+		"::ffff:203.0.113.7":    "::ffff:203.0.113.7",
+		"2001:db8:1:2:aaaa::1":  "2001:db8:1:2::",
+		"2001:db8:1:2:bbbb::99": "2001:db8:1:2::",
+		"2001:db8:1:3::1":       "2001:db8:1:3::",
+	}
+	for in, want := range cases {
+		if got := limitKey(in); got != want {
+			t.Errorf("limitKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

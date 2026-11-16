@@ -58,7 +58,7 @@ func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
 			}
 		}
 		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-		if !limiter.allow(ip) {
+		if !limiter.allow(limitKey(ip)) {
 			log.Printf("fqdp connection rate limit exceeded for %s; closing", ip)
 			sendError(conn, uint16(ErrRateLimited), "connection rate limit exceeded")
 			conn.Close()
@@ -66,6 +66,15 @@ func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
 		}
 		go serveConnection(conn)
 	}
+}
+
+// limitKey groups IPv6 addresses by /64, since one host usually owns a whole
+// /64 and could otherwise pick a fresh source address per connection.
+func limitKey(ip string) string {
+	if p := net.ParseIP(ip); p != nil && p.To4() == nil {
+		return p.Mask(net.CIDRMask(64, 128)).String()
+	}
+	return ip
 }
 
 // connLimiter counts new connections per IP in fixed windows.
