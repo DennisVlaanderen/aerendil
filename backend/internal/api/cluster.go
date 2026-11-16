@@ -10,7 +10,7 @@ func registerClusterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/cluster/status", requirePermission(auth.PermClusterRead, handleErrors(clusterStatusHandler)))
 }
 
-func clusterStatusHandler(w http.ResponseWriter, r *http.Request) error {
+func clusterStatusHandler(w http.ResponseWriter, _ *http.Request) error {
 	status, err := dataStore.ClusterStatus()
 	if err != nil {
 		return err
