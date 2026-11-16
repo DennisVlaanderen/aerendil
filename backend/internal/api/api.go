@@ -56,6 +56,7 @@ func RegisterRoutes(mux *http.ServeMux, s *store.Store) {
 	registerEnvironmentRoutes(mux)
 	registerOAuthRoutes(mux)
 	registerApplicationCredentialRoutes(mux)
+	registerClusterRoutes(mux)
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) error {

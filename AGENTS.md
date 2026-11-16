@@ -108,7 +108,7 @@ store.
 - **`api/`** — `net/http` (stdlib `ServeMux` with Go 1.22+ method patterns,
   e.g. `"GET /api/flags"`), no framework. `RegisterRoutes` wires routes for
   flags, segments, auth, users, groups, audits, environments, and application
-  credentials (plus the unauthenticated `POST /api/oauth/token` OAuth2
+  credentials, plus read-only Raft status at `GET /api/cluster/status` (plus the unauthenticated `POST /api/oauth/token` OAuth2
   client-credentials endpoint those credentials authenticate against) —
   check `api.go` directly for the exact list rather than assuming it here,
   since it grows over time. Every mutating route follows the same
@@ -142,7 +142,7 @@ store.
   group-based: `permissions.go` holds a flat catalog of permission strings
   (`PermFlagsRead/Write/Update/Delete`,
   `PermSegmentsRead/Write/Update/Delete`, `PermUsersRead/Create/Update/Delete`,
-  `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`,
+  `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`, `PermClusterRead`,
   `PermEnvironmentsRead/Create/Update/Delete`,
   `PermApplicationCredentialsRead/Create/Update/Delete`) attached to
   `store.Group.Permissions` and resolved live — no caching, nothing baked
