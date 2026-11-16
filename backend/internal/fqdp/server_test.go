@@ -55,11 +55,12 @@ func startTestServer(t *testing.T, limit int, window time.Duration) (string, *sy
 
 // handshakeFrame is a minimal valid Handshake: version 0.1, zero-length token.
 func handshakeFrame() []byte {
-	payload := make([]byte, 9)
+	const payloadLen = 9
+	payload := make([]byte, payloadLen)
 	payload[0] = byte(MessageTypeHandshake)
 	payload[2] = 1
 	frame := make([]byte, 4+len(payload))
-	binary.BigEndian.PutUint32(frame[0:4], uint32(len(payload))) //nolint:gosec // G115: fixed 9-byte payload
+	binary.BigEndian.PutUint32(frame[0:4], payloadLen)
 	copy(frame[4:], payload)
 	return frame
 }
