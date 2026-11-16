@@ -9,8 +9,9 @@ import (
 	"aerendil/backend/internal/auth"
 )
 
-func getClusterStatus(mux *http.ServeMux, token string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodGet, "/api/cluster/status", nil)
+func getClusterStatus(t *testing.T, mux *http.ServeMux, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/cluster/status", nil)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -22,10 +23,10 @@ func getClusterStatus(mux *http.ServeMux, token string) *httptest.ResponseRecord
 func TestClusterStatusRequiresAuthAndPermission(t *testing.T) {
 	mux := newTestMux(t)
 
-	if rec := getClusterStatus(mux, ""); rec.Code != http.StatusUnauthorized {
+	if rec := getClusterStatus(t, mux, ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without a token, got %d", rec.Code)
 	}
-	if rec := getClusterStatus(mux, tokenFor(t, auth.PermAuditsRead)); rec.Code != http.StatusForbidden {
+	if rec := getClusterStatus(t, mux, tokenFor(t, auth.PermAuditsRead)); rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 without cluster:read, got %d", rec.Code)
 	}
 }
@@ -33,7 +34,7 @@ func TestClusterStatusRequiresAuthAndPermission(t *testing.T) {
 func TestClusterStatusReportsSingleNodeLeader(t *testing.T) {
 	mux := newTestMux(t)
 
-	rec := getClusterStatus(mux, tokenFor(t, auth.PermClusterRead))
+	rec := getClusterStatus(t, mux, tokenFor(t, auth.PermClusterRead))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
