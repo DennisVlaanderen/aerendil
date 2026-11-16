@@ -92,6 +92,18 @@ jobs:
         name: go-coverage
         path: coverage.out
 
+    # Publishes the coverage profile behind the README badge. Needs the
+    # CODECOV_TOKEN repository secret; non-fatal so a Codecov outage (or a
+    # fork PR without the secret) never fails the build.
+    - name: Upload coverage to Codecov
+      if: needs.changes.outputs.backend == 'true' && matrix.go == 'stable'
+      uses: codecov/codecov-action@v5
+      with:
+        files: coverage.out
+        flags: backend
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+
   lint:
     name: Lint
     needs: changes
