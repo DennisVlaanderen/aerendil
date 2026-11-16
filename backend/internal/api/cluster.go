@@ -1,13 +1,10 @@
 package api
 
-import (
-	"net/http"
+import "net/http"
 
-	"aerendil/backend/internal/auth"
-)
-
+// Cluster status is Admin-only: it exposes node addresses and Raft internals.
 func registerClusterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/cluster/status", requirePermission(auth.PermClusterRead, handleErrors(clusterStatusHandler)))
+	mux.HandleFunc("GET /api/cluster/status", requireAdmin(handleErrors(clusterStatusHandler)))
 }
 
 func clusterStatusHandler(w http.ResponseWriter, _ *http.Request) error {

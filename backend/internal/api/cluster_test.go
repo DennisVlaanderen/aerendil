@@ -20,21 +20,22 @@ func getClusterStatus(t *testing.T, mux *http.ServeMux, token string) *httptest.
 	return rec
 }
 
-func TestClusterStatusRequiresAuthAndPermission(t *testing.T) {
+func TestClusterStatusRequiresAdmin(t *testing.T) {
 	mux := newTestMux(t)
 
 	if rec := getClusterStatus(t, mux, ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 without a token, got %d", rec.Code)
 	}
-	if rec := getClusterStatus(t, mux, tokenFor(t, auth.PermAuditsRead)); rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without cluster:read, got %d", rec.Code)
+	// Even a principal holding every grantable permission is not an Admin.
+	if rec := getClusterStatus(t, mux, tokenFor(t, auth.AllPermissions...)); rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for a non-admin, got %d", rec.Code)
 	}
 }
 
 func TestClusterStatusReportsSingleNodeLeader(t *testing.T) {
 	mux := newTestMux(t)
 
-	rec := getClusterStatus(t, mux, tokenFor(t, auth.PermClusterRead))
+	rec := getClusterStatus(t, mux, adminToken(t))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}

@@ -142,7 +142,7 @@ store.
   group-based: `permissions.go` holds a flat catalog of permission strings
   (`PermFlagsRead/Write/Update/Delete`,
   `PermSegmentsRead/Write/Update/Delete`, `PermUsersRead/Create/Update/Delete`,
-  `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`, `PermClusterRead`,
+  `PermGroupsRead/Create/Update/Delete`, `PermAuditsRead`,
   `PermEnvironmentsRead/Create/Update/Delete`,
   `PermApplicationCredentialsRead/Create/Update/Delete`) attached to
   `store.Group.Permissions` and resolved live — no caching, nothing baked

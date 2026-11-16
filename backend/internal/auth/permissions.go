@@ -27,7 +27,6 @@ const (
 	PermGroupsUpdate       = "groups:update"
 	PermGroupsDelete       = "groups:delete"
 	PermAuditsRead         = "audits:read"
-	PermClusterRead        = "cluster:read"
 	PermEnvironmentsRead   = "environments:read"
 	PermEnvironmentsCreate = "environments:create"
 	PermEnvironmentsUpdate = "environments:update"
@@ -54,7 +53,6 @@ var AllPermissions = []string{
 	PermUsersRead, PermUsersCreate, PermUsersUpdate, PermUsersDelete,
 	PermGroupsRead, PermGroupsCreate, PermGroupsUpdate, PermGroupsDelete,
 	PermAuditsRead,
-	PermClusterRead,
 	PermEnvironmentsRead, PermEnvironmentsCreate, PermEnvironmentsUpdate, PermEnvironmentsDelete,
 	PermApplicationCredentialsRead, PermApplicationCredentialsCreate,
 	PermApplicationCredentialsUpdate, PermApplicationCredentialsDelete,
