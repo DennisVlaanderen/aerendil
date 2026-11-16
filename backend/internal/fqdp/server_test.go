@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -38,7 +39,7 @@ func startTestServer(t *testing.T, limit int, window time.Duration) (string, *sy
 	log.SetOutput(logs)
 	t.Cleanup(func() { log.SetOutput(prev) })
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -58,7 +59,7 @@ func handshakeFrame() []byte {
 	payload[0] = byte(MessageTypeHandshake)
 	payload[2] = 1
 	frame := make([]byte, 4+len(payload))
-	binary.BigEndian.PutUint32(frame[0:4], uint32(len(payload)))
+	binary.BigEndian.PutUint32(frame[0:4], uint32(len(payload))) //nolint:gosec // G115: fixed 9-byte payload
 	copy(frame[4:], payload)
 	return frame
 }
@@ -83,11 +84,11 @@ func readErrorCode(t *testing.T, conn net.Conn) uint16 {
 
 func dial(t *testing.T, addr string) net.Conn {
 	t.Helper()
-	conn, err := net.Dial("tcp", addr)
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", addr)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 	return conn
 }
 
@@ -119,7 +120,7 @@ func TestConnectionOverLimitIsRejectedAndLogged(t *testing.T) {
 	if code := readErrorCode(t, conn); code != uint16(ErrRateLimited) {
 		t.Fatalf("code = %d, want %d", code, ErrRateLimited)
 	}
-	if _, err := conn.Read(make([]byte, 1)); err != io.EOF {
+	if _, err := conn.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
 		t.Fatalf("read after reject = %v, want EOF (connection closed)", err)
 	}
 	if !strings.Contains(logs.String(), "rate limit") {

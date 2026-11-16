@@ -39,11 +39,11 @@ func StartTCPServer(ctx context.Context, addr string, limit int, window time.Dur
 }
 
 func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	go func() {
 		<-ctx.Done()
-		listener.Close()
+		_ = listener.Close()
 	}()
 
 	for {
@@ -64,7 +64,7 @@ func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
 				log.Printf("fqdp connection rate limit exceeded for %s; closing further connections this window", ip)
 			}
 			sendError(conn, uint16(ErrRateLimited), "connection rate limit exceeded")
-			conn.Close()
+			_ = conn.Close()
 			continue
 		}
 		go serveConnection(conn)

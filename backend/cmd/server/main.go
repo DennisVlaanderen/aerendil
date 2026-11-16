@@ -129,6 +129,7 @@ func fqdpConnLimitFromEnvironment() (int, time.Duration) {
 	if raw := strings.TrimSpace(os.Getenv("AERENDIL_FQDP_CONN_LIMIT")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed < 1 {
+			//nolint:gosec // G706: %q escapes the value
 			log.Fatalf("invalid AERENDIL_FQDP_CONN_LIMIT value %q: must be a positive integer", raw)
 		}
 		limit = parsed
@@ -138,6 +139,7 @@ func fqdpConnLimitFromEnvironment() (int, time.Duration) {
 	if raw := strings.TrimSpace(os.Getenv("AERENDIL_FQDP_CONN_WINDOW")); raw != "" {
 		parsed, err := time.ParseDuration(raw)
 		if err != nil || parsed <= 0 {
+			//nolint:gosec // G706: %q escapes the value
 			log.Fatalf("invalid AERENDIL_FQDP_CONN_WINDOW value %q: must be a positive duration like 1m", raw)
 		}
 		window = parsed
