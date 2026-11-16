@@ -12,4 +12,6 @@ const (
 	ErrHandshakeTokenTruncated FQDPHandshakeError = 102
 	// ErrHandshakeNotImplemented indicates the handshake flow is not yet implemented.
 	ErrHandshakeNotImplemented FQDPHandshakeError = 103
+	// ErrRateLimited indicates a connection or request rate limit was exceeded.
+	ErrRateLimited FQDPHandshakeError = 107
 )

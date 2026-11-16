@@ -1,6 +1,7 @@
 // Package fqdp implements the FQDP binary protocol server described in
 // docs/fqdp.md. Currently a stub: only Handshake is parsed; no session,
-// Query, Subscribe, or Update handling exists yet.
+// Query, Subscribe, or Update handling exists yet. New connections are
+// rate-limited per IP; per-session request limits (§12) await real sessions.
 package fqdp
 
 import (
@@ -11,6 +12,8 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync"
+	"time"
 )
 
 const (
@@ -23,15 +26,20 @@ const (
 )
 
 // StartTCPServer serves FQDP connections on addr, each on its own
-// goroutine, until ctx is canceled.
-func StartTCPServer(ctx context.Context, addr string) error {
+// goroutine, until ctx is canceled. Each source IP may open at most limit
+// new connections per window.
+func StartTCPServer(ctx context.Context, addr string, limit int, window time.Duration) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
-
 	log.Printf("fqdp tcp server listening on %s", addr)
+	serve(ctx, listener, newConnLimiter(limit, window))
+	return nil
+}
+
+func serve(ctx context.Context, listener net.Listener, limiter *connLimiter) {
+	defer listener.Close()
 
 	go func() {
 		<-ctx.Done()
@@ -43,14 +51,47 @@ func StartTCPServer(ctx context.Context, addr string) error {
 		if err != nil {
 			select {
 			case <-ctx.Done():
-				return nil
+				return
 			default:
 				log.Printf("accept error: %v", err)
 				continue
 			}
 		}
+		ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+		if !limiter.allow(ip) {
+			log.Printf("fqdp connection rate limit exceeded for %s; closing", ip)
+			sendError(conn, uint16(ErrRateLimited), "connection rate limit exceeded")
+			conn.Close()
+			continue
+		}
 		go serveConnection(conn)
 	}
+}
+
+// connLimiter counts new connections per IP in fixed windows.
+// shortcut: fixed window allows up to 2x limit across a window boundary; switch to a sliding window or token bucket if that burst matters.
+type connLimiter struct {
+	mu          sync.Mutex
+	limit       int
+	window      time.Duration
+	windowStart time.Time
+	counts      map[string]int
+}
+
+func newConnLimiter(limit int, window time.Duration) *connLimiter {
+	return &connLimiter{limit: limit, window: window, windowStart: time.Now(), counts: map[string]int{}}
+}
+
+func (l *connLimiter) allow(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if now := time.Now(); now.Sub(l.windowStart) >= l.window {
+		// Dropping the whole map bounds memory to the IPs seen in one window.
+		l.windowStart = now
+		clear(l.counts)
+	}
+	l.counts[ip]++
+	return l.counts[ip] <= l.limit
 }
 
 func serveConnection(conn net.Conn) {

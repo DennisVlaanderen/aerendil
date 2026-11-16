@@ -160,7 +160,9 @@ store.
   length-prefixed framing (`readFrame`) and accepts connections, but only the
   Handshake message type is even parsed, and it always responds with an
   "not implemented" `Error` frame (`ErrHandshakeNotImplemented`) — no session,
-  Query, Subscribe, or Update handling exists yet. `message_types.go` /
+  Query, Subscribe, or Update handling exists yet. The accept loop does
+  enforce a per-IP new-connection rate limit (`connLimiter`, `Error` 107;
+  `AERENDIL_FQDP_CONN_LIMIT` / `AERENDIL_FQDP_CONN_WINDOW`). `message_types.go` /
   `errors.go` hold the wire constants. Treat `docs/fqdp.md` as the target
   spec, not a description of current behavior, when working in this package.
 - **`eval/`** — the pure `docs/fqdp.md` §7 evaluator (conditions, segment
