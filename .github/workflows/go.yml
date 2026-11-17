@@ -97,7 +97,7 @@ jobs:
     # fork PR without the secret) never fails the build.
     - name: Upload coverage to Codecov
       if: needs.changes.outputs.backend == 'true' && matrix.go == 'stable'
-      uses: codecov/codecov-action@v5
+      uses: codecov/codecov-action@v7
       with:
         files: coverage.out
         flags: backend
