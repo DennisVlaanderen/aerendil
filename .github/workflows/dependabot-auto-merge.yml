@@ -1,5 +1,6 @@
-# Auto-merges Dependabot pull requests once GitHub's public compatibility
-# data says the update is safe and every other required check has passed.
+# Auto-merges Dependabot pull requests once every required check has
+# passed. Patch/minor/digest updates always qualify; semver-major updates
+# additionally need GitHub's public compatibility score to clear 80%.
 #
 # Runs as `pull_request_target` (not `pull_request`) because Dependabot-
 # triggered `pull_request` events get a read-only GITHUB_TOKEN, which can't
@@ -15,7 +16,7 @@
 # also casts that approval itself (as github-actions[bot], never as
 # dependabot[bot] -- GitHub forbids self-approval, so this only works
 # because the approver and the PR author are different identities) once
-# the compatibility check above clears. Any other branch-protection
+# the update-type/compatibility decision below clears. Any other branch-protection
 # requirement this workflow can't itself satisfy -- a CODEOWNERS review
 # from a specific human/team, a required check that never goes green, a
 # merge conflict -- leaves the PR exactly where GitHub's native auto-merge
@@ -62,19 +63,31 @@ jobs:
           github-token: "${{ secrets.DEPENDABOT_COMPAT_PAT }}"
           compat-lookup: true
 
-      # A score of 0 is what fetch-metadata returns both when the update
-      # genuinely has 0% known compatibility *and* when no score exists for
-      # it at all (most Go modules and anything without wide public CI
-      # history) -- the action doesn't distinguish the two. We treat "no
-      # score" as non-blocking rather than as a failure: requiring a score
-      # to exist would leave most of this repo's dependency ecosystems
-      # (Go, Docker, GitHub Actions) never auto-merging, since compatibility
-      # scores are effectively an npm/pip-ecosystem-only signal.
-      - name: Decide whether the compatibility score clears the bar
+      # Patch, minor and digest-only updates always auto-merge: the required
+      # CI checks (build, tests, lint, coverage, CodeQL, image builds) are
+      # the real gate for those, and GitHub now publishes compatibility
+      # scores for Go, Docker and GitHub Actions updates too. Those scores
+      # are often low even for routine patch bumps (e.g. 55% for a golang
+      # alpine patch release) because they're computed from public CI
+      # history, so gating patch/minor on them left almost every update
+      # waiting on a human.
+      #
+      # Only semver-major updates are held back by the score. A score of 0
+      # is what fetch-metadata returns both when the update genuinely has
+      # 0% known compatibility *and* when no score exists at all -- the
+      # action doesn't distinguish the two -- so "no score" is treated as
+      # non-blocking rather than as a failure.
+      - name: Decide whether the update can auto-merge
         id: decision
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          SCORE: ${{ steps.metadata.outputs.compatibility-score }}
         run: |
-          score="${{ steps.metadata.outputs.compatibility-score }}"
-          if [ -z "$score" ] || [ "$score" -eq 0 ]; then
+          score="$SCORE"
+          if [ "$UPDATE_TYPE" != "version-update:semver-major" ]; then
+            echo "Update type '${UPDATE_TYPE:-unknown}' is not a major bump; CI is the gate."
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$score" ] || [ "$score" -eq 0 ]; then
             echo "No known compatibility score for this update; not blocking on it."
             echo "merge=true" >> "$GITHUB_OUTPUT"
           elif [ "$score" -gt 80 ]; then
