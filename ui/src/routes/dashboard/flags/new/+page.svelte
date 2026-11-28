@@ -120,9 +120,9 @@
 				</label>
 
 				<fieldset class="grid gap-1.5">
-					<legend class="mb-1.5 text-sm font-medium text-foreground"
-						>{m.flag_variations_label()}</legend
-					>
+					<legend class="mb-1.5 text-sm font-medium text-foreground">
+						{m.flag_variations_label()}
+					</legend>
 					<VariationsEditor bind:variations {type} />
 				</fieldset>
 
@@ -132,9 +132,9 @@
 				</label>
 
 				<fieldset class="grid gap-1.5">
-					<legend class="text-sm font-medium text-foreground"
-						>{m.flag_create_environments_label()}</legend
-					>
+					<legend class="text-sm font-medium text-foreground">
+						{m.flag_create_environments_label()}
+					</legend>
 					<div class="flex flex-wrap gap-3">
 						{#each data.environments as environment (environment.id)}
 							<label class="flex items-center gap-1.5 text-sm text-foreground">

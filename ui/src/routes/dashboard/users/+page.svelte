@@ -165,9 +165,9 @@
 
 				{#if data.groups.length > 0}
 					<fieldset class="grid gap-1.5">
-						<legend class="text-sm font-medium text-foreground"
-							>{m.users_create_groups_label()}</legend
-						>
+						<legend class="text-sm font-medium text-foreground">
+							{m.users_create_groups_label()}
+						</legend>
 						<div class="flex flex-wrap gap-3">
 							{#each data.groups as group (group.id)}
 								<label class="flex items-center gap-1.5 text-sm text-foreground">

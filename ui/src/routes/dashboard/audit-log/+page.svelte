@@ -167,9 +167,9 @@
 									></span>
 								</button>
 							</td>
-							<td class="px-3 py-3 whitespace-nowrap text-foreground"
-								>{formatTimestamp(entry.timestamp)}</td
-							>
+							<td class="px-3 py-3 whitespace-nowrap text-foreground">
+								{formatTimestamp(entry.timestamp)}
+							</td>
 							<td class="px-3 py-3 text-foreground">
 								{entry.actorId}
 								{#if entry.actorType === 'applicationCredential'}

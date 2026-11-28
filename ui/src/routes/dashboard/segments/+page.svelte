@@ -49,8 +49,9 @@
 								<a
 									class="text-primary hover:underline"
 									href={localizedResolve(`/dashboard/segments/${encodeURIComponent(segment.key)}`)}
-									>{segment.key}</a
 								>
+									{segment.key}
+								</a>
 							</td>
 							<td class="py-2 text-foreground">{segment.name}</td>
 							<td class="py-2 text-muted-foreground">

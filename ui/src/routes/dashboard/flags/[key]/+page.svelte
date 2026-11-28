@@ -169,15 +169,15 @@
 
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
 			<div class="grid gap-1.5 rounded-lg border border-border bg-background p-4">
-				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-					>{m.flag_detail_version()}</span
-				>
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+					{m.flag_detail_version()}
+				</span>
 				<strong class="text-foreground">{data.flag.revision}</strong>
 			</div>
 			<div class="grid gap-1.5 rounded-lg border border-border bg-background p-4">
-				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-					>{m.flag_detail_type()}</span
-				>
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+					{m.flag_detail_type()}
+				</span>
 				<strong class="text-foreground">{data.flag.type}</strong>
 			</div>
 		</div>

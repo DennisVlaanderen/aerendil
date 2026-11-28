@@ -124,9 +124,9 @@
 								></span>
 							{/if}
 							<strong class="text-foreground">{environment.name}</strong>
-							<span class="text-sm text-muted-foreground"
-								>{m.environments_table_order()}: {environment.order}</span
-							>
+							<span class="text-sm text-muted-foreground">
+								{m.environments_table_order()}: {environment.order}
+							</span>
 						</div>
 						<button
 							type="button"
