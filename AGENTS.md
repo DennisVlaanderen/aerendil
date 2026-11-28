@@ -257,6 +257,78 @@ never directly from the browser.
   defaults are for local development only.
 - `docker-compose.yml` is the reference way to run the full stack locally.
 
+## Go design patterns
+
+Before you introduce a pattern in Go code, look it up on
+[go-patterns.dev](https://go-patterns.dev/). Prefer its Go-native,
+function-and-channel idioms over class-style SOLID patterns. For example, use
+functional options instead of a factory or builder. If go-patterns.dev does
+not cover the problem, use the Go version of the classic pattern on
+[refactoring.guru](https://refactoring.guru/design-patterns/go). Reach for a
+pattern only when the code needs it. A plain function or struct is still the
+default.
+
+**Use go-patterns.dev** where it overlaps with or replaces a classic pattern:
+
+| Need | Use (go-patterns.dev) | Instead of (refactoring.guru) |
+| ---- | --------------------- | ----------------------------- |
+| Optional constructor settings | [Functional Options](https://go-patterns.dev/creational/functional-options) | Builder, Factory Method, Abstract Factory |
+| Many required, validated settings | [Configuration Struct + Factory](https://go-patterns.dev/creational/configuration-struct-factory) (`NewX(cfg Config)`) | Builder |
+| One shared, expensive instance | [Lazy Initialization](https://go-patterns.dev/creational/lazy-initialization) with `sync.Once`, passed in explicitly | Singleton (global access) |
+| Stepwise query or DSL building | [Fluent Interfaces](https://go-patterns.dev/creational/fluent-interfaces), only when chaining reads naturally | Builder |
+| Lazy, concurrent stream of values | [Generator](https://go-patterns.dev/generative/generator); for synchronous iteration, use stdlib `iter.Seq` instead | Iterator |
+| Staged processing | [Pipeline](https://go-patterns.dev/generative/pipeline), [Fan-Out](https://go-patterns.dev/generative/fan-out), [Fan-In](https://go-patterns.dev/generative/fan-in) | Chain of Responsibility, Observer (for data flow) |
+| Asynchronous result | [Future](https://go-patterns.dev/parallel-computing/future), [Error Group](https://go-patterns.dev/parallel-computing/errgroup) | Command (for deferred execution) |
+| Caching in front of a dependency | [Map + `sync.RWMutex`](https://go-patterns.dev/stability/caching/with-map-and-rwmutex) by default; [`sync.Map`](https://go-patterns.dev/stability/caching/with-sync-map) only for read-heavy, disjoint keys; [expiring cache](https://go-patterns.dev/stability/caching/with-expiration) when entries need a TTL | Proxy (caching proxy) |
+| Guarding a flaky dependency | [Retry](https://go-patterns.dev/stability/retry), [Timeout](https://go-patterns.dev/stability/timeout), [Circuit Breaker](https://go-patterns.dev/stability/circuit-breaker) | Proxy (protection proxy) |
+| Multi-step atomic write | [Unit of Work](https://go-patterns.dev/database/unit-of-work), a callback that runs inside one transaction | Command, Memento (for rollback) |
+
+These go-patterns.dev patterns have no classic counterpart and are always the
+reference: [Worker Pool](https://go-patterns.dev/parallel-computing/worker-pool),
+[Queuing](https://go-patterns.dev/parallel-computing/queuing),
+[Parallel For Loop](https://go-patterns.dev/parallel-computing/parallel-for-loop),
+[Map-Reduce](https://go-patterns.dev/parallel-computing/map-reduce),
+[Semaphore](https://go-patterns.dev/sync/semaphore),
+[Singleflight](https://go-patterns.dev/sync/singleflight),
+[Drop](https://go-patterns.dev/stability/drop), and the
+[channels article](https://go-patterns.dev/articles/channels). Follow its rule
+that only the creator of a channel closes it.
+
+Don't follow the go-patterns.dev
+[Mutex](https://go-patterns.dev/sync/mutex) page, which uses a buffered
+channel. Use `sync.Mutex` or `sync.RWMutex`. Avoid
+[Configurable Object](https://go-patterns.dev/creational/configurable-object),
+because setters after construction make the object mutable. Use functional
+options instead.
+
+**Use refactoring.guru** for everything else. Prefer small interfaces, or a
+single `func` type where one method is enough:
+
+- Creational: [Prototype](https://refactoring.guru/design-patterns/prototype/go/example).
+  Use Abstract Factory only for real families of related types, not for
+  configuration.
+- Structural: [Adapter](https://refactoring.guru/design-patterns/adapter/go/example),
+  [Bridge](https://refactoring.guru/design-patterns/bridge/go/example),
+  [Composite](https://refactoring.guru/design-patterns/composite/go/example),
+  [Decorator](https://refactoring.guru/design-patterns/decorator/go/example)
+  (HTTP middleware is `func(http.Handler) http.Handler`),
+  [Facade](https://refactoring.guru/design-patterns/facade/go/example),
+  [Flyweight](https://refactoring.guru/design-patterns/flyweight/go/example),
+  [Proxy](https://refactoring.guru/design-patterns/proxy/go/example) (for
+  access control or logging, not caching or resilience).
+- Behavioral: [Chain of Responsibility](https://refactoring.guru/design-patterns/chain-of-responsibility/go/example)
+  (for request handling),
+  [Command](https://refactoring.guru/design-patterns/command/go/example),
+  [Mediator](https://refactoring.guru/design-patterns/mediator/go/example),
+  [Memento](https://refactoring.guru/design-patterns/memento/go/example),
+  [Observer](https://refactoring.guru/design-patterns/observer/go/example)
+  (for event subscription),
+  [State](https://refactoring.guru/design-patterns/state/go/example),
+  [Strategy](https://refactoring.guru/design-patterns/strategy/go/example),
+  [Template Method](https://refactoring.guru/design-patterns/template-method/go/example)
+  (with an interface for the steps, since Go has no inheritance),
+  [Visitor](https://refactoring.guru/design-patterns/visitor/go/example).
+
 ## Scope note
 
 Only `backend/` has Go CI; only `ui/` has Node CI. When changing one side,
