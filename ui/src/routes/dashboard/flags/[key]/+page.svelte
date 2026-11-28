@@ -64,6 +64,10 @@
 	let evaluateError = $state('');
 	let evaluation: EvaluationResult | undefined = $state();
 
+	let forceDisableModal: { show: () => void } | undefined = $state();
+	let isForceDisabling = $state(false);
+	let forceDisableError = $state('');
+
 	let deleteModal: { show: () => void } | undefined = $state();
 	let isDeleting = $state(false);
 	let deleteError = $state('');
@@ -133,6 +137,23 @@
 			return;
 		}
 		evaluation = result.data;
+	}
+
+	async function confirmForceDisable() {
+		isForceDisabling = true;
+		forceDisableError = '';
+
+		const result = await apiRequest(
+			`/bff/flags/${encodeURIComponent(data.flag.key)}/force-disable?environmentId=${encodeURIComponent(data.flag.environmentId)}`,
+			{ method: 'POST' }
+		);
+
+		isForceDisabling = false;
+		if (result.error) {
+			forceDisableError = resolveErrorMessage(result.code);
+			return;
+		}
+		await invalidateAll();
 	}
 
 	async function confirmDelete() {
@@ -296,6 +317,31 @@
 			</button>
 		</form>
 
+		<!-- Only while enabled: force-disabling an off flag does nothing. -->
+		{#if canUpdate && data.flag.enabled}
+			<section class="mt-6 grid gap-2 rounded-lg border border-danger/40 bg-danger/5 p-4">
+				<h2 class="flex items-center gap-2 text-sm font-semibold text-danger">
+					<span class="icon-[lucide--octagon-alert] size-4 shrink-0" aria-hidden="true"></span>
+					{m.flag_force_disable_title()}
+				</h2>
+				<p class="text-xs text-muted-foreground">{m.flag_force_disable_hint()}</p>
+				{#if forceDisableError}
+					<p class="flex items-center gap-2 text-sm text-danger">
+						<span class="icon-[lucide--circle-alert] size-4 shrink-0" aria-hidden="true"></span>
+						{forceDisableError}
+					</p>
+				{/if}
+				<button
+					type="button"
+					disabled={isForceDisabling}
+					class="cursor-pointer justify-self-start rounded-lg bg-danger px-4 py-2 text-sm font-medium text-danger-foreground hover:opacity-90 disabled:cursor-wait disabled:opacity-70"
+					onclick={() => forceDisableModal?.show()}
+				>
+					{m.flag_force_disable_button()}
+				</button>
+			</section>
+		{/if}
+
 		{#if canDelete}
 			<div class="mt-6 border-t border-border pt-5">
 				{#if deleteError}
@@ -316,6 +362,19 @@
 		{/if}
 	</div>
 </div>
+
+<ConfirmModal
+	bind:this={forceDisableModal}
+	title={m.flag_force_disable_confirm_title()}
+	description={m.flag_force_disable_confirm_description({
+		key: data.flag.key,
+		environment: selectedEnvironmentName ?? data.flag.environmentId
+	})}
+	confirmLabel={m.flag_force_disable_button()}
+	cancelLabel={m.modal_cancel()}
+	variant="danger"
+	onconfirm={confirmForceDisable}
+/>
 
 <ConfirmModal
 	bind:this={deleteModal}
