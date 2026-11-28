@@ -221,9 +221,9 @@
 
 			<div class="flex items-end justify-between gap-3 border-t border-border pt-3">
 				<div class="grid gap-1.5">
-					<span id="{id}-time" class="text-xs font-medium text-muted-foreground"
-						>{m.datetime_picker_time()}</span
-					>
+					<span id="{id}-time" class="text-xs font-medium text-muted-foreground">
+						{m.datetime_picker_time()}
+					</span>
 					<div role="group" aria-labelledby="{id}-time" class="flex items-center gap-1">
 						<input
 							inputmode="numeric"

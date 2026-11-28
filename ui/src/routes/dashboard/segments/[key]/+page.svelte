@@ -71,8 +71,10 @@
 			{#each usedBy as key, i (key)}
 				<a
 					class="font-mono text-primary hover:underline"
-					href={localizedResolve(`/dashboard/flags/${encodeURIComponent(key)}`)}>{key}</a
-				>{i < usedBy.length - 1 ? ', ' : ''}
+					href={localizedResolve(`/dashboard/flags/${encodeURIComponent(key)}`)}
+				>
+					{key}
+				</a>{i < usedBy.length - 1 ? ', ' : ''}
 			{:else}
 				{m.segment_unused()}
 			{/each}

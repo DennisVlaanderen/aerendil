@@ -22,20 +22,20 @@
 
 		<div class="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
 			<div class="grid gap-1.5 rounded-lg border border-border bg-background p-4">
-				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-					>{m.dashboard_access_level()}</span
-				>
-				<strong class="text-foreground"
-					>{isAdmin ? m.dashboard_full_admin() : m.dashboard_standard_access()}</strong
-				>
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+					{m.dashboard_access_level()}
+				</span>
+				<strong class="text-foreground">
+					{isAdmin ? m.dashboard_full_admin() : m.dashboard_standard_access()}
+				</strong>
 			</div>
 			<div class="grid gap-1.5 rounded-lg border border-border bg-background p-4">
-				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
-					>{m.dashboard_status()}</span
-				>
-				<strong class="text-foreground"
-					>{isAdmin ? m.dashboard_ready_manage() : m.dashboard_ready_work()}</strong
-				>
+				<span class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+					{m.dashboard_status()}
+				</span>
+				<strong class="text-foreground">
+					{isAdmin ? m.dashboard_ready_manage() : m.dashboard_ready_work()}
+				</strong>
 			</div>
 		</div>
 	</div>

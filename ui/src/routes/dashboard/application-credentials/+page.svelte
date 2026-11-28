@@ -204,23 +204,25 @@
 				{m.application_credentials_secret_reveal_warning()}
 			</p>
 			<div class="grid gap-1.5">
-				<span class="text-sm font-medium text-foreground"
-					>{m.application_credentials_secret_client_id_label()}</span
-				>
+				<span class="text-sm font-medium text-foreground">
+					{m.application_credentials_secret_client_id_label()}
+				</span>
 				<code
 					class="overflow-x-auto rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground"
-					>{revealedSecret.clientId}</code
 				>
+					{revealedSecret.clientId}
+				</code>
 			</div>
 			<div class="grid gap-1.5">
-				<span class="text-sm font-medium text-foreground"
-					>{m.application_credentials_secret_client_secret_label()}</span
-				>
+				<span class="text-sm font-medium text-foreground">
+					{m.application_credentials_secret_client_secret_label()}
+				</span>
 				<div class="flex items-center gap-2">
 					<code
 						class="flex-1 overflow-x-auto rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground"
-						>{revealedSecret.clientSecret}</code
 					>
+						{revealedSecret.clientSecret}
+					</code>
 					<button
 						type="button"
 						class="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface-muted"
@@ -350,9 +352,9 @@
 			</div>
 
 			<fieldset class="grid gap-1.5">
-				<legend class="text-sm font-medium text-foreground"
-					>{m.application_credentials_create_scopes_label()}</legend
-				>
+				<legend class="text-sm font-medium text-foreground">
+					{m.application_credentials_create_scopes_label()}
+				</legend>
 				<div class="flex flex-wrap gap-3">
 					{#each scopeOptions as scope (scope.value)}
 						<label class="flex items-center gap-1.5 text-sm text-foreground">
