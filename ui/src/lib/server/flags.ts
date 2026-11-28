@@ -113,3 +113,19 @@ export async function deleteFlag(
 	);
 	return failure ?? null;
 }
+
+// forceDisableFlag is the incident kill switch: it disables the flag without
+// a revision check and is audited apart from a normal update.
+export async function forceDisableFlag(
+	token: string,
+	environmentId: string,
+	key: string
+): Promise<FlagResult> {
+	const { body, failure } = await send(
+		flagUrl(environmentId, key, '/force-disable'),
+		token,
+		{ method: 'POST' },
+		"Couldn't force-disable that flag."
+	);
+	return failure ?? { flag: body as FlagDefinition };
+}
